@@ -57,9 +57,53 @@ that reports it, always. `ThermalState.HELD_FAIR` stays the non-default alternat
 the floor in place it is belt and braces rather than the only defence, so ARCHITECTURE.md
 § 6's "run at fair" can hold.
 
+### iOS replace: everything a new asset does not inherit
+
+`SafeReplacerIos` carried creation date, location, favourite and album membership. It did not
+carry `isHidden` — the locked folder — so a replacement would have put a photograph the user
+deliberately hid back into the main grid.
+
+Beyond that, some state has no setter on a creation request at all: adjustment data (an
+edited photo's original underneath it), a burst identifier, a smart album's membership,
+somebody else's shared album. `ReplacePreflight` — shared, and tested on a JVM against a
+value rather than a photo library — decides that from metadata **before the encode**, so such
+a file is skipped with a reason (`WOULD_LOSE_STATE`) rather than replaced and quietly
+diminished. Discovering it during the swap would mean aborting halfway through the user's
+only copy.
+
+### The iOS restore journey
+
+`UndoLocation.SYSTEM_TRASH` fell through to `FromBin`, so iOS offered a one-tap restore the
+platform does not have — PhotoKit has no API to restore from Recently Deleted, by design.
+It is now its own state, with copy that says where the file is and until when, and an **Open
+Photos** action. Keep and Offload stay one tap, because those originals are in the app's own
+storage or on a volume the user picked. USER_JOURNEY.md § 5 gained the iOS variant.
+
+### Two real defects the sweep found
+
+- **`Predictor.bounds` could construct invalid bounds and throw.** A confident entry whose
+  learned setting falls outside the fallback bracket produced `low > high`, which the
+  constructor rejects — a crash in the night pass from a table row that was merely out of
+  date. Reachable since milestone 12 made the fallback derive from the source's own bitrate.
+  Found by a property test over settings, sample counts and variances, not by a case anybody
+  thought of.
+- **The undo sweeper did not check that the job succeeded.** An entry left by a night that
+  died between the journal write and the job's status update would be swept thirty days
+  later — deleting what may be the only copy of that file, and reporting the space as freed.
+  The job's state is now a required argument rather than a defaulted one, because a default
+  of "assume it succeeded" would put the hole back invisibly.
+
+### What still needs a device
+
+PROJECT.md gained a **Device-required verification** section: iOS thermal oscillation,
+PhotoKit's change-block atomicity, whether `isHidden` can actually be set on a creation
+request, smart-album re-derivation, encoder quirks, and reduce-motion/TalkBack. Each has the
+exact procedure to run. None of it is faked in a test — a green suite asserting invented
+platform behaviour is worse than an open question, because it looks like an answer.
+
 ### Numbers
 
-878 shared JVM tests and 67 build-guard tests pass.
+906 shared JVM tests and 67 build-guard tests pass.
 
 ## Milestone 15 — the iOS port
 

@@ -29,7 +29,15 @@ import shared
 ///
 /// `PHPhotoLibrary.performChanges` is atomic as far as the library is concerned: either the
 /// whole block applies or none of it does. That is what lets the § 7 contract hold here at
-/// all, since there is no rename to be atomic on.
+/// all, since there is no rename to be atomic on — and it is why a failure re-applying an
+/// album is safe: the delete in the same block does not happen either.
+///
+/// ## What cannot be carried is refused before the encode
+///
+/// Some state has no setter on a creation request: adjustment data, a burst identifier, a
+/// smart album's membership, somebody else's shared album. `ReplacePreflight` — shared, and
+/// tested on a JVM — decides that from metadata alone, so such a file is skipped with a
+/// reason rather than replaced and quietly diminished.
 @objc public final class SafeReplacerIos: NSObject, ReplaceOps {
 
     private let library: PHPhotoLibrary
@@ -51,8 +59,16 @@ import shared
             throw ReplaceError.originalMissing
         }
 
-        // Read before the block: inside it, only change requests may run.
-        let albums = containingAlbums(of: original)
+        // Read before the block: inside it, only change requests may run. The preflight
+        // has already decided this asset holds nothing that cannot be put back — see
+        // `state(of:)` and `ReplacePreflight` — so what is left here is doing it.
+        let state = self.state(of: original)
+        guard case let verdict = ReplacePreflight.shared.check(state: state),
+              let proceed = verdict as? ReplacePreflightVerdictProceed else {
+            throw ReplaceError.wouldLoseState
+        }
+        let carry = proceed.carry
+        let albums = userAlbums(of: original, keeping: carry.albumIds)
         let url = URL(fileURLWithPath: replacement.path)
 
         var newIdentifier: String?
@@ -63,7 +79,15 @@ import shared
             }
             creation.creationDate = original.creationDate
             creation.location = original.location
-            creation.isFavorite = original.isFavorite
+
+            // Every property a new asset does not inherit. `isFavorite` is not vanity:
+            // three other screens — the map pin, the memory cover, the duplicate
+            // best-copy rule — read it to decide what the user sees.
+            creation.isFavorite = carry.favourite
+
+            // And `isHidden`, which is the locked folder. Dropping it would put a
+            // photograph the user deliberately hid back into the main grid.
+            creation.isHidden = carry.hidden
 
             guard let placeholder = creation.placeholderForCreatedAsset else { return }
             newIdentifier = placeholder.localIdentifier
@@ -75,7 +99,8 @@ import shared
             }
 
             // Rule 1. The delete is in the same block, so there is no instant at which the
-            // user has neither file.
+            // user has neither file — and if any step above fails, PhotoKit applies none of
+            // them, so the original is not deleted either.
             PHAssetChangeRequest.deleteAssets([original] as NSArray)
         }
 
@@ -153,15 +178,74 @@ import shared
         PHAsset.fetchAssets(withLocalIdentifiers: [ref.value], options: nil).firstObject
     }
 
-    /// Every album the asset is in, read before the change block.
-    private func containingAlbums(of asset: PHAsset) -> [PHAssetCollection] {
-        let collections = PHAssetCollection.fetchAssetCollectionsContaining(
-            asset,
-            with: .album,
-            options: nil
+    /// The asset's state, as the shared preflight wants it.
+    ///
+    /// Everything here is a metadata read. That is the point: the decision it feeds happens
+    /// *before* the encode, so a file that cannot be replaced without losing something is
+    /// never touched at all — rather than the loss being discovered during the swap, on the
+    /// user's only copy.
+    func state(of asset: PHAsset) -> ReplacePreflightAssetState {
+        var albums: [ReplacePreflightAlbum] = []
+        for type in [PHAssetCollectionType.album, .smartAlbum] {
+            let found = PHAssetCollection.fetchAssetCollectionsContaining(asset, with: type, options: nil)
+            found.enumerateObjects { collection, _, _ in
+                albums.append(
+                    ReplacePreflightAlbum(
+                        id: collection.localIdentifier,
+                        kind: Self.kind(of: collection)
+                    )
+                )
+            }
+        }
+
+        return ReplacePreflightAssetState(
+            albums: albums,
+            favourite: asset.isFavorite,
+            hidden: asset.isHidden,
+            // `canPerform(.content)` is false for an asset whose adjustments this app cannot
+            // reproduce; `hasAdjustments` is the flag on the resource. Either means there is
+            // an original underneath that a replacement would discard.
+            hasAdjustments: asset.hasAdjustments,
+            burstIdentifier: asset.burstIdentifier
         )
+    }
+
+    /// How a collection behaves when asked to accept a new asset.
+    ///
+    /// The split that matters is inside `.smartAlbum`: the ones whose predicate this app
+    /// re-satisfies (favourite, recently added, videos) need no action because the
+    /// replacement lands in them by itself, and every other one is membership that would be
+    /// lost — because a smart album cannot be added to at all.
+    private static func kind(of collection: PHAssetCollection) -> ReplacePreflightAlbumKind {
+        switch collection.assetCollectionType {
+        case .album:
+            return collection.assetCollectionSubtype == .albumCloudShared ? .shared : .user
+        case .smartAlbum:
+            return derivedSmartAlbums.contains(collection.assetCollectionSubtype)
+                ? .derivedSmart
+                : .opaqueSmart
+        default:
+            return .opaqueSmart
+        }
+    }
+
+    /// Smart albums the replacement re-derives into, because their predicate reads only
+    /// properties carried across in the change block.
+    private static let derivedSmartAlbums: Set<PHAssetCollectionSubtype> = [
+        .smartAlbumFavorites,
+        .smartAlbumRecentlyAdded,
+        .smartAlbumVideos,
+        .smartAlbumUserLibrary,
+    ]
+
+    /// The collections the carry-over named, resolved back to objects for the change block.
+    private func userAlbums(of asset: PHAsset, keeping ids: [String]) -> [PHAssetCollection] {
+        let wanted = Set(ids)
         var albums: [PHAssetCollection] = []
-        collections.enumerateObjects { collection, _, _ in albums.append(collection) }
+        let found = PHAssetCollection.fetchAssetCollectionsContaining(asset, with: .album, options: nil)
+        found.enumerateObjects { collection, _, _ in
+            if wanted.contains(collection.localIdentifier) { albums.append(collection) }
+        }
         return albums
     }
 
@@ -175,5 +259,9 @@ import shared
     enum ReplaceError: Error {
         case originalMissing
         case commitFailed
+
+        /// The preflight refused. Should be unreachable: triage skips such an asset long
+        /// before a plan exists, and this is the belt to that braces.
+        case wouldLoseState
     }
 }

@@ -251,6 +251,29 @@ class ReplaceSequenceTest {
         assertEquals(listOf("metadata", "park", "commit", "restore"), world.calls)
     }
 
+    /**
+     * The iOS shape of a commit failure.
+     *
+     * PhotoKit's `performChanges` is all-or-nothing: `SafeReplacerIos` creates the asset,
+     * re-applies favourite, hidden and album membership, and deletes the original **inside
+     * one block**, so a failure at the album step means none of it happened — not a new
+     * asset with no albums, and certainly not a deleted original with no replacement.
+     *
+     * The sequence sees exactly one thing: commit threw. What this test pins is that the
+     * consequence is the right one — the original is still in the library, untouched, and
+     * nothing partial was left behind for a later run to trip over.
+     */
+    @Test
+    fun `a failure inside the change block leaves the original untouched`() = runTest {
+        val world = World()
+        val result = sequence(world, ops = FakeOps(world, failAt = "commit")).replace(plan)
+
+        assertIs<ReplaceResult.RolledBack>(result)
+        assertEquals(Where.LIBRARY, world.original, "the original must still be in the library")
+        assertEquals(null, world.committed, "no half-made replacement may survive the block")
+        assertEquals(null, world.undoRow, "and nothing may claim the space was freed")
+    }
+
     @Test
     fun `a timestamp failure unwinds the commit and then the park, in that order`() = runTest {
         val world = World()

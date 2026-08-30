@@ -25,6 +25,21 @@ Open → **Result card** at top of grid: numbers, energy estimate, "See what cha
 ## 5. Restore
 History or Viewer Info → Restore → confirmation sheet showing where the original is (bin / SD card) → restored in place, card "Original restored". If expired: "The original was removed on <date> after the 30-day window" with link to change retention.
 
+**On iOS, "Free space" folders restore differently, and the UI has to say so.** There is no
+rename in PhotoKit, so a replacement is add-then-delete and the original lands in the
+system's own Recently Deleted for 30 days — which is the undo bin, and is also the one place
+this app cannot reach: there is no API to restore from it, by design. So for those files:
+
+- The History row shows the state distinctly — not as a Restore button that would fail.
+- Tapping it opens an explanatory sheet: *"Your original is in Photos, under Recently
+  Deleted, until <date>. Restore it from there."*
+- The sheet's action is **Open Photos** (`photos-redirect://`). There is no deep link to
+  Recently Deleted itself, which is why the copy names the album rather than only the app.
+
+**Keep originals and Offload are one tap on iOS as on Android**, because those originals are
+in the app's own storage or on a volume the user picked — not in the system bin. The
+difference is the folder mode, not the platform.
+
 ## 6. Compress now
 Viewer or long-press → Compress now → sheet with estimated size and time → Start. Options: "Watch while it works" (play-to-compress) or progress bar. End: "Now 165 MB (was 380 MB)" with Share / Replace original / Keep both. On battery: this is allowed; note "Uses battery" shown once.
 

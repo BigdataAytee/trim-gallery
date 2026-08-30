@@ -1,6 +1,7 @@
 package app.trimgallery.core.domain.trash
 
 import app.trimgallery.core.model.FolderMode
+import app.trimgallery.core.model.JobState
 import app.trimgallery.core.model.UndoEntry
 import app.trimgallery.core.model.UndoLocation
 import app.trimgallery.core.model.UndoState
@@ -55,9 +56,47 @@ object TrashPolicy {
         return entry.state == UndoState.ACTIVE && expiry <= now
     }
 
-    /** Entries the sweep should remove. Active only — a restored entry is not a candidate. */
-    fun expired(entries: List<UndoEntry>, now: Instant): List<UndoEntry> =
-        entries.filter { isExpired(it, now) }
+    /**
+     * Entries the sweep should remove.
+     *
+     * Active and past their date — and **only where the job that parked the original
+     * actually succeeded**.
+     *
+     * That last condition is the one this function exists for. An `UndoEntry` is written as
+     * the final step of the ARCHITECTURE.md § 7 contract, so its existence normally implies
+     * the swap completed. "Normally" is not good enough here: a process killed between the
+     * journal write and the job's own status update, a rollback that could not reach the
+     * row, a `FAILED` job whose replacement was discarded — each leaves an entry whose
+     * original may be *the only copy of that file left*. Sweeping it deletes the user's
+     * photograph and reports space freed.
+     *
+     * So the job's state is a required argument rather than a defaulted one. A default of
+     * "assume it succeeded" would put the hole straight back, and it would be invisible:
+     * every test would pass, and the failure would only ever appear on somebody's phone
+     * thirty days after a night that went wrong.
+     *
+     * @param jobStateOf the state of the job named by the entry, or null when the row is
+     *   gone. Null is treated as *not* succeeded: an entry whose job cannot be found is an
+     *   entry nothing can vouch for.
+     */
+    fun expired(
+        entries: List<UndoEntry>,
+        now: Instant,
+        jobStateOf: (UndoEntry) -> JobState?,
+    ): List<UndoEntry> = entries.filter { isExpired(it, now) && jobStateOf(it) == JobState.SUCCEEDED }
+
+    /**
+     * Entries that are due but held back because their job did not succeed.
+     *
+     * Returned rather than silently skipped, so the condition is observable: an original
+     * kept past its window because a night went wrong is a thing an operator should be able
+     * to see, and a user should not be told the space was freed.
+     */
+    fun heldBack(
+        entries: List<UndoEntry>,
+        now: Instant,
+        jobStateOf: (UndoEntry) -> JobState?,
+    ): List<UndoEntry> = entries.filter { isExpired(it, now) && jobStateOf(it) != JobState.SUCCEEDED }
 
     /**
      * What the row says under the thumbnail.

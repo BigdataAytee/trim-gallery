@@ -123,13 +123,29 @@ object Predictor {
         entry == null -> fallback
 
         entry.confident -> {
-            val low = (entry.settingBps * (1.0 - NARROW_BRACKET)).toInt()
-            val high = (entry.settingBps * (1.0 + NARROW_BRACKET)).toInt()
-            SettingSearch.Bounds(
-                lowBps = low.coerceAtLeast(fallback.lowBps),
-                highBps = high.coerceAtMost(fallback.highBps),
-                startBps = entry.settingBps.coerceIn(fallback.lowBps, fallback.highBps),
-            )
+            val low = (entry.settingBps * (1.0 - NARROW_BRACKET)).toInt().coerceAtLeast(fallback.lowBps)
+            val high = (entry.settingBps * (1.0 + NARROW_BRACKET)).toInt().coerceAtMost(fallback.highBps)
+
+            if (low > high) {
+                // The prediction does not overlap the search space at all, so it is not a
+                // prediction about *this* file. Since milestone 12 the fallback bracket is
+                // derived from the source's own bitrate, so a family whose learned setting
+                // was recorded for much busier or much flatter footage lands outside it —
+                // and the intersection of the two ranges is then empty.
+                //
+                // This used to construct `Bounds(fallback.low, narrowedHigh)` with low above
+                // high, which the constructor rejects: a crash in the night pass, from a
+                // table row that was merely out of date. Trusting the fallback is both safe
+                // and correct — the search still starts as near the prediction as the range
+                // allows, and one extra probe is the whole cost.
+                fallback.copy(startBps = entry.settingBps.coerceIn(fallback.lowBps, fallback.highBps))
+            } else {
+                SettingSearch.Bounds(
+                    lowBps = low,
+                    highBps = high,
+                    startBps = entry.settingBps.coerceIn(low, high),
+                )
+            }
         }
 
         else -> fallback.copy(

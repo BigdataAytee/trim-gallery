@@ -1040,6 +1040,52 @@ Recorded by class, as each one is fixed:
 - **`ThermalState.HELD_FAIR` stays the non-default.** With the floor in place it is belt and
   braces rather than the only defence, so ARCHITECTURE.md § 6's "run at fair" can hold.
 
+## Device-required verification
+
+Things that cannot be established without hardware. Each one has the procedure to run, so
+the answer comes back comparable rather than anecdotal. Nothing here is faked in a test:
+a green suite that asserts made-up platform behaviour is worse than an open question,
+because it looks like an answer.
+
+**Thermal behaviour on iOS.** Whether `ProcessInfo.thermalState` actually oscillates around
+a boundary, and how often. *Procedure:* run a night pass on a plugged-in iPhone in a warm
+room, log every `thermalStateDidChangeNotification` with a timestamp for two hours, and
+count transitions per minute. If serious↔fair swings exceed roughly one a minute, switch
+`ThermalState.FAIR` to `HELD_FAIR` — the constant is already there and tested. The 60 s
+pause floor should already reduce the *pauses* to one a minute regardless; this measures
+whether the underlying signal justifies the stronger fix.
+
+**PhotoKit change-block semantics.** That a failure re-applying album membership really does
+roll back the delete in the same block. The shared tests assert what the sequence does when
+`commit` throws; they cannot assert that PhotoKit throws rather than half-applying.
+*Procedure:* on a device, replace an asset that belongs to an album you delete from another
+app mid-block (or inject a failure by adding to a collection you have just made read-only),
+then confirm in Photos that the original is still present and no new asset was created.
+Repeat with the asset in the Hidden album. **Until this is confirmed, the iOS replace path
+should not ship**: everything else in the § 7 contract rests on that atomicity.
+
+**Whether `isHidden` can be set on a creation request.** `PHAssetChangeRequest.isHidden`
+exists, but hidden assets are subject to their own authorisation and the write may be
+silently ignored. *Procedure:* replace an asset in the Hidden album and confirm the
+replacement is still hidden. If it is not, the preflight must treat `hidden = true` as
+`WOULD_LOSE_STATE` rather than as a carried property — a one-line change to
+`ReplacePreflight`, and the test that pins the current behaviour will fail, which is the
+point of having it.
+
+**Smart-album membership after replacement.** That the derived smart albums really do
+re-derive. *Procedure:* replace an asset that is in Favourites, Recently Added and Videos;
+confirm the replacement appears in all three without being added to any.
+
+**Encoder quirks.** Real-time multiples per chip, whether AV1 sustains its advertised
+points, and the XPSNR↔VMAF calibration per bucket. All of it is FIELD_TEST.md, which is the
+procedure; none of it can be inferred from a desk.
+
+**Reduce-motion and TalkBack.** DESIGN_SYSTEM.md's motion springs and the content
+descriptions on the grid, viewer and result card. *Procedure:* enable Remove Animations and
+TalkBack, then walk the grid → viewer → result-card flow and confirm every control is
+reachable and announced, and that no shared-element transition runs. Not verifiable here for
+the same reason nothing Compose is: it has never been compiled.
+
 ## Open questions added
 - **The Compose layer has never been compiled.** Every Compose Multiplatform version
   resolves `androidx.annotation`, `androidx.collection` and `androidx.lifecycle` from
@@ -1160,3 +1206,31 @@ Recorded by class, as each one is fixed:
   on Android and Core ML on iOS, "same model converted". No model has been chosen on either,
   and clustering quality will change when one is — on both platforms at once, which is the
   argument for choosing before the Android launch rather than after.
+
+- **`Predictor.bounds` could construct invalid bounds and throw.** A confident entry whose
+  learned setting falls entirely outside the fallback bracket produced `low > high`, which
+  the `Bounds` constructor rejects — a crash in the night pass from a table row that was
+  merely out of date. It became reachable at milestone 12, when the fallback bracket started
+  being derived from the source's own bitrate rather than being a fixed wide range. Now the
+  non-overlapping case falls back, which is also the right answer: a prediction that does not
+  intersect the search space is not a prediction about this file. Found by a property test
+  over settings, sample counts and variances rather than by a case somebody thought of.
+- **The undo sweeper did not check that the job succeeded.** `TrashPolicy.expired` filtered
+  on state and expiry alone, so an entry left by a night that died between the journal write
+  and the job's status update — or by a rollback that could not reach the row — would be
+  swept thirty days later, deleting what may be the only copy of that file and reporting the
+  space as freed. The job's state is now a *required* argument: a default of "assume it
+  succeeded" would put the hole straight back and no test would see it.
+- **`History` offered a one-tap restore on iOS that the platform does not have.**
+  `UndoLocation.SYSTEM_TRASH` fell through to `FromBin`. PhotoKit has no API to restore from
+  Recently Deleted, by design, so the button would have failed every time. It is now its own
+  state with its own copy and an Open Photos action.
+- **Stage-boundary resume is not testable yet, and this is not a gap in the tests.**
+  `NightRun.Step` is one opaque `run(item)` call; per-file stages (probe, encode, verify,
+  replace) live inside `VideoOptimiseStep`, which is still unwritten. So there are no stage
+  boundaries in the code to kill at — only file boundaries, which are covered. When that step
+  is assembled, a test that interrupts at each of its stages should land with it.
+- **Migration coverage has nothing to cover yet.** The schema is at version 1 with no `.sqm`
+  files, so "every version pair" is vacuously satisfied. What is missing is the harness that
+  would stop the *first* migration landing untested; it needs SQLDelight's generated code,
+  which is compiled only in CI, so it should be written in the same change as that migration.

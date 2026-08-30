@@ -209,4 +209,51 @@ class PredictorTest {
         val width = (bounds.highBps - bounds.lowBps).toDouble() / (fallback.highBps - fallback.lowBps)
         assertTrue(width < 0.2, "bracket should be far narrower than the fallback, was $width")
     }
+
+    // ------------------------------------------------------- bounds, always
+
+    /**
+     * The property the search depends on: whatever the predictor has learned, the bracket it
+     * hands back must be one the binary search can actually work in — low ≤ start ≤ high, and
+     * all of them positive.
+     *
+     * A confident entry *narrows* the bracket around its own mean, so an entry whose stored
+     * setting sits outside the fallback range — a family the device used to encode very
+     * differently, a row written by an older build — could otherwise produce a bracket that
+     * excludes its own starting point, and the search would spend every probe outside it.
+     */
+    @Test
+    fun `the bracket is always usable, whatever the table holds`() {
+        val fallbacks = listOf(
+            SettingSearch.Bounds(lowBps = 1_000_000, highBps = 20_000_000, startBps = 10_000_000),
+            SettingSearch.Bounds(lowBps = 500_000, highBps = 600_000, startBps = 550_000),
+        )
+        val settings = listOf(1, 100_000, 5_000_000, 19_000_000, 500_000_000)
+        val samples = listOf(0, 1, Predictor.CONFIDENT_SAMPLES - 1, Predictor.CONFIDENT_SAMPLES, 10_000)
+        val variances = listOf(0.0, 1e6, 1e14)
+
+        for (fallback in fallbacks) {
+            for (setting in settings) {
+                for (sample in samples) {
+                    for (variance in variances) {
+                        val entry = Predictor.Entry(key(), setting, sample, variance)
+                        val bounds = Predictor.bounds(entry, fallback)
+                        val where = "setting=$setting samples=$sample var=$variance"
+                        assertTrue(bounds.lowBps > 0, "$where: low ${bounds.lowBps}")
+                        assertTrue(bounds.highBps >= bounds.lowBps, "$where: $bounds")
+                        assertTrue(
+                            bounds.startBps in bounds.lowBps..bounds.highBps,
+                            "$where: start ${bounds.startBps} outside ${bounds.lowBps}..${bounds.highBps}",
+                        )
+                    }
+                }
+            }
+        }
+    }
+
+    @Test
+    fun `no entry at all is exactly the fallback`() {
+        val fallback = SettingSearch.Bounds(lowBps = 1_000_000, highBps = 20_000_000, startBps = 10_000_000)
+        assertEquals(fallback, Predictor.bounds(null, fallback))
+    }
 }

@@ -10,7 +10,9 @@ import app.trimgallery.core.model.UndoLocation
 import app.trimgallery.core.model.UndoState
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertFalse
 import kotlin.test.assertIs
+import kotlin.test.assertNull
 import kotlin.test.assertTrue
 import kotlin.time.Instant
 
@@ -205,5 +207,79 @@ class HistoryTest {
             now,
         )
         assertEquals(250_000_000, History.freedIn(rows))
+    }
+
+    // ------------------------------------------------------- the iOS restore
+
+    /**
+     * The bug this state replaces: `SYSTEM_TRASH` fell through to `FromBin`, so iOS offered
+     * a one-tap restore the platform does not have. PhotoKit has no API to restore from
+     * Recently Deleted — Apple requires the person to do it — so a Restore button there is a
+     * button that lies.
+     */
+    @Test
+    fun `an original in the system bin is a distinct state, not the app's own bin`() {
+        val entry = undo("m1", location = UndoLocation.SYSTEM_TRASH)
+        val restorable = History.restorable(entry, now)
+        assertIs<History.Restorable.FromSystemBin>(restorable)
+        assertFalse(History.isOneTap(restorable), "iOS cannot restore from Recently Deleted")
+    }
+
+    @Test
+    fun `the app's own bin and an external volume stay one tap`() {
+        assertTrue(History.isOneTap(History.restorable(undo("m1", location = UndoLocation.BIN), now)))
+        assertTrue(
+            History.isOneTap(
+                History.restorable(undo("m1", location = UndoLocation.OFFLOAD, state = UndoState.OFFLOADED), now),
+            ),
+        )
+    }
+
+    @Test
+    fun `the system-bin sheet says where the file is and until when`() {
+        val text = History.restoreExplanation(
+            History.Restorable.FromSystemBin(Instant.parse("2026-09-29T00:00:00Z")),
+            formatDate = { "30 September" },
+        )
+        assertTrue(text.contains("Photos"), text)
+        assertTrue(text.contains("Recently Deleted"), text)
+        assertTrue(text.contains("30 September"), text)
+    }
+
+    @Test
+    fun `a system-bin entry that has expired is expired, not still in the bin`() {
+        val entry = undo("m1", location = UndoLocation.SYSTEM_TRASH, expiresAt = "2026-08-01T00:00:00Z")
+        assertIs<History.Restorable.Expired>(History.restorable(entry, now))
+    }
+
+    /**
+     * There is no deep link to Recently Deleted, only to Photos — so the action opens the
+     * app and the copy has to name the album. A button labelled "Restore" that opened Photos
+     * and hoped would be worse than no button.
+     */
+    @Test
+    fun `the state the app cannot act on offers to open Photos instead`() {
+        assertEquals("Open Photos", History.secondaryActionLabel(History.Restorable.FromSystemBin(null)))
+        assertTrue(History.PHOTOS_DEEP_LINK.startsWith("photos-redirect://"))
+        assertNull(History.secondaryActionLabel(History.Restorable.FromBin(null)))
+    }
+
+    @Test
+    fun `every restorable state has an explanation`() {
+        val states = listOf(
+            History.Restorable.FromBin(Instant.parse("2026-09-06T00:00:00Z")),
+            History.Restorable.FromBin(null),
+            History.Restorable.FromExternal,
+            History.Restorable.FromSystemBin(Instant.parse("2026-09-29T00:00:00Z")),
+            History.Restorable.FromSystemBin(null),
+            History.Restorable.Expired(Instant.parse("2026-08-29T00:00:00Z")),
+            History.Restorable.AlreadyRestored,
+            History.Restorable.NotApplicable,
+        )
+        for (state in states) {
+            val text = History.restoreExplanation(state) { "a date" }
+            assertTrue(text.isNotBlank(), "$state")
+            assertTrue(text.trim().endsWith("."), "$state: $text")
+        }
     }
 }

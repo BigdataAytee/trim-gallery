@@ -63,6 +63,9 @@ object SkipList {
         SkipReason.UNSUPPORTED_CODEC -> "Trim doesn't recognise this format."
         SkipReason.NO_HARDWARE_ENCODER -> "This phone's encoder can't handle a file this size."
         SkipReason.COULD_NOT_REACH_QUALITY -> "Trim couldn't make this smaller without a visible difference."
+        SkipReason.WOULD_LOSE_STATE ->
+            "Optimising this would lose something Trim can't put back — its edits, its burst, " +
+                "or an album it can't be added to again."
     }
 
     /** A short heading for the group, for the row above the thumbnails. */
@@ -80,6 +83,7 @@ object SkipList {
         SkipReason.UNSUPPORTED_CODEC -> "Unsupported format"
         SkipReason.NO_HARDWARE_ENCODER -> "Too big for this phone"
         SkipReason.COULD_NOT_REACH_QUALITY -> "Couldn't keep the quality"
+        SkipReason.WOULD_LOSE_STATE -> "Would lose album or edit state"
     }
 
     /**

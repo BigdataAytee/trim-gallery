@@ -107,4 +107,39 @@ class EntitlementsTest {
     fun `Pro users are never shown the offer`() {
         assertFalse(Entitlements.mayShowOffer(Tier.PRO, lastShown = null, now = now, inViewer = false))
     }
+
+    // ------------------------------------------------- the cap, once it is hit
+
+    /**
+     * MONETIZATION.md § Conversion moments states three things the paywall may never do.
+     * Two of them are only observable at the moment the cap bites, which is exactly when a
+     * regression would be least likely to be noticed — the app still works, it just quietly
+     * stops doing something it promised.
+     */
+    @Test
+    fun `indexing continues after the monthly cap is reached`() {
+        val overCap = Entitlements.FREE_MONTHLY_BYTES
+        assertTrue(Entitlements.capReached(Tier.FREE, overCap))
+        assertFalse(Entitlements.mayOptimise(Tier.FREE, overCap, estimatedSaving = 1))
+        assertTrue(Entitlements.mayIndex(Tier.FREE), "the gallery must keep improving")
+    }
+
+    @Test
+    fun `restore is never blocked, at any tier, cap or state`() {
+        // The signature takes nothing, so there is no condition a caller could pass that
+        // would withhold an original. That is the guarantee, and it is structural rather
+        // than a value this test could vary.
+        assertTrue(Entitlements.mayRestore())
+    }
+
+    @Test
+    fun `hitting the cap stops optimisation and nothing else`() {
+        val overCap = Entitlements.FREE_MONTHLY_BYTES + 1
+        assertEquals(0L, Entitlements.remainingBytes(Tier.FREE, overCap))
+        assertFalse(Entitlements.mayOptimise(Tier.FREE, overCap, 1))
+        assertTrue(Entitlements.mayIndex(Tier.FREE))
+        assertTrue(Entitlements.mayRestore())
+        // And Compress now is a separate allowance, so a capped month still has its five a day.
+        assertTrue(Entitlements.mayCompressNow(Tier.FREE, usedToday = 0))
+    }
 }

@@ -35,6 +35,21 @@ enum class SkipReason {
     NO_HARDWARE_ENCODER,
     WOULD_NOT_SHRINK,
     COULD_NOT_REACH_QUALITY,
+
+    /**
+     * Replacing it would lose state the platform will not let us put back.
+     *
+     * iOS only, and the reason it exists is that PhotoKit has no rename: a replacement is a
+     * *new* asset, and a new asset carries none of the old one's memberships or history.
+     * Most of that can be re-applied inside the change block — favourite, albums, dates —
+     * but some cannot: a smart album cannot be added to, a shared album belongs to somebody
+     * else, an edited asset's "revert to original" is data we would be discarding, and a
+     * burst has an identifier with no setter.
+     *
+     * Detected *before* the encode rather than discovered during the swap, so the file is
+     * never touched and the user is told why (BUILD.md § 9's Skipped list).
+     */
+    WOULD_LOSE_STATE,
 }
 
 /**

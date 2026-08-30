@@ -31,6 +31,20 @@ object History {
         /** The original is on removable storage, which may not be present. */
         data object FromExternal : Restorable
 
+        /**
+         * The original is in the system's own Recently Deleted — iOS, and only iOS.
+         *
+         * PhotoKit has no rename, so a replacement is add-then-delete and the deleted
+         * original lands in the OS bin for 30 days. That bin *is* the undo (ARCHITECTURE.md
+         * § 6), and it is also the one this app cannot reach: there is no API to restore
+         * from Recently Deleted, by design — Apple requires the person to do it themselves.
+         *
+         * So this is a distinct state rather than a flavour of [FromBin]. A Restore button
+         * that opened Photos and hoped would be a button that lies; this one says where the
+         * file is, how long it has, and offers to take the user there.
+         */
+        data class FromSystemBin(val expiresAt: Instant?) : Restorable
+
         /** Restorable in principle, but the window has closed. */
         data class Expired(val removedAt: Instant?) : Restorable
 
@@ -119,6 +133,10 @@ object History {
                 // offering a one-tap restore for a file on a card in a drawer is a promise
                 // the app cannot keep.
                 entry.location == UndoLocation.OFFLOAD -> Restorable.FromExternal
+                // iOS. Distinct from the app's own bin because this app cannot restore from
+                // it — see FromSystemBin. Falling through to FromBin here was the bug this
+                // check replaces: it offered a one-tap restore the platform does not have.
+                entry.location == UndoLocation.SYSTEM_TRASH -> Restorable.FromSystemBin(entry.expiresAt)
                 else -> Restorable.FromBin(entry.expiresAt)
             }
         }
@@ -141,6 +159,13 @@ object History {
                 }
             Restorable.FromExternal ->
                 "The original is on your external storage. Connect it to restore this file."
+            is Restorable.FromSystemBin ->
+                if (restorable.expiresAt == null) {
+                    "Your original is in Photos, under Recently Deleted. Restore it from there."
+                } else {
+                    "Your original is in Photos, under Recently Deleted, until " +
+                        "${formatDate(restorable.expiresAt)}. Restore it from there."
+                }
             is Restorable.Expired ->
                 restorable.removedAt?.let { "The original was removed on ${formatDate(it)}." }
                     ?: "The original has already been removed."
@@ -150,4 +175,35 @@ object History {
 
     /** The morning card's headline: what one night did. */
     fun freedIn(rows: List<Row>): Long = rows.sumOf { it.saved ?: 0 }
+
+    /**
+     * Whether the app can put the original back itself, or only say where it is.
+     *
+     * The distinction the Restore button is drawn from: one label opens a confirmation and
+     * does the work, the other opens an explanation. Getting it wrong on iOS means a button
+     * that appears to work and does not.
+     */
+    fun isOneTap(restorable: Restorable): Boolean = when (restorable) {
+        is Restorable.FromBin -> true
+        Restorable.FromExternal -> true
+        is Restorable.FromSystemBin -> false
+        is Restorable.Expired, Restorable.AlreadyRestored, Restorable.NotApplicable -> false
+    }
+
+    /**
+     * Where "Open Photos" should send the user, when the platform offers anywhere.
+     *
+     * `photos-redirect://` is the documented scheme for opening the Photos app. It cannot
+     * open Recently Deleted directly — there is no deep link for it — so the sheet has to
+     * say where to go once they are there, which is why [restoreExplanation] names the
+     * album rather than only the app.
+     */
+    const val PHOTOS_DEEP_LINK = "photos-redirect://"
+
+    /** The button on a state the app cannot act on itself. */
+    fun secondaryActionLabel(restorable: Restorable): String? = when (restorable) {
+        is Restorable.FromSystemBin -> "Open Photos"
+        is Restorable.Expired -> "Change how long originals are kept"
+        else -> null
+    }
 }
