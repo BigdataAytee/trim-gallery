@@ -1,0 +1,40 @@
+# Detekt configuration for trim-gallery.
+# Builds on the default rule set; only project-specific deviations live here.
+
+build:
+  maxIssues: 0
+
+complexity:
+  LongMethod:
+    # Compose screen functions are declarative and read fine when long.
+    ignoreAnnotated: ['Composable']
+  LongParameterList:
+    ignoreAnnotated: ['Composable']
+  TooManyFunctions:
+    ignoreAnnotated: ['Composable']
+
+naming:
+  FunctionNaming:
+    # Composables are PascalCase by convention.
+    ignoreAnnotated: ['Composable']
+
+style:
+  MagicNumber:
+    ignoreAnnotated: ['Composable']
+  MaxLineLength:
+    maxLineLength: 120
+  ForbiddenMethodCall:
+    active: true
+    methods:
+      # BUILD.md rule 2: no software video encoding, ever. Creating a codec by name
+      # is how a software encoder gets in by the back door; go through the
+      # hardware-only selector instead.
+      - reason: 'Select encoders through HardwareOnlyEncoderSelector (BUILD.md rule 2).'
+        value: 'android.media.MediaCodec.createEncoderByType'
+      - reason: 'Select encoders through HardwareOnlyEncoderSelector (BUILD.md rule 2).'
+        value: 'android.media.MediaCodec.createByCodecName'
+
+exceptions:
+  TooGenericExceptionCaught:
+    active: true
+    excludes: ['**/Milestone1ViewModel.kt']
