@@ -124,7 +124,10 @@ CREATE TABLE Predictor (
     h             INTEGER NOT NULL,
     fps           INTEGER NOT NULL,
     bitrateBucket INTEGER NOT NULL,
-    setting       TEXT    NOT NULL,
+    -- The winning bitrate in bits per second. INTEGER rather than the TEXT in
+    -- ARCHITECTURE.md section 4: the search runs on bitrate and the table holds a running
+    -- mean of it, which is arithmetic, not a label. Noted in PROJECT.md.
+    setting       INTEGER NOT NULL,
     samples       INTEGER NOT NULL DEFAULT 0,
     PRIMARY KEY (platform, device, cameraModel, codec, w, h, fps, bitrateBucket)
 );
@@ -197,10 +200,12 @@ UPDATE MediaItem SET locked = ? WHERE id = ?;
 selectExpiredUndo:
 SELECT * FROM UndoEntry WHERE state = 'ACTIVE' AND expiresAt IS NOT NULL AND expiresAt <= ?;
 
+-- Both values come from Predictor.learn, which folds the new result into a running mean.
+-- Doing it here instead would put the arithmetic somewhere it cannot be unit tested, and
+-- last-write-wins would let one unusually busy clip replace what twenty files agreed on.
 upsertPredictor:
-INSERT INTO Predictor(platform, device, cameraModel, codec, w, h, fps, bitrateBucket, setting, samples)
-VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 1)
-ON CONFLICT DO UPDATE SET setting = excluded.setting, samples = Predictor.samples + 1;
+INSERT OR REPLACE INTO Predictor(platform, device, cameraModel, codec, w, h, fps, bitrateBucket, setting, samples)
+VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?);
 
 selectPredictor:
 SELECT * FROM Predictor

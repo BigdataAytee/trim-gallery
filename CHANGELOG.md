@@ -119,6 +119,39 @@ environment's egress policy (a confirmed gateway denial, not a tooling fault).
 
 ---
 
+### Added — milestone 3, probe + search + predictor
+
+The search phase from BUILD.md § 5. ARCHITECTURE.md § 15 gives this milestone no platform
+work, so it is all shared Kotlin and **all of it is tested** — 52 new tests, 177 in total,
+0 failures.
+
+- `WindowPlan` — one 5-second window from the middle, three for files over three minutes,
+  three at start/middle/end for verification, scored at 720p. Windows never overlap and
+  never run past the end of the file; scoring the same frames twice would weight them
+  twice in the average.
+- `SettingSearch` — binary search on bitrate for the cheapest setting that still clears
+  the XPSNR threshold. Early exit to the low bound when the first probe is far clear,
+  the top of the bracket tried before bisecting a range that may have no answer, a hard
+  probe cap, and no bitrate ever probed twice. A file that cannot reach the threshold is
+  reported as such rather than fudged — shipping something the user can see is worse is
+  the one outcome the app must never produce.
+- `Predictor` + `BitrateBucket` — the (device, camera, codec, resolution, fps, bitrate
+  bucket) table. At 20 samples it narrows the bracket around a running mean; below that it
+  moves the starting point only.
+- `ProbeAndSearch` — ties them to `YuvSource`, `ProbeEncoder` and `QualityScorer`, and
+  **decodes the source window once**, reused by every probe. That is the difference
+  between a search costing one decode and one costing four.
+
+Three real bugs the tests caught before they shipped:
+
+- The early-exit path probed the low bound without checking the probe budget, so
+  `maxProbes = 1` spent two.
+- Convergence at 8% needed three probes inside a confident prediction's bracket, against
+  BUILD.md's "1–2 probes with prediction", to win about 4% of bitrate. Now 12%.
+- Two clips from the same camera minutes apart can straddle a bucket edge and be treated
+  as different families. Inherent to bucketing, so it is documented in a test and in
+  PROJECT.md rather than papered over.
+
 ### Added — milestone 2, the quality metrics
 
 XPSNR and libvmaf now build from source behind the `trim_native.h` C ABI, bound to Kotlin

@@ -305,6 +305,43 @@ one clip, at 640×360 rather than the 1080p BUILD.md verifies at. It is evidence
 works. The real threshold needs the milestone 1 encoder on device across resolutions and
 content, fitted per bucket — the same key the predictor table already uses.
 
+## Milestone 3 — probe, search and the predictor
+
+Entirely shared Kotlin (ARCHITECTURE.md § 15 gives this milestone no platform work), so
+all of it is unit tested against fakes.
+
+- **The search runs on bitrate throughout, never CQ.** BUILD.md § 5 allows
+  `BITRATE_MODE_CQ` where the encoder advertises it, but that is a choice for the final
+  encode: a predictor table holding a mixture of CQ levels and bitrates would not be
+  comparable, and CQ is not universally supported anyway.
+- **Probe windows are scored as a mean, not a minimum.** A single hard window would
+  otherwise set the bitrate for the whole file. The verifier is the right place to catch a
+  file that holds up badly in one part — it looks at three separate windows and can reject.
+- **Convergence stops at 12% of the bracket, not 8%.** A confident prediction hands the
+  search a bracket about 36% wide; converging tighter spends a third probe to win roughly
+  4% of bitrate. That is a bad trade when the metric is the bottleneck, and it broke
+  BUILD.md's "1–2 probes with prediction" — caught by a test asserting the probe count.
+- **An unconfident prediction moves the starting point but never narrows the bounds.**
+  Even a handful of samples beats the midpoint of a wide range, but narrowing on thin
+  evidence would trap every later file in the same family behind one early wrong guess.
+- **`Predictor.learn` is a running mean, and the arithmetic lives in Kotlin.** The SQL is
+  now a plain upsert taking both values. Doing the averaging in SQL would put it somewhere
+  it cannot be unit tested, and the original last-write-wins would have let one unusually
+  busy clip replace what twenty files agreed on.
+- **`Predictor.setting` is INTEGER, not the TEXT in ARCHITECTURE.md § 4.** It holds a
+  bitrate that gets averaged; that is arithmetic, not a label.
+- **Bucket edges split families, and that is accepted.** Two clips from the same camera
+  minutes apart can straddle an edge — 11.8 and 12.2 Mbps are different families. Every
+  bucketing has edges, and nothing in the container reports the camera *mode* that would
+  avoid them. The effect splits a prediction rather than corrupting it: each half still
+  converges, it just takes longer to become confident. There is a test that documents this
+  rather than pretending otherwise.
+- **Missing camera model or codec becomes an explicit "unknown" family.** Lumping
+  metadata-less files in with a real camera's would poison a prediction that is otherwise
+  reliable.
+- **The scoring width is forced even.** Chroma planes are half-width in 4:2:0, and an odd
+  width leaves the last column without a sample.
+
 ## Open questions added
 - **The Compose layer has never been compiled.** Every Compose Multiplatform version
   resolves `androidx.annotation`, `androidx.collection` and `androidx.lifecycle` from
