@@ -11,8 +11,13 @@
 # Needs ffmpeg on PATH for encoding and decoding only.
 set -euo pipefail
 
-clip="${1:?usage: calibrate.sh <clip.mp4> [out.csv]}"
+clip="${1:?usage: calibrate.sh <clip.mp4> [out.csv] [codec]}"
 out="${2:-calibration.csv}"
+# Which encoder to sweep. HEVC is the milestone 2 answer; AV1 is milestone 12's open
+# question, and needs an ffmpeg built with libaom or SVT-AV1 — neither is a dependency of
+# this app, they are reference encoders for producing the number (STACK.md lists ab-av1 and
+# Av1an the same way).
+codec="${3:-hevc}"
 here="$(cd "$(dirname "$0")" && pwd)"
 build="${TRIM_NATIVE_BUILD:-$here/../../../build/native}"
 work="$(mktemp -d)"
@@ -30,9 +35,18 @@ echo "clip: ${width}x${height} @ ${fps}fps"
 ffmpeg -y -loglevel error -i "$clip" -pix_fmt yuv420p -f rawvideo "$work/ref.yuv"
 
 echo "crf,xpsnr_y,vmaf" > "$out"
+case "$codec" in
+  hevc) encoder=(-c:v libx265 -preset medium -x265-params log-level=none) ;;
+  av1)  encoder=(-c:v libsvtav1 -preset 6) ;;
+  *)    echo "unknown codec: $codec (expected hevc or av1)" >&2; exit 1 ;;
+esac
+
+ffmpeg -hide_banner -encoders 2>/dev/null | grep -q " ${encoder[1]}" || {
+  echo "this ffmpeg has no ${encoder[1]}; rebuild it with that encoder enabled" >&2; exit 1
+}
+
 for crf in 20 24 28 30 32 34 36 40; do
-  ffmpeg -y -loglevel error -i "$clip" -c:v libx265 -crf "$crf" -preset medium -an \
-         -x265-params log-level=none "$work/e.mp4"
+  ffmpeg -y -loglevel error -i "$clip" "${encoder[@]}" -crf "$crf" -an "$work/e.mp4"
   ffmpeg -y -loglevel error -i "$work/e.mp4" -pix_fmt yuv420p -f rawvideo "$work/d.yuv"
   line=$("$build/test/test_metrics" --sweep "$work/ref.yuv" "$work/d.yuv" "$width" "$height" "$fps" 2>/dev/null || true)
   echo "$crf,$line"

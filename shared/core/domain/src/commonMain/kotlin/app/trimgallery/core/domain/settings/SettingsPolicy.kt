@@ -63,12 +63,25 @@ object SettingsPolicy {
 
     fun lockExplanation(locked: Locked): String = when (locked) {
         Locked.COMPACT_MODE -> "Compact mode frees more space at a slightly lower quality target. Pro."
-        Locked.AV1 -> "AV1 makes smaller files on phones with an AV1 encoder. Pro."
+        Locked.AV1 -> AV1_EXPLANATION
         Locked.CAREFUL_VERIFY -> "Careful verify checks more of each video before replacing it. Pro."
         Locked.REVERSIBLE_JXL -> "Reversible mode stores photos as JPEG XL, which can be turned back. Pro."
         Locked.OFFLOAD -> "Offload moves originals to an SD card or USB drive instead of the bin. Pro."
         Locked.EXTENDED_UNDO -> "Pro keeps originals for up to ${Entitlements.PRO_MAX_RETENTION_DAYS} days."
     }
+
+    /**
+     * What the AV1 toggle costs as well as what it saves (milestone 12).
+     *
+     * AV1 is worth roughly a third off HEVC at the same quality, and the honest sentence
+     * has to carry the other half too: the file stays perfectly playable on the phone that
+     * made it, and an older phone, a television or a car it is shared to may not open it.
+     * Offering the saving without the caveat would be selling a setting whose cost only
+     * shows up when someone else cannot watch the video.
+     */
+    const val AV1_EXPLANATION =
+        "AV1 makes files about a third smaller again, on phones that can encode it. " +
+            "Older phones, TVs and cars may not be able to play them. Pro."
 
     /**
      * BUILD.md § 9: *"Compact 90 with warning"*.

@@ -181,17 +181,13 @@ object Triager {
     /**
      * Whether this device can encode this file at all (ARCHITECTURE.md § 13).
      *
-     * Resolution and frame rate only. The codec choice is the encoder's — HEVC where
-     * available, AV1 only where the user allowed it — so triage asks the weaker question
-     * "is there *any* hardware path for a frame this size", and lets the search settle the
-     * rest.
+     * Resolution and frame rate only, against *either* encoder. Which codec a file ends
+     * up in is `CodecChoice`'s question and needs the settings and the tier, neither of
+     * which triage has — so triage asks the weaker one, "is there any hardware path for a
+     * frame this size at all", and lets the choice settle the rest.
      */
-    private fun canEncode(item: MediaItem, caps: CodecCaps): Boolean {
-        if (!caps.hardwareHevc && !caps.hardwareAv1) return false
-        if (item.width > caps.maxWidth || item.height > caps.maxHeight) return false
-        val fps = item.fps ?: return true
-        return fps <= caps.maxFps
-    }
+    private fun canEncode(item: MediaItem, caps: CodecCaps): Boolean =
+        caps.anyCanSustain(item.width, item.height, item.fps ?: 0.0)
 
     /**
      * A candidate, unless the saving is too small to be worth a night's battery.

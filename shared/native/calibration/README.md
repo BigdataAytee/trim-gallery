@@ -48,10 +48,23 @@ It is **not** the threshold to ship. Three reasons, all of which move it:
 
 Treat 39.8 as evidence the method works, not as a constant to paste into the search.
 
+## AV1 is not calibrated
+
+Milestone 12 added the AV1 output path, and `CodecLadder.xpsnrThreshold` is keyed by codec
+so that AV1 can have its own answer. It does not have one yet: it returns the HEVC numbers,
+which is a placeholder rather than a finding. XPSNR is a proxy for VMAF, and the mapping
+between them depends on what the artefacts look like — AV1's and HEVC's do not look alike,
+so there is no reason one calibration should serve both.
+
+The harness sweeps AV1 too (`./calibrate.sh clip.mp4 out.csv av1`), but it needs an ffmpeg
+built with SVT-AV1, which this build environment does not have. Like x265 above, that is a
+reference encoder for producing the number, not a dependency of the app — STACK.md lists
+ab-av1 and Av1an the same way.
+
 ## Reproducing, and doing it properly
 
 ```
-./calibrate.sh <clip.mp4> [output.csv]
+./calibrate.sh <clip.mp4> [output.csv] [hevc|av1]
 ```
 
 To answer the question for real, run it on device against the milestone 1 encoder over a

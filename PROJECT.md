@@ -768,6 +768,60 @@ all of it is unit tested against fakes.
   never counted against the Compress now daily limit or the monthly GB cap. An edit is not an
   optimisation.
 
+## Milestone 12 — the AV1 path
+
+- **`CodecCaps` is per encoder, not per device.** It carried one set of limits read from the
+  HEVC encoder and applied them to both, so a 4K60 clip passed a capability check against
+  the wrong encoder — most phones with an AV1 encoder top out below their HEVC ceiling,
+  commonly 4K30 against 4K60. The failure would have surfaced at encode time, after the
+  whole probe and search.
+- **`getSupportedPerformancePoints()` is represented, and silence is not permission.**
+  BUILD.md § 10 requires respecting the advertised throughput. An encoder that lists no
+  points is treated as having said nothing and falls back to its width/height/rate bounds;
+  reading an empty list as "no limit" is how a night spends four hours on one clip. Points
+  are compared by area, so a portrait clip matches a landscape point — it is the same
+  number of macroblocks turned on its side — and frame rates get half a frame of slack,
+  because containers report 29.97 as 30 often enough that exact comparison would refuse the
+  commonest rates there are.
+- **`Predictor.Key` includes the output codec** (a supplement to BUILD.md § 5's key list and
+  to SCHEMA.md's `predictor` table, both recorded here). AV1 reaches the same quality at
+  roughly two thirds of HEVC's bitrate, so one family would average the two and predict a
+  number wrong for both — and worse than no prediction, because a confident entry narrows
+  the bracket around it and the search would spend its whole probe budget escaping. A user
+  who turns AV1 on keeps their HEVC history; it simply does not answer AV1's questions.
+- **An AV1 source is only ever re-encoded to AV1, and skipped otherwise.** Triage counts AV1
+  above ~8 Mbps as a candidate, and taking such a file to HEVC would usually make it larger
+  at the same quality: a night's battery spent to lose the user space. Checked before every
+  other rule, because "HEVC is available" is not a consolation.
+- **AV1 is demoted when this device measures it too slow**, below 1× real time, and only
+  after five samples. BUILD.md § 6 caps the night in minutes, so a slow encoder means a
+  bigger saving per file and a smaller one per night. One slow file is a file, not a fact
+  about the encoder — demoting AV1 for the life of a phone on one thermally-throttled clip
+  would be a bug nobody could see. An encoder that has never been measured is given the
+  work, because that is how the measurement gets made.
+- **The AV1 entitlement is re-checked in `CodecChoice`, not trusted from `SettingsPolicy`.**
+  Sanitising already clears `allowAv1` for a free tier. A codec choice that silently
+  depended on that having happened first is one refactor from encoding a free user's library
+  into a format they did not buy.
+- **The Settings explanation names AV1's cost.** *"Older phones, TVs and cars may not be
+  able to play them."* The file plays on the phone that made it, so the cost only appears
+  when it is shared — which is exactly the kind of cost a toggle must not hide.
+- **The fallback search bracket lives in `CodecLadder`, per codec.** It was the caller's to
+  invent, which was survivable with one output codec. A bracket built for HEVC opens an AV1
+  search a third too high and converges downwards for every probe it has.
+- **The bracket comes off the source bitrate, not the resolution.** The source bitrate is
+  the one number that already accounts for how busy the footage is: a static talking head
+  and a handheld shot of a forest are the same 4K30 and want very different answers.
+- **The queue's estimate and the search's opening bid are one number.** `expectedFactor` and
+  `fallbackBounds().startBps` come from the same constant, so "About 19 GB more possible"
+  and the bitrate the search actually opens at cannot drift apart.
+- **The XPSNR thresholds are the measured ones, not invented constants.** From milestone 2's
+  sweep (`shared/native/calibration/`): VMAF 95 interpolates to XPSNR y 39.8, and VMAF
+  90.035 was measured directly at 36.0. That README is explicit they are provisional —
+  software x265, one clip, 640×360 — but a measured provisional number beats an invented
+  one, and the verifier is what makes a wrong threshold cost a re-encode rather than
+  quality.
+
 ## Open questions added
 - **The Compose layer has never been compiled.** Every Compose Multiplatform version
   resolves `androidx.annotation`, `androidx.collection` and `androidx.lifecycle` from
@@ -824,3 +878,21 @@ all of it is unit tested against fakes.
   applies eight sliders to a bitmap and to a video frame is Compose and Media3 work that
   cannot be built or looked at here. The two halves that would be wrong invisibly — the
   geometry and the save policy — are the halves that are written.
+
+- **AV1's XPSNR↔VMAF calibration is not measured.** `CodecLadder.xpsnrThreshold` is keyed by
+  codec and AV1 currently returns the HEVC numbers, which is a placeholder rather than a
+  finding: XPSNR is a proxy for VMAF and the mapping depends on what the artefacts look
+  like, which AV1's and HEVC's do not do alike. The calibration harness now sweeps either
+  encoder (`./calibrate.sh clip.mp4 out.csv av1`) but needs an ffmpeg built with SVT-AV1,
+  which this environment does not have — and properly the number wants the device fleet from
+  milestone 13 rather than a host encoder, for the same reason the HEVC point is provisional.
+- **`CodecChoice.MeasuredSpeed` has no producer yet.** The numbers are in the `job` table —
+  `realtime_multiple` per row, and `engine` says which codec produced each — but nothing
+  aggregates them per device and codec. It is one query, and it belongs with the assembly of
+  `VideoOptimiseStep`, which is still the missing piece of the night pass. Until then the
+  caller passes null, which means "try AV1", which is the correct behaviour for an encoder
+  nothing has measured.
+- **`AV1_BITRATE_RATIO` is a literature number, not a measurement.** Two thirds is the
+  conservative end of what codec comparisons report for hardware encoders. It only sets
+  where the first probe lands, so being wrong costs a probe rather than quality — but it is
+  the kind of constant milestone 13 should replace with something this app measured.

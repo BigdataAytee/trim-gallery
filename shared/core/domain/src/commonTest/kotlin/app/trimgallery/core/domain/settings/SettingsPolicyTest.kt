@@ -107,6 +107,19 @@ class SettingsPolicyTest {
         assertTrue(SettingsPolicy.lockedFor(Tier.PRO).isEmpty())
     }
 
+    /**
+     * AV1's saving is real and so is its cost: the file plays on the phone that made it,
+     * and an older phone, a television or a car it is shared to may not open it. A setting
+     * sold on the saving alone has a cost that only appears when someone else cannot watch
+     * the video.
+     */
+    @Test
+    fun `the AV1 explanation says what it costs, not only what it saves`() {
+        val text = SettingsPolicy.lockExplanation(SettingsPolicy.Locked.AV1)
+        assertTrue(text.contains("smaller"), text)
+        assertTrue(text.contains("may not be able to play"), text)
+    }
+
     @Test
     fun `changing the quality target or AV1 makes triage stale`() {
         assertTrue(SettingsPolicy.invalidatesTriage(Settings(), Settings(qualityTarget = QualityTarget.COMPACT)))

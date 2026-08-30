@@ -8,6 +8,7 @@ import app.trimgallery.core.model.MediaRef
 import app.trimgallery.core.model.MediaStatus
 import app.trimgallery.core.model.SkipReason
 import app.trimgallery.engine.CodecCaps
+import app.trimgallery.engine.EncoderCaps
 import app.trimgallery.engine.ContainerFacts
 import app.trimgallery.engine.ContainerReader
 import app.trimgallery.engine.LibraryStorage
@@ -181,8 +182,7 @@ class TriageStepTest {
     fun `device capabilities reach the triage rules`() = runTest {
         val sink = FakeSink(rows = emptyList())
         val caps = CodecCaps(
-            hardwareHevc = true, hardwareAv1 = false, cqSupported = true,
-            maxWidth = 1280, maxHeight = 720, maxFps = 30.0,
+            hevc = EncoderCaps(hardware = true, maxWidth = 1280, maxHeight = 720, maxFps = 30.0, cqSupported = true),
         )
         TriageStep(FakeStorage(listOf(video("a"))), FakeContainers(), sink, nowMs = { 1L }).run(listOf(grant), caps)
 

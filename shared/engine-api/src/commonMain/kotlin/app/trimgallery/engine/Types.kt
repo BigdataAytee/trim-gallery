@@ -46,29 +46,98 @@ data class EncodeSpec(
 enum class VideoCodec { HEVC, AV1 }
 
 /**
+ * One point on `MediaCodecInfo.VideoCapabilities.getSupportedPerformancePoints()`.
+ *
+ * BUILD.md § 10: *"Check `getSupportedPerformancePoints()`; never request beyond advertised
+ * throughput."* The rule matters most for AV1, where phone encoders routinely advertise 4K
+ * at 30 fps while their HEVC sibling does 4K at 60 — asking for more does not fail cleanly,
+ * it produces an encode that runs at a fraction of real time and eats the night.
+ */
+data class PerformancePoint(val width: Int, val height: Int, val fps: Int) {
+    /**
+     * Whether this point covers a frame of the given size and rate.
+     *
+     * Compared by area rather than by width and height separately, which is how the
+     * platform documents it: a point advertised as 1920×1080 covers 1080×1920, because a
+     * portrait clip is the same number of macroblocks turned on its side.
+     */
+    fun covers(width: Int, height: Int, fps: Double): Boolean {
+        val area = width.toLong() * height.toLong()
+        return area <= this.width.toLong() * this.height.toLong() && fps <= this.fps + FPS_SLACK
+    }
+
+    private companion object {
+        /**
+         * Containers report 29.97 as 30 and 23.976 as 24 often enough that an exact
+         * comparison would refuse the commonest frame rates there are.
+         */
+        const val FPS_SLACK = 0.5
+    }
+}
+
+/**
+ * What one encoder on this device can do.
+ *
+ * Per encoder rather than per device because HEVC and AV1 differ, and the difference is not
+ * cosmetic: on most phones with an AV1 encoder at all, its ceiling is lower than the HEVC
+ * one. A single set of limits taken from HEVC — which is what this was until milestone 12 —
+ * means an AV1 spec is checked against the wrong encoder's ceiling and passes when it
+ * should not.
+ */
+data class EncoderCaps(
+    val hardware: Boolean = false,
+    val maxWidth: Int = 0,
+    val maxHeight: Int = 0,
+    val maxFps: Double = 0.0,
+    val cqSupported: Boolean = false,
+    /**
+     * What the encoder says it can sustain, or empty where it does not say.
+     *
+     * Empty is not "anything": it is "no information", and the caller falls back to the
+     * width, height and rate limits above. Treating silence as permission is how a night
+     * ends up spending four hours on one clip.
+     */
+    val performancePoints: List<PerformancePoint> = emptyList(),
+) {
+    /** Whether a frame this size and this fast is within what the encoder advertises. */
+    fun canSustain(width: Int, height: Int, fps: Double): Boolean {
+        if (!hardware) return false
+        if (width > maxWidth || height > maxHeight || fps > maxFps + 0.5) return false
+        if (performancePoints.isEmpty()) return true
+        return performancePoints.any { it.covers(width, height, fps) }
+    }
+}
+
+/**
  * What the device can actually do, queried before anything is configured.
  *
  * ARCHITECTURE.md § 13: pre-check caps, fall back to VBR or a lower level — never to
  * software.
  */
 data class CodecCaps(
-    val hardwareHevc: Boolean,
-    val hardwareAv1: Boolean,
-    val cqSupported: Boolean,
-    val maxWidth: Int,
-    val maxHeight: Int,
-    val maxFps: Double,
+    val hevc: EncoderCaps = EncoderCaps(),
+    val av1: EncoderCaps = EncoderCaps(),
 ) {
+    fun forCodec(codec: VideoCodec): EncoderCaps = when (codec) {
+        VideoCodec.HEVC -> hevc
+        VideoCodec.AV1 -> av1
+    }
+
     /** True when the device can encode this spec in hardware at the rate asked for. */
     fun supports(spec: EncodeSpec): Boolean {
-        val codecOk = when (spec.codec) {
-            VideoCodec.HEVC -> hardwareHevc
-            VideoCodec.AV1 -> hardwareAv1
-        }
-        val modeOk = spec.setting.mode != BitrateMode.CQ || cqSupported
-        return codecOk && modeOk &&
-            spec.width <= maxWidth && spec.height <= maxHeight && spec.fps <= maxFps
+        val caps = forCodec(spec.codec)
+        val modeOk = spec.setting.mode != BitrateMode.CQ || caps.cqSupported
+        return modeOk && caps.canSustain(spec.width, spec.height, spec.fps)
     }
+
+    /**
+     * Whether *any* hardware encoder on this device could take a frame this size.
+     *
+     * Triage's question, and deliberately the weaker one: which codec a file ends up in is
+     * settled later, by `CodecChoice`, once the settings and the tier are known.
+     */
+    fun anyCanSustain(width: Int, height: Int, fps: Double): Boolean =
+        hevc.canSustain(width, height, fps) || av1.canSustain(width, height, fps)
 }
 
 /** The result of a full-file encode. */

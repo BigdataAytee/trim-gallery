@@ -1,6 +1,7 @@
 package app.trimgallery.core.pipeline
 
 import app.trimgallery.core.model.MediaItem
+import app.trimgallery.engine.VideoCodec
 import kotlin.math.sqrt
 
 /**
@@ -44,7 +45,23 @@ object Predictor {
         val platform: String,
         val device: String,
         val cameraModel: String,
+        /** The source's codec: what the camera wrote. */
         val codec: String,
+        /**
+         * The codec being *written* — HEVC or AV1 (milestone 12).
+         *
+         * Not in BUILD.md § 5's list and not in SCHEMA.md's table (both recorded in
+         * PROJECT.md), and it has to be here: AV1 reaches the same quality at roughly two
+         * thirds of HEVC's bitrate, so a table keyed without it would average the two
+         * together. Every prediction from that family would then be too low for HEVC and
+         * too high for AV1 — worse than no prediction at all, because the search narrows
+         * its bracket around a confident one and would spend its whole probe budget
+         * escaping a number no file ever wanted.
+         *
+         * The same argument applies to a user toggling AV1 on: their existing HEVC history
+         * is not thrown away, it simply does not answer questions about AV1.
+         */
+        val outputCodec: VideoCodec,
         val width: Int,
         val height: Int,
         val fps: Int,
@@ -81,11 +98,12 @@ object Predictor {
      * dropped: files with no camera metadata are their own family, and lumping them in
      * with a real camera's would poison a prediction that is otherwise reliable.
      */
-    fun keyOf(item: MediaItem, platform: String, device: String): Key = Key(
+    fun keyOf(item: MediaItem, platform: String, device: String, outputCodec: VideoCodec): Key = Key(
         platform = platform,
         device = device,
         cameraModel = item.cameraModel ?: UNKNOWN,
         codec = item.codec?.lowercase() ?: UNKNOWN,
+        outputCodec = outputCodec,
         width = item.width,
         height = item.height,
         fps = item.fps?.let { roundFps(it) } ?: 0,

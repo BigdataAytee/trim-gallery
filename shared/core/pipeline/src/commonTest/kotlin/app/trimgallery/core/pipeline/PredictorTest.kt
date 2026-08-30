@@ -3,6 +3,7 @@ package app.trimgallery.core.pipeline
 import app.trimgallery.core.model.MediaItem
 import app.trimgallery.core.model.MediaKind
 import app.trimgallery.core.model.MediaRef
+import app.trimgallery.engine.VideoCodec
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertNotEquals
@@ -62,7 +63,20 @@ class PredictorTest {
         cameraModel = camera, phash = null, sha256 = null, mtime = 0,
     )
 
-    private fun key(item: MediaItem = item()) = Predictor.keyOf(item, "android", "Pixel 9")
+    /**
+     * The defect this component fixed: AV1 reaches the same quality at roughly two thirds of
+     * HEVC's bitrate, so a table keyed without the output codec averages the two together
+     * and every prediction from that family is too low for HEVC and too high for AV1 — worse
+     * than no prediction, because a confident one narrows the bracket around it.
+     */
+    @Test
+    fun `HEVC and AV1 are different families of the same file`() {
+        assertNotEquals(key(codec = VideoCodec.HEVC), key(codec = VideoCodec.AV1))
+        assertEquals(key(codec = VideoCodec.AV1), key(codec = VideoCodec.AV1))
+    }
+
+    private fun key(item: MediaItem = item(), codec: VideoCodec = VideoCodec.HEVC) =
+        Predictor.keyOf(item, "android", "Pixel 9", codec)
 
     @Test
     fun `files from the same camera in the same shape share a key`() {

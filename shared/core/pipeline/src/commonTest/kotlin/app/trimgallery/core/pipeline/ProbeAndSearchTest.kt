@@ -10,6 +10,7 @@ import app.trimgallery.engine.QualityScorer
 import app.trimgallery.engine.Setting
 import app.trimgallery.engine.TempFile
 import app.trimgallery.engine.YuvSource
+import app.trimgallery.engine.VideoCodec
 import app.trimgallery.engine.YuvWindow
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -184,7 +185,7 @@ class ProbeAndSearchTest {
 
         val scorer2 = FakeScorer(4_800_000)
         val entry = Predictor.Entry(
-            Predictor.keyOf(item(), "android", "Pixel 9"),
+            Predictor.keyOf(item(), "android", "Pixel 9", VideoCodec.HEVC),
             settingBps = 5_000_000,
             samples = Predictor.CONFIDENT_SAMPLES,
         )

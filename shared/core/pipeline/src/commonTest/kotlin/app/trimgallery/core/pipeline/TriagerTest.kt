@@ -6,6 +6,8 @@ import app.trimgallery.core.model.MediaKind
 import app.trimgallery.core.model.MediaRef
 import app.trimgallery.core.model.SkipReason
 import app.trimgallery.engine.CodecCaps
+import app.trimgallery.engine.EncoderCaps
+import app.trimgallery.engine.PerformancePoint
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertIs
@@ -203,27 +205,21 @@ class TriagerTest {
         // probe and search first, and tell the user nothing.
         val eightK = video("avc1", bitrate = 80_000_000, size = 900_000_000)
             .copy(width = 7680, height = 4320)
-        val caps = CodecCaps(
-            hardwareHevc = true, hardwareAv1 = false, cqSupported = true,
-            maxWidth = 3840, maxHeight = 2160, maxFps = 60.0,
-        )
+        val caps = CodecCaps(hevc = hevcCaps())
         assertEquals(
             SkipReason.NO_HARDWARE_ENCODER,
             assertIs<Triager.Verdict.Skip>(Triager.triage(eightK, caps)).reason,
         )
         // The same file is a candidate on a device that can manage it.
         assertIs<Triager.Verdict.Candidate>(
-            Triager.triage(eightK, caps.copy(maxWidth = 7680, maxHeight = 4320)),
+            Triager.triage(eightK, CodecCaps(hevc = hevcCaps(maxWidth = 7680, maxHeight = 4320))),
         )
     }
 
     @Test
     fun `a frame rate beyond the encoder is a skip`() {
         val slowMotion = video("avc1", bitrate = 80_000_000, size = 400_000_000).copy(fps = 240.0)
-        val caps = CodecCaps(
-            hardwareHevc = true, hardwareAv1 = false, cqSupported = true,
-            maxWidth = 3840, maxHeight = 2160, maxFps = 60.0,
-        )
+        val caps = CodecCaps(hevc = hevcCaps())
         assertEquals(
             SkipReason.NO_HARDWARE_ENCODER,
             assertIs<Triager.Verdict.Skip>(Triager.triage(slowMotion, caps)).reason,
@@ -233,10 +229,7 @@ class TriagerTest {
     @Test
     fun `a device with no hardware encoder at all skips every video`() {
         // BUILD.md rule 2: skip the file, never fall back to software.
-        val caps = CodecCaps(
-            hardwareHevc = false, hardwareAv1 = false, cqSupported = false,
-            maxWidth = 3840, maxHeight = 2160, maxFps = 60.0,
-        )
+        val caps = CodecCaps()
         assertEquals(
             SkipReason.NO_HARDWARE_ENCODER,
             assertIs<Triager.Verdict.Skip>(
@@ -244,6 +237,59 @@ class TriagerTest {
             ).reason,
         )
     }
+
+    /**
+     * The defect this split fixed: one set of limits taken from the HEVC encoder was
+     * applied to both, so a 4K60 clip looked encodable on a device whose AV1 encoder tops
+     * out at 4K30. Triage asks the weaker question — is there *any* path — so an AV1-only
+     * device with the lower ceiling correctly skips it, and a device with HEVC does not.
+     */
+    @Test
+    fun `each encoder is checked against its own ceiling`() {
+        val fourKSixty = video("avc1", bitrate = 80_000_000, size = 900_000_000)
+            .copy(width = 3840, height = 2160, fps = 60.0)
+
+        val av1Only = CodecCaps(av1 = EncoderCaps(hardware = true, maxWidth = 3840, maxHeight = 2160, maxFps = 30.0))
+        assertEquals(
+            SkipReason.NO_HARDWARE_ENCODER,
+            assertIs<Triager.Verdict.Skip>(Triager.triage(fourKSixty, av1Only)).reason,
+        )
+
+        assertIs<Triager.Verdict.Candidate>(Triager.triage(fourKSixty, CodecCaps(hevc = hevcCaps())))
+    }
+
+    /** BUILD.md § 10: never request beyond advertised throughput. */
+    @Test
+    fun `an encoder's own performance points bound it`() {
+        val fourKSixty = video("avc1", bitrate = 80_000_000, size = 900_000_000)
+            .copy(width = 3840, height = 2160, fps = 60.0)
+        val advertised = hevcCaps().copy(
+            performancePoints = listOf(PerformancePoint(3840, 2160, 30), PerformancePoint(1920, 1080, 60)),
+        )
+        assertEquals(
+            SkipReason.NO_HARDWARE_ENCODER,
+            assertIs<Triager.Verdict.Skip>(Triager.triage(fourKSixty, CodecCaps(hevc = advertised))).reason,
+        )
+
+        val fourKThirty = fourKSixty.copy(fps = 30.0)
+        assertIs<Triager.Verdict.Candidate>(Triager.triage(fourKThirty, CodecCaps(hevc = advertised)))
+    }
+
+    /** Silence is "no information", not "no limit". */
+    @Test
+    fun `an encoder that lists no performance points falls back to its bounds`() {
+        val fourKSixty = video("avc1", bitrate = 80_000_000, size = 900_000_000)
+            .copy(width = 3840, height = 2160, fps = 60.0)
+        assertIs<Triager.Verdict.Candidate>(Triager.triage(fourKSixty, CodecCaps(hevc = hevcCaps())))
+    }
+
+    private fun hevcCaps(maxWidth: Int = 3840, maxHeight: Int = 2160) = EncoderCaps(
+        hardware = true,
+        maxWidth = maxWidth,
+        maxHeight = maxHeight,
+        maxFps = 60.0,
+        cqSupported = true,
+    )
 
     @Test
     fun `unknown capabilities do not block triage`() {

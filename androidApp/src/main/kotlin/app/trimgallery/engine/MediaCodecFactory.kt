@@ -4,13 +4,16 @@ import android.content.Context
 import android.media.MediaCodecInfo
 import android.media.MediaCodecList
 import android.media.MediaFormat
+import android.os.Build
 import androidx.media3.common.MimeTypes
 import androidx.media3.common.util.UnstableApi
 import androidx.media3.transformer.EncoderSelector
 import app.trimgallery.engine.CodecCaps
 import app.trimgallery.engine.CodecFactory
 import app.trimgallery.engine.EncodeSpec
+import app.trimgallery.engine.EncoderCaps
 import app.trimgallery.engine.HwEncoder
+import app.trimgallery.engine.PerformancePoint
 import app.trimgallery.engine.VideoCodec
 
 /**
@@ -26,27 +29,53 @@ import app.trimgallery.engine.VideoCodec
 @UnstableApi
 class MediaCodecFactory(private val context: Context) : CodecFactory {
 
-    override fun capabilities(): CodecCaps {
-        val hevc = hardwareEncodersFor(MimeTypes.VIDEO_H265)
-        val av1 = hardwareEncodersFor(MimeTypes.VIDEO_AV1)
-        val best = hevc.firstOrNull()
+    override fun capabilities(): CodecCaps = CodecCaps(
+        hevc = capsFor(MimeTypes.VIDEO_H265),
+        av1 = capsFor(MimeTypes.VIDEO_AV1),
+    )
 
-        val videoCaps = best
-            ?.getCapabilitiesForType(MimeTypes.VIDEO_H265)
-            ?.videoCapabilities
+    /**
+     * What one format's best hardware encoder on this device can do.
+     *
+     * Queried per format rather than once for the device, because HEVC and AV1 differ and
+     * the difference is not cosmetic: on most phones that have an AV1 encoder at all, its
+     * ceiling is lower than the HEVC one — commonly 4K30 against 4K60. Until milestone 12
+     * this method read one set of limits from the HEVC encoder and applied them to both,
+     * which let an AV1 spec through against the wrong encoder's ceiling.
+     */
+    private fun capsFor(mimeType: String): EncoderCaps {
+        val best = hardwareEncodersFor(mimeType).firstOrNull() ?: return EncoderCaps()
+        val forType = best.getCapabilitiesForType(mimeType)
+        val video = forType?.videoCapabilities ?: return EncoderCaps(hardware = true)
 
-        return CodecCaps(
-            hardwareHevc = hevc.isNotEmpty(),
-            hardwareAv1 = av1.isNotEmpty(),
-            cqSupported = best
-                ?.getCapabilitiesForType(MimeTypes.VIDEO_H265)
-                ?.encoderCapabilities
+        return EncoderCaps(
+            hardware = true,
+            maxWidth = video.supportedWidths?.upper ?: 0,
+            maxHeight = video.supportedHeights?.upper ?: 0,
+            maxFps = video.supportedFrameRates?.upper?.toDouble() ?: 0.0,
+            cqSupported = forType.encoderCapabilities
                 ?.isBitrateModeSupported(MediaCodecInfo.EncoderCapabilities.BITRATE_MODE_CQ)
                 ?: false,
-            maxWidth = videoCaps?.supportedWidths?.upper ?: 0,
-            maxHeight = videoCaps?.supportedHeights?.upper ?: 0,
-            maxFps = videoCaps?.supportedFrameRates?.upper?.toDouble() ?: 0.0,
+            performancePoints = performancePointsOf(video),
         )
+    }
+
+    /**
+     * The throughput the encoder advertises (BUILD.md § 10).
+     *
+     * > Check `getSupportedPerformancePoints()`; never request beyond advertised
+     * > throughput.
+     *
+     * Added in API 29 and permitted to return null at any level, which is not the same as
+     * "no limit": an empty list means the encoder did not say, and `EncoderCaps.canSustain`
+     * then falls back to the width, height and rate bounds rather than treating silence as
+     * permission.
+     */
+    private fun performancePointsOf(video: MediaCodecInfo.VideoCapabilities): List<PerformancePoint> {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.Q) return emptyList()
+        return video.supportedPerformancePoints.orEmpty().map {
+            PerformancePoint(width = it.width, height = it.height, fps = it.maxFrameRate)
+        }
     }
 
     override fun encoder(spec: EncodeSpec, background: Boolean): HwEncoder =

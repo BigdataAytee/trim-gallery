@@ -1,5 +1,80 @@
 # Changelog
 
+## Milestone 12 — the AV1 path
+
+BUILD.md § 10: *"HEVC via MediaCodec on all devices; AV1 where `MediaCodecList` reports a
+hardware AV1 encoder."* The encoder side already spoke AV1 — `TransformerEncoder` has
+mapped `VideoCodec.AV1` to its mime type since milestone 1. What was missing was everything
+that decides *when* to use it, and two things that were quietly wrong once there were two
+codecs to be wrong about.
+
+### Two defects the second codec exposed
+
+**`CodecCaps` carried one set of limits, read from the HEVC encoder, and applied them to
+both.** Most phones that have an AV1 encoder at all top out below their HEVC ceiling —
+commonly 4K30 against 4K60 — so a 4K60 clip passed a check against the wrong encoder's
+capability and would have failed at encode time, after the whole probe and search. It is
+now `EncoderCaps` per codec, and BUILD.md § 10's *"check `getSupportedPerformancePoints()`;
+never request beyond advertised throughput"* is represented rather than aspirational. An
+encoder that lists no points is treated as having said nothing, not as having said "no
+limit": treating silence as permission is how a night ends up spending four hours on one
+clip.
+
+**`Predictor.Key` keyed on the source codec but not the output codec.** AV1 reaches the
+same quality at roughly two thirds of HEVC's bitrate, so one family would have averaged the
+two together and predicted a number too low for HEVC and too high for AV1 — worse than no
+prediction at all, because a confident entry *narrows* the search bracket around it, and the
+search would then spend its whole probe budget escaping a bitrate no file ever wanted. The
+key and the `predictor` table now carry the output codec.
+
+### When AV1 is used
+
+`CodecChoice` is four rules, and only the first is about AV1 being good:
+
+1. **An AV1 source is only ever re-encoded to AV1** — and skipped, with a reason, where AV1
+   is unavailable. Triage counts AV1 above ~8 Mbps as a candidate (BUILD.md § 5), and taking
+   such a file to HEVC would usually make it *larger* for the same picture: a night's
+   battery spent to lose the user space. "HEVC is available" is not a consolation here.
+2. **The device has to sustain it**, by its own ceiling and its own advertised performance
+   points.
+3. **It has to be fast enough to be worth the night.** BUILD.md § 6 caps the night in
+   minutes, so an encoder at half real time turns a night that would have cleared four
+   hours of video into one that clears one — a bigger saving per file and a smaller one per
+   night. The guard uses what this device actually measured (`Job.realtimeMultiple`), needs
+   five samples before it believes them, and never demotes an encoder it has not measured.
+4. **The user has to have chosen it**, with Pro and with the setting on. Checked here as
+   well as in `SettingsPolicy`, rather than trusted: a codec choice that silently depended
+   on something else having sanitised first is one refactor from encoding a free user's
+   library into a format they did not buy.
+
+The Settings explanation now says what AV1 costs as well as what it saves — *"older phones,
+TVs and cars may not be able to play them"*. The file stays perfectly playable on the phone
+that made it; the cost only shows up when it is shared, which is exactly the kind of cost a
+setting must not hide.
+
+### Where the search starts
+
+`CodecLadder` gives the fallback bracket a home. It was the caller's to invent, which was
+survivable with one output codec: with two it is not, because a bracket built for HEVC opens
+an AV1 search a third too high and converges downwards for every probe it has. The bracket
+comes off the source's own bitrate rather than its resolution — the source bitrate is the
+one number that already knows whether the footage is a talking head or a handheld shot of a
+forest — and the queue's saving estimate and the search's opening bid are now the same
+number, so what the user is promised and what the search goes looking for cannot drift.
+
+The XPSNR thresholds are the **measured** ones from milestone 2's calibration sweep, not
+invented constants: VMAF 95 interpolates to XPSNR y 39.8 and VMAF 90.035 was measured
+directly at 36.0. AV1 returns the same values, and that is a placeholder rather than a
+finding — XPSNR is a proxy for VMAF and the mapping depends on what the artefacts look
+like, which AV1's and HEVC's do not do alike. The table is keyed by codec so the measurement
+has somewhere to land, the calibration harness now sweeps either encoder, and PROJECT.md
+records it as open. It needs an ffmpeg with SVT-AV1, which this environment does not have,
+and properly it needs the device fleet from milestone 13.
+
+### Numbers
+
+710 shared JVM tests and 47 build-guard tests pass; the guards scan 160 source files clean.
+
 ## Milestone 11 — the editor
 
 BUILD.md § 9: *"crop, rotate, straighten, light/colour sliders, a few filters, video trim.
