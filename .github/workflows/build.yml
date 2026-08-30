@@ -4,7 +4,6 @@ name: Build
 
 on:
   push:
-    branches: [main]
   pull_request:
 
 concurrency:
@@ -62,6 +61,37 @@ jobs:
         with:
           name: shared-test-reports
           path: '**/build/reports/tests'
+          if-no-files-found: ignore
+
+  ios-compile:
+    name: iOS cross-compile
+    runs-on: macos-14
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+      - uses: gradle/actions/setup-gradle@v4
+
+      # The claim this job exists to test. Until it ran, "the shared layer is portable"
+      # rested on a source scan: the code had never been through the Kotlin/Native
+      # compiler, which is the only thing that can actually answer the question.
+      #
+      # The portability guard catches what a grep can see — a `java.util` import in
+      # commonMain. It cannot see an expect/actual gap, a dependency published with no
+      # Native artifact, or an API that is in the JVM standard library and not in
+      # kotlin-stdlib-common. This can.
+      - name: Compile every shared module for both iOS targets
+        run: ./gradlew iosCompile --stacktrace
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: ios-compile-reports
+          path: '**/build/reports'
           if-no-files-found: ignore
 
   android:

@@ -40,6 +40,33 @@ tasks.register("sharedTest") {
     )
 }
 
+/**
+ * `./gradlew iosCompile` — the Kotlin/Native half of ARCHITECTURE.md § 16.
+ *
+ * Only exists on a Mac, because that is the only place the iOS targets are declared. Until
+ * this ran, "the shared layer is portable" was a claim resting on a source scan: the code had
+ * never been through the Kotlin/Native compiler, which is the only thing that can actually
+ * answer the question. The portability guard catches the class of error a grep can see;
+ * this catches the rest — expect/actual gaps, a dependency with no Native artifact, an API
+ * that exists on the JVM standard library and not in kotlin-stdlib-common.
+ */
+if (System.getProperty("os.name").startsWith("Mac")) {
+    tasks.register("iosCompile") {
+        group = "verification"
+        description = "Compiles every shared module for both iOS targets."
+        dependsOn(
+            subprojects
+                .filter { it.path.startsWith(":shared:") }
+                .flatMap {
+                    listOf(
+                        "${it.path}:compileKotlinIosArm64",
+                        "${it.path}:compileKotlinIosSimulatorArm64",
+                    )
+                },
+        )
+    }
+}
+
 tasks.register("guards") {
     group = "verification"
     description = "Runs every build guard in every module (ARCHITECTURE.md § 14)."
