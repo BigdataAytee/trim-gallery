@@ -1,5 +1,89 @@
 # Changelog
 
+## Milestone 15 — the iOS port
+
+BUILD.md § 13.15: *"iOS port: VideoToolbox, AVAssetWriter, BGProcessingTask, PhotoKit."*
+
+**Nothing here has been compiled.** There is no Mac and no Xcode in this environment, so
+Swift is written to documented behaviour and reviewed, not executed, and Kotlin/Native
+targets are still declared only on a Mac. That makes this the least verifiable milestone in
+the project — which is exactly why the work went first into the parts that *can* be verified
+here, and only then into the Swift.
+
+### Proving the shared layer is actually portable
+
+The shared modules have only ever been compiled for the JVM. A stray `java.util` import in
+`commonMain` would have passed every test and every CI run right up until the day someone
+tried to build for Kotlin/Native and found the port blocked by a hundred small things.
+
+There were none — the audit came back clean — but "we checked by hand" does not survive a
+year of changes, so it is now a build guard with source-set path scoping: platform imports
+in shared common code fail the build. Two things came out of writing it:
+
+- **The first version flagged 196 correct lines.** `androidx` is not one thing:
+  `androidx.compose.*` is Compose Multiplatform and compiles for Kotlin/Native, while
+  `androidx.work` and `androidx.datastore` do not. That is the useful kind of false
+  positive — a guard nobody can satisfy gets switched off, and then it guards nothing.
+- **The allow-lists were language-dependent.** They name `SafeReplacerIos.kt`, written when
+  every implementation was Kotlin; the component is Swift, because PhotoKit lives there.
+  Comparison is now extension-insensitive, which is the right comparison anyway: the
+  boundary is about the component, not the compiler. The guard's iOS patterns —
+  `VTCompressionSessionCreate`, PhotoKit mutations — had also never been applied to any
+  Swift, because the harness only globbed `.kt`. Both fixed; 189 files scan clean.
+
+### The decisions the port exposed
+
+iOS reports **four thermal states** where Android reports a continuous headroom. The
+tempting move is a second gate for iOS; the result of that is two policies that drift, and a
+user told "paused for heat" on one phone and not the other at the same temperature. So the
+mapping is shared: one gate, one hysteresis, one set of thresholds, converted at the edge to
+give exactly ARCHITECTURE.md § 6's *"run at nominal/fair, pause at serious/critical"*.
+
+A consequence worth knowing is asserted rather than hoped: **iOS has no state between the
+thresholds, so the hysteresis does nothing there.** An oscillating OS signal is a pause per
+oscillation. The alternative — mapping fair *between* the thresholds so only nominal
+resumes — is named, tested and ready if the field test finds flapping.
+
+iOS also has **no alarm API at all**, so the whole deadline there is the user's own "stop by"
+time. That path now has a test, because the port depends on it already working: had
+`AlarmWindow.deadline` needed an alarm to produce an answer, the night pass on iOS would
+simply never stop.
+
+### The adapters
+
+Written selectively — the ones whose contracts are subtle enough that getting them wrong
+loses a user's file or a user's albums:
+
+- **`SafeReplacerIos`.** There is no rename on iOS: "replace" is
+  `creationRequestForAssetFromVideo` then `deleteAssets`, and both must be in **one** change
+  block, or there is a window with neither file in it — on the user's only copy. Album
+  membership does not follow a new asset, so the original's albums are read *before* the
+  block and re-applied inside it; miss that and the photograph is still in the library, just
+  not where they left it, and nothing surfaces it. The delete lands in system Recently
+  Deleted for 30 days, which is exactly the FREE folder mode's retention, so on iOS the bin
+  is the OS's.
+- **`NightTask`.** `BGProcessingTask` with `requiresExternalPower` and
+  `requiresNetworkConnectivity = false`. It re-submits *before* running, because iOS grants
+  one window per submission and a night that forgot to ask for the next one is an app that
+  optimises once and never again. The expiration handler is not clean-up bolted on — it is
+  the same interruption the guards already produce when a phone is unplugged, and
+  `NightRun` already checkpoints after every file.
+- **`ThermalGuardIos`**, which observes rather than polls, and converts through the shared
+  mapping.
+- **`VideoToolboxFactory`**, the only place a codec is created on iOS.
+  `RequireHardwareAcceleratedVideoEncoder`, not `Enable` — only the first fails rather than
+  falling back, which is the behaviour BUILD.md rule 2 needs.
+
+`IosDatabase` completes the storage side: the same schema, the native driver, foreign keys
+on (SCHEMA.md's `ON DELETE CASCADE` is inert without the pragma, and an orphaned undo row is
+an original nobody can restore), and the file in Application Support rather than Documents,
+where a user browsing their own files would find the index of their photo library.
+
+### Numbers
+
+869 shared JVM tests and 59 build-guard tests pass; the guards scan 189 source files —
+Kotlin and Swift — clean.
+
 ## Milestone 14 — Memories and the map (v1.1)
 
 BUILD.md § 9 v1.1: *"Memories / On this day with music; Map view with offline tiles."*

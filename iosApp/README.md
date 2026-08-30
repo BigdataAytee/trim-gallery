@@ -6,7 +6,26 @@ complete and so the build guards already cover the iOS side.
 
 ## What is here now
 
-- The § 3 directory shape (`engine/`, `storage/`, `scheduler/`, `ui/`), empty.
+Milestone 15 landed the adapters whose contracts are subtle enough to be worth writing down
+before anyone has a Mac in front of them — the ones where getting it wrong loses a user's
+file or a user's albums:
+
+- `storage/SafeReplacerIos.swift` — the only writer. Add-then-delete in **one** change block,
+  album membership read before it and re-applied inside it, and the system Recently Deleted
+  as the undo bin.
+- `scheduler/NightTask.swift` — `BGProcessingTask`, re-submitting before it runs, and an
+  expiration handler that is the same interruption the guards already produce.
+- `scheduler/ThermalGuardIos.swift` — observes `thermalState` and converts it through the
+  shared `ThermalState`, so both platforms pause under one policy.
+- `engine/VideoToolboxFactory.swift` — the only place a codec is created, requiring hardware
+  rather than requesting it.
+
+**None of it has been compiled.** There is no Mac and no Xcode in the environment this was
+written in, so every one of those files is written to documented behaviour and reviewed, not
+executed. Expect to fix API details on the first real build; the decisions inside them are
+the part worth keeping.
+
+- The § 3 directory shape (`engine/`, `storage/`, `scheduler/`, `ui/`).
 - `TrimGallery.entitlements` and `Info.plist` with **no network keys**. The
   `verifySourceBoundaries` guard scans both and fails the build if
   `NSAppTransportSecurity` or any network entitlement appears (ARCHITECTURE.md § 6, and
@@ -14,7 +33,7 @@ complete and so the build guards already cover the iOS side.
 
 ## What is not here
 
-No Xcode project, no Swift, no Kotlin/Native framework. Kotlin/Native iOS targets are
+No Xcode project and no Kotlin/Native framework. Kotlin/Native iOS targets are
 declared in the shared modules **only when building on a Mac** — otherwise Linux CI
 cannot configure the build, and CI is what gates the shared tests today. That is a
 deliberate trade-off, recorded in PROJECT.md.

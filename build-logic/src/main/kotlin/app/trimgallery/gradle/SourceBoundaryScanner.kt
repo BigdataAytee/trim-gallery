@@ -22,7 +22,10 @@ object SourceBoundaryScanner {
      *
      * @param id short name, used in task names and messages
      * @param patterns the calls that are restricted
-     * @param allowedFileNames base file names permitted to make those calls
+     * @param allowedFileNames the components permitted to make those calls, by file name.
+     *   Compared without the extension, because the boundary is about *which component*
+     *   does a thing and the same component is `.kt` on Android and `.swift` on iOS —
+     *   `SafeReplacerIos` is the only writer whichever language it ends up in.
      * @param rationale why the boundary exists, printed on failure
      */
     data class Rule(
@@ -38,6 +41,15 @@ object SourceBoundaryScanner {
          * set this must be specific enough that prose cannot trip them.
          */
         val rawSource: Boolean = false,
+        /**
+         * Restrict the rule to files whose path contains this segment.
+         *
+         * The other rules are about *which file* may do a thing, so a file-name allow-list
+         * expresses them. This one is about *which source set*: a JVM import is perfectly
+         * correct in `jvmMain` and fatal in `commonMain`, and the difference is the
+         * directory, not the name.
+         */
+        val pathContains: String? = null,
     )
 
     data class Violation(
@@ -152,7 +164,53 @@ object SourceBoundaryScanner {
         rawSource = true,
     )
 
-    val DEFAULT_RULES = listOf(CODEC_FACTORY_ONLY, REPLACER_ONLY, NO_NETWORK_API, NO_WRITE_MODE_OPEN)
+    /**
+     * Platform types in shared common code (milestone 15, the iOS port).
+     *
+     * ARCHITECTURE.md § 3 says the shared modules depend on no platform, and until this
+     * milestone that was true only because nobody had broken it — the shared layer has only
+     * ever been compiled for the JVM, so a stray `java.util` import would have gone on
+     * passing every test and CI run right up until the day someone tried to build for
+     * Kotlin/Native and found the port blocked by a hundred small things.
+     *
+     * This turns "we checked by hand" into something the build enforces on every commit,
+     * which is the only form in which the claim survives contact with a year of changes.
+     *
+     * Deliberately *not* on the list:
+     *
+     * - `kotlin.jvm.JvmInline` and friends. The `kotlin.jvm` annotations are part of common
+     *   Kotlin and `MediaRef` is a `@JvmInline value class` on every target.
+     * - `Dispatchers.IO`. It has been available on Native since coroutines 1.9, so banning
+     *   it would be enforcing a fact that stopped being true. This codebase injects the
+     *   dispatcher anyway, for testability rather than portability.
+     */
+    val PORTABLE_COMMON = Rule(
+        id = "portableCommon",
+        patterns = listOf(
+            Regex("""^\s*import\s+java\."""),
+            Regex("""^\s*import\s+javax\."""),
+            Regex("""^\s*import\s+android\."""),
+            // androidx is not one thing. `androidx.compose.*` is Compose Multiplatform and
+            // compiles for Kotlin/Native — `shared/core/ui` is full of it, correctly.
+            // `androidx.work`, `androidx.datastore` and `androidx.media3` are Android only.
+            // The first version of this rule banned the lot and flagged 196 correct lines,
+            // which is the useful kind of false positive: a guard nobody can satisfy gets
+            // switched off, and then it is guarding nothing.
+            Regex("""^\s*import\s+androidx\.(?!compose\.)"""),
+            // Kotlin/Native's Apple interop packages: correct in iosMain, wrong in common.
+            Regex("""^\s*import\s+platform\."""),
+            Regex("""\bSystem\s*\.\s*(currentTimeMillis|nanoTime|getProperty|getenv)\b"""),
+        ),
+        allowedFileNames = emptySet(),
+        pathContains = "commonMain",
+        rationale = "Shared code must compile for Kotlin/Native as well as the JVM " +
+            "(ARCHITECTURE.md § 3). A platform type in commonMain blocks the iOS port and " +
+            "will not be noticed by any JVM test — put it behind an engine-api interface, " +
+            "or in the platform source set that actually needs it.",
+    )
+
+    val DEFAULT_RULES =
+        listOf(CODEC_FACTORY_ONLY, REPLACER_ONLY, NO_NETWORK_API, NO_WRITE_MODE_OPEN, PORTABLE_COMMON)
 
 
     /**
@@ -221,7 +279,11 @@ object SourceBoundaryScanner {
     /** Scans one file against every rule that applies to it. */
     fun scan(file: File, rules: List<Rule> = DEFAULT_RULES): List<Violation> {
         if (!file.isFile) return emptyList()
-        val applicable = rules.filterNot { file.name in it.allowedFileNames }
+        val path = file.invariantSeparatorsPath
+        val component = componentName(file.name)
+        val applicable = rules
+            .filterNot { rule -> rule.allowedFileNames.any { componentName(it) == component } }
+            .filter { it.pathContains == null || path.contains(it.pathContains) }
         if (applicable.isEmpty()) return emptyList()
 
         val raw = file.readText()
@@ -240,6 +302,18 @@ object SourceBoundaryScanner {
         return violations.sortedWith(compareBy({ it.line }, { it.rule.id }))
     }
 
+    /**
+     * A file name with its language stripped.
+     *
+     * The allow-lists were written when every implementation was Kotlin, so they say
+     * `SafeReplacerIos.kt` — and milestone 15 wrote that component in Swift, where PhotoKit
+     * lives. Comparing without the extension is what stops the guard flagging the one file
+     * it was written to permit, and it is the right comparison anyway: the boundary is about
+     * the component, not the compiler.
+     */
+    internal fun componentName(fileName: String): String =
+        fileName.substringBeforeLast('.', fileName)
+
     fun scanAll(files: Iterable<File>, rules: List<Rule> = DEFAULT_RULES): List<Violation> =
         files.flatMap { scan(it, rules) }
 
@@ -249,7 +323,11 @@ object SourceBoundaryScanner {
         appendLine()
         violations.groupBy { it.rule }.forEach { (rule, found) ->
             appendLine("  ${rule.id}: ${rule.rationale}")
-            appendLine("  Allowed only in: ${rule.allowedFileNames.sorted().joinToString(", ")}")
+            if (rule.allowedFileNames.isEmpty()) {
+                appendLine("  Allowed nowhere" + (rule.pathContains?.let { " under $it" } ?: "") + ".")
+            } else {
+                appendLine("  Allowed only in: ${rule.allowedFileNames.sorted().joinToString(", ")}")
+            }
             found.forEach { appendLine("    - $it") }
             appendLine()
         }

@@ -46,10 +46,16 @@ Milestone 14 adds the v1.1 pair: Memories, with the exclusions that make the fea
 ship, and the map — clustering, home and trips, over an offline basemap the user supplies as
 an MBTiles pack. There is no geocoder and never will be, so nothing here names a place.
 
-All six native functions are verified against their upstream binaries. 859 shared JVM tests
-and 47 build-guard tests pass. Nothing Android or Compose has been
-compiled — Google Maven is unreachable from the build environment, which is why every
-decision the app makes lives in platform-free Kotlin that can be tested without it. See
+Milestone 15 begins the iOS port. The shared layer's portability is now enforced by a build
+guard rather than assumed, the decisions iOS forces — four thermal states instead of a
+continuous reading, no alarm API at all — are shared with the Android ones, and four Swift
+adapters are written where the contract is subtle. **None of the Swift has been compiled**:
+there is no Mac in the build environment, and most of the adapter matrix is still unwritten.
+
+All six native functions are verified against their upstream binaries. 869 shared JVM tests
+and 59 build-guard tests pass, over Kotlin and Swift. Nothing Android, iOS or Compose has been
+compiled — Google Maven is unreachable and there is no Mac — which is why every decision the
+app makes lives in platform-free Kotlin that can be tested without either. See
 CHANGELOG.md for what is done and what was verified, and PROJECT.md for what is knowingly
 untested.
 

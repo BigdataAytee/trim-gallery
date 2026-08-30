@@ -223,6 +223,194 @@ class SourceBoundaryScannerTest {
         assertEquals(source.length, SourceBoundaryScanner.strip(source).length)
     }
 
+    // --------------------------------------------------- language independence
+
+    /**
+     * The allow-lists were written when every implementation was Kotlin and say
+     * `SafeReplacerIos.kt`; milestone 15 wrote that component in Swift, where PhotoKit
+     * lives. Without an extension-insensitive comparison the guard flags the one file it
+     * exists to permit.
+     */
+    @Test
+    fun `an allow-listed component is allowed in either language`() {
+        val swift = kt(
+            "iosApp/TrimGallery/storage/SafeReplacerIos.swift",
+            """
+            import Photos
+            PHAssetChangeRequest.deleteAssets(assets)
+            """.trimIndent(),
+        )
+        assertTrue(SourceBoundaryScanner.scan(swift).isEmpty())
+
+        val factory = kt(
+            "iosApp/TrimGallery/engine/VideoToolboxFactory.swift",
+            "VTCompressionSessionCreate(allocator: nil)",
+        )
+        assertTrue(SourceBoundaryScanner.scan(factory).isEmpty())
+    }
+
+    @Test
+    fun `a Swift file that is not allow-listed is still caught`() {
+        val file = kt(
+            "iosApp/TrimGallery/ui/GalleryView.swift",
+            "PHAssetChangeRequest.deleteAssets(assets)",
+        )
+        assertEquals("replacer", SourceBoundaryScanner.scan(file).single().rule.id)
+    }
+
+    @Test
+    fun `stripping the extension does not merge different components`() {
+        assertEquals("SafeReplacerIos", SourceBoundaryScanner.componentName("SafeReplacerIos.swift"))
+        assertEquals("SafeReplacerIos", SourceBoundaryScanner.componentName("SafeReplacerIos.kt"))
+        assertEquals("Makefile", SourceBoundaryScanner.componentName("Makefile"))
+    }
+
+    // ----------------------------------------------------- portability guard
+
+    /**
+     * The whole reason this rule exists: the shared layer has only ever been compiled for
+     * the JVM, so a `java.util` import in commonMain passes every test and every CI run
+     * right up until the day someone builds for Kotlin/Native and finds the port blocked.
+     */
+    @Test
+    fun `a JVM import in shared common code is a violation`() {
+        val file = kt(
+            "shared/core/domain/src/commonMain/kotlin/Thing.kt",
+            """
+            package app.trimgallery
+            import java.util.UUID
+            """.trimIndent(),
+        )
+        val violations = SourceBoundaryScanner.scan(file)
+        assertEquals(1, violations.size)
+        assertEquals("portableCommon", violations.single().rule.id)
+    }
+
+    @Test
+    fun `Android and Apple types are equally unwelcome in common code`() {
+        for (line in listOf(
+            "import android.content.Context",
+            "import androidx.datastore.core.DataStore",
+            "import platform.Foundation.NSDate",
+            "import javax.crypto.Cipher",
+        )) {
+            val file = kt(
+                "shared/core/pipeline/src/commonMain/kotlin/Thing.kt",
+                "package app.trimgallery\n$line\n",
+            )
+            assertEquals(line, 1, SourceBoundaryScanner.scan(file).size)
+        }
+    }
+
+    @Test
+    fun `the clock is not read from the JVM in common code`() {
+        val file = kt(
+            "shared/core/pipeline/src/commonMain/kotlin/Thing.kt",
+            """
+            package app.trimgallery
+            val now = System.currentTimeMillis()
+            """.trimIndent(),
+        )
+        assertEquals("portableCommon", SourceBoundaryScanner.scan(file).single().rule.id)
+    }
+
+    /**
+     * A JVM import is correct in `jvmMain` and fatal in `commonMain`, and the difference is
+     * the directory rather than the file name — which is why this rule is scoped by path.
+     */
+    @Test
+    fun `the same import is fine in a platform source set`() {
+        for (path in listOf(
+            "shared/core/data/src/androidMain/kotlin/Thing.kt",
+            "shared/core/data/src/jvmMain/kotlin/Thing.kt",
+            "shared/core/data/src/iosMain/kotlin/Thing.kt",
+            "androidApp/src/main/kotlin/Thing.kt",
+        )) {
+            val file = kt(path, "package app.trimgallery\nimport android.content.Context\n")
+            assertTrue(path, SourceBoundaryScanner.scan(file).none { it.rule.id == "portableCommon" })
+        }
+    }
+
+    /**
+     * `kotlin.jvm` annotations are part of common Kotlin — `MediaRef` is a `@JvmInline value
+     * class` on every target — so banning them would break the model layer it is meant to
+     * protect.
+     */
+    @Test
+    fun `kotlin jvm annotations are common Kotlin and stay allowed`() {
+        val file = kt(
+            "shared/core/model/src/commonMain/kotlin/Ids.kt",
+            """
+            package app.trimgallery
+            import kotlin.jvm.JvmInline
+            @JvmInline
+            value class MediaRef(val value: String)
+            """.trimIndent(),
+        )
+        assertTrue(SourceBoundaryScanner.scan(file).isEmpty())
+    }
+
+    /**
+     * androidx is not one thing. Compose Multiplatform ships under `androidx.compose` and
+     * compiles for Kotlin/Native; `androidx.work` and `androidx.datastore` do not. Banning
+     * the lot flagged 196 correct lines in `shared/core/ui` — the useful kind of false
+     * positive, because a guard nobody can satisfy gets switched off and then guards nothing.
+     */
+    @Test
+    fun `Compose Multiplatform is not an Android dependency`() {
+        val file = kt(
+            "shared/core/ui/src/commonMain/kotlin/Tile.kt",
+            """
+            package app.trimgallery
+            import androidx.compose.foundation.layout.Box
+            import androidx.compose.runtime.Composable
+            import androidx.compose.ui.Modifier
+            """.trimIndent(),
+        )
+        assertTrue(SourceBoundaryScanner.scan(file).isEmpty())
+    }
+
+    @Test
+    fun `the Android-only androidx libraries are still caught`() {
+        for (line in listOf(
+            "import androidx.work.WorkManager",
+            "import androidx.datastore.core.DataStore",
+            "import androidx.media3.transformer.Transformer",
+        )) {
+            val file = kt(
+                "shared/core/data/src/commonMain/kotlin/Thing.kt",
+                "package app.trimgallery\n$line\n",
+            )
+            assertEquals(line, 1, SourceBoundaryScanner.scan(file).size)
+        }
+    }
+
+    @Test
+    fun `ordinary shared code passes`() {
+        val file = kt(
+            "shared/core/domain/src/commonMain/kotlin/Thing.kt",
+            """
+            package app.trimgallery
+            import kotlin.math.min
+            import kotlinx.coroutines.flow.Flow
+            import kotlinx.datetime.LocalDate
+            """.trimIndent(),
+        )
+        assertTrue(SourceBoundaryScanner.scan(file).isEmpty())
+    }
+
+    /** A rule with no allow-list must not print an empty "allowed only in" line. */
+    @Test
+    fun `the failure message reads sensibly for a rule allowed nowhere`() {
+        val file = kt(
+            "shared/core/domain/src/commonMain/kotlin/Thing.kt",
+            "package app.trimgallery\nimport java.io.File\n",
+        )
+        val message = SourceBoundaryScanner.failureMessage(SourceBoundaryScanner.scan(file))
+        assertTrue(message, message.contains("Allowed nowhere under commonMain."))
+        assertTrue(message, message.contains("Kotlin/Native"))
+    }
+
     @Test
     fun `an escaped quote does not end a string early`() {
         // Otherwise the rest of the line reads as code and a rule name inside a message

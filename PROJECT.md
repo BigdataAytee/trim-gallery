@@ -942,6 +942,62 @@ all of it is unit tested against fakes.
 - **Over the length limit a memory samples across its span rather than truncating.** A
   memory of one morning of a week-long trip is a memory of the wrong thing.
 
+## Milestone 15 — the iOS port
+
+- **The shared layer's portability is enforced, not assumed.** It has only ever been compiled
+  for the JVM, so a platform import in `commonMain` would pass every test until someone built
+  for Kotlin/Native. The audit came back clean; the guard is what keeps it that way through a
+  year of changes.
+- **`androidx` is not one thing.** `androidx.compose.*` is Compose Multiplatform and compiles
+  for Native; `androidx.work`, `androidx.datastore` and `androidx.media3` do not. The first
+  version of the rule banned the lot and flagged 196 correct lines in `shared/core/ui` — a
+  guard nobody can satisfy gets switched off, and then it guards nothing.
+- **Guard allow-lists compare file names without the extension.** They were written when every
+  implementation was Kotlin and say `SafeReplacerIos.kt`; the component is Swift, because
+  PhotoKit lives there. The boundary is about the component, not the compiler.
+- **The guards had never seen any Swift.** The `VTCompressionSessionCreate` and PhotoKit
+  patterns existed from milestone 4 but the harness globbed only `.kt`, so they had never run
+  against anything. Fixed the moment there was Swift for them to run against.
+- **The thermal mapping is shared, not per platform.** iOS gives four states, Android a
+  continuous headroom. A second gate for iOS would drift from the first, and a user would be
+  told "paused for heat" on one phone and not the other at the same temperature. One gate,
+  one hysteresis, converted at the edge.
+- **On iOS the hysteresis does nothing, and that is written down.** There is no state between
+  0.5 and 0.7, so an oscillating OS signal is a pause per oscillation. `ThermalState.HELD_FAIR`
+  is the alternative — fair mapped between the thresholds, so only nominal resumes — named and
+  tested so switching after a field test is one line. It trades the letter of
+  ARCHITECTURE.md § 6 ("run at fair") for the behaviour the two thresholds exist to produce.
+- **An unrecognised thermal state reads as nominal.** A value a future OS adds must not stop
+  the night pass on every phone that has it; the gate still pauses on any reading it does
+  understand.
+- **iOS's replace is add-then-delete in one change block.** Two blocks means an instant with
+  neither file, on the user's only copy. PhotoKit's `performChanges` is atomic for the whole
+  block, which is what lets the § 7 contract hold where there is no rename to be atomic on.
+- **Album membership is read before the change block and re-applied inside it.** A new asset
+  belongs to no album, so without this the photograph stays in the library and silently leaves
+  every album the user filed it in — and nothing surfaces it.
+- **iOS's rollback is weaker than Android's, and the difference is real.** `uncommit` can
+  remove the replacement but PhotoKit offers no programmatic restore from Recently Deleted, so
+  the unwind recovers the identity and the user recovers the original from the Photos app. It
+  is the one place the two platforms genuinely differ on safety, and the undo row names the
+  system bin so History can say so.
+- **`NightTask` re-submits before it runs.** iOS grants one window per submission; a night
+  that forgot to ask for the next one is an app that optimises once and never again, with no
+  way for the user to tell why.
+- **`earliestBeginDate` is ten minutes out, not tonight at a fixed hour.** iOS treats it as
+  the earliest it will *consider* running and picks the moment itself — it already knows when
+  the phone is put down. Asking for 2 a.m. would not make it run at 2 a.m.; it would only stop
+  it running at midnight when the phone was already charging and idle.
+- **VideoToolbox is asked to *require* hardware, not to prefer it.** Only
+  `RequireHardwareAcceleratedVideoEncoder` fails rather than falling back to software, which
+  is what BUILD.md rule 2 needs.
+- **`EncoderCaps.performancePoints` is empty on iOS.** VideoToolbox has no equivalent, and
+  empty means "no information" — falling back to the dimension bounds — rather than "no
+  limit". Whether iOS needs a throughput bound at all is a field-test question.
+- **The iOS database file goes in Application Support, not Documents.** Documents is exposed
+  to the Files app, and a user browsing their own files should not find the index of their
+  photo library sitting there.
+
 ## Open questions added
 - **The Compose layer has never been compiled.** Every Compose Multiplatform version
   resolves `androidx.annotation`, `androidx.collection` and `androidx.lifecycle` from
@@ -1046,3 +1102,19 @@ all of it is unit tested against fakes.
   of megabytes, so the copy is a real cost and the UI must show its size and ask before
   spending it. Whether a better route exists — a custom VFS over a `ParcelFileDescriptor` —
   is worth checking on device before settling for the copy.
+
+- **No Swift or Kotlin/Native code in this repository has been compiled.** There is no Mac
+  and no Xcode in the build environment, and the iOS targets are still declared only on one.
+  Four adapters are written — the replacer, the scheduler, the thermal guard and the codec
+  factory — chosen because their contracts are the ones where getting it wrong loses a file
+  or a user's albums. Expect API details to move on the first real build; the decisions
+  inside them are the part worth keeping.
+- **Most of the adapter matrix is still unwritten.** `PhotoKitStorage`, `AVAssetWriterEncoder`,
+  `YuvSourceIos`, `VisionIndexer`, `UndoBinIos`, the `CGImageDestination` photo path, the
+  `AVPlayerItemVideoOutput` tap, and the cinterop that binds `shared/native` for ios-arm64.
+  Each implements an interface that already exists and is already exercised by fakes in the
+  shared tests, which is the point of having written them that way — but none of it is done.
+- **Face embeddings need the same model on both platforms.** ARCHITECTURE.md § 6 says LiteRT
+  on Android and Core ML on iOS, "same model converted". No model has been chosen on either,
+  and clustering quality will change when one is — on both platforms at once, which is the
+  argument for choosing before the Android launch rather than after.

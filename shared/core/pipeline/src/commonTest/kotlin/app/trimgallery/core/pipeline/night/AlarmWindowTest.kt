@@ -122,4 +122,32 @@ class AlarmWindowTest {
         // the last few percent back up.
         assertEquals(30.minutes, AlarmWindow.LEAD)
     }
+
+    /**
+     * iOS has no alarm API at all (ARCHITECTURE.md § 6), so the whole deadline there is the
+     * user's own "stop by" time. Asserted rather than assumed, because the port depends on
+     * this path already working: had `deadline` required an alarm to produce an answer, the
+     * night pass on iOS would simply never stop.
+     */
+    @Test
+    fun `with no alarm source the stop-by time is the whole deadline`() {
+        val now = Instant.parse("2026-08-30T22:00:00Z")
+        val deadline = AlarmWindow.deadline(
+            now = now,
+            nextAlarm = null,
+            stopBy = LocalTime(6, 0),
+            zone = utc,
+        )
+        assertEquals(Instant.parse("2026-08-31T06:00:00Z"), deadline)
+        assertFalse(AlarmWindow.reached(now, deadline))
+        assertTrue(AlarmWindow.reached(Instant.parse("2026-08-31T06:30:00Z"), deadline))
+    }
+
+    /** And a platform with neither is unbounded, which is the guards' problem, not this one's. */
+    @Test
+    fun `no alarm and no stop-by is no deadline`() {
+        val now = Instant.parse("2026-08-30T22:00:00Z")
+        assertNull(AlarmWindow.deadline(now, nextAlarm = null, stopBy = null, zone = TimeZone.UTC))
+        assertFalse(AlarmWindow.reached(now, null))
+    }
 }
