@@ -23,6 +23,9 @@ class ManifestPermissionScannerTest {
             writeText(
                 "<?xml version=\"1.0\" encoding=\"utf-8\"?>\n" +
                     "<manifest xmlns:android=\"http://schemas.android.com/apk/res/android\"\n" +
+                    // The tools namespace, so a body can use tools:node — declaring it always
+                    // costs nothing and the manifests this guard reads all have it.
+                    "    xmlns:tools=\"http://schemas.android.com/tools\"\n" +
                     "    package=\"app.trimgallery\">\n" +
                     body.trimIndent() + "\n" +
                     "</manifest>\n",
@@ -133,4 +136,32 @@ class ManifestPermissionScannerTest {
         assertTrue(message.contains(dirty.path))
         assertTrue(message.contains("BUILD.md rule 8"))
     }
+    /**
+     * The line written to *satisfy* the guard must not fail it.
+     *
+     * `tools:node="remove"` is the only way an app manifest can keep a permission a
+     * dependency declared out of the merged result — Coil declares INTERNET, WorkManager
+     * declares ACCESS_NETWORK_STATE — and reading it as a request would make BUILD.md rule 8
+     * unsatisfiable.
+     */
+    @Test
+    fun `a permission removed with tools node remove is not a violation`() {
+        val manifest = manifest(
+            """    <uses-permission android:name="android.permission.INTERNET" tools:node="remove" />""",
+        )
+        assertTrue(ManifestPermissionScanner.scan(manifest).isEmpty())
+    }
+
+    /** `replace` keeps the permission and only changes how it merges. Still a violation. */
+    @Test
+    fun `a permission kept with tools node replace is still a violation`() {
+        val manifest = manifest(
+            """    <uses-permission android:name="android.permission.INTERNET" tools:node="replace" />""",
+        )
+        assertEquals(
+            listOf("android.permission.INTERNET"),
+            ManifestPermissionScanner.scan(manifest).map { it.permission },
+        )
+    }
+
 }

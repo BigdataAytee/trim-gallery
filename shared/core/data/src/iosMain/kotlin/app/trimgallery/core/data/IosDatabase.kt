@@ -6,6 +6,11 @@ import app.cash.sqldelight.driver.native.wrapConnection
 import app.trimgallery.core.data.db.TrimDatabase
 import co.touchlab.sqliter.DatabaseConfiguration
 import co.touchlab.sqliter.JournalMode
+import kotlinx.cinterop.ExperimentalForeignApi
+import platform.Foundation.NSApplicationSupportDirectory
+import platform.Foundation.NSFileManager
+import platform.Foundation.NSSearchPathForDirectoriesInDomains
+import platform.Foundation.NSUserDomainMask
 
 /**
  * The iOS connection to the shared schema (milestone 15).
@@ -39,13 +44,44 @@ object IosDatabase {
             upgrade = { connection, from, to ->
                 wrapConnection(connection) { TrimDatabase.Schema.migrate(it, from.toLong(), to.toLong()) }
             },
+            // WAL, for the same reason the night pass checkpoints every file: a reader on the
+            // main thread drawing the gallery must not be blocked by the writer recording a
+            // replace (ARCHITECTURE.md § 8).
+            //
+            // On `DatabaseConfiguration`, not on `Extended`. Written the other way round from
+            // the documentation and never compiled until the iOS job ran, because Kotlin/Native
+            // needs a Mac and this repository was written without one.
+            journalMode = JournalMode.WAL,
             extendedConfig = DatabaseConfiguration.Extended(
                 foreignKeyConstraints = true,
-                // WAL, for the same reason the night pass checkpoints every file: a reader
-                // on the main thread drawing the gallery must not be blocked by the writer
-                // recording a replace (ARCHITECTURE.md § 8).
-                journalMode = JournalMode.WAL,
+                basePath = applicationSupportPath(),
             ),
         ),
     )
+
+    /**
+     * Application Support, created if it is not there yet.
+     *
+     * iOS does not create this directory for you, and sqliter's default puts the file under
+     * Documents — which is the one place it must not be: an app that declares
+     * `UIFileSharingEnabled` exposes Documents to the Files app, and the index of someone's
+     * photo library is not a document they meant to share. Application Support is also
+     * excluded from iCloud backup by default, which is the right answer for a cache that can
+     * be rebuilt from the library itself.
+     */
+    @OptIn(ExperimentalForeignApi::class)
+    private fun applicationSupportPath(): String {
+        val base = NSSearchPathForDirectoriesInDomains(
+            directory = NSApplicationSupportDirectory,
+            domainMask = NSUserDomainMask,
+            expandTilde = true,
+        ).first() as String
+        NSFileManager.defaultManager.createDirectoryAtPath(
+            path = base,
+            withIntermediateDirectories = true,
+            attributes = null,
+            error = null,
+        )
+        return base
+    }
 }

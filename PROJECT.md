@@ -1118,6 +1118,27 @@ Recorded by class, as each one is fixed:
   is the honest form of the rule — sources on disk and none found means the wiring broke;
   no sources at all means there is nothing here to guard.
 
+- **The APK asked for INTERNET, and the guard caught it.** `verifyNoInternetPermissionMerged`
+  failed on all three variants the first time it ran — which is exactly the case that task
+  exists for, and the one a scan of the app's own manifest cannot see. Libraries declare what
+  they might need: Coil can fetch an image over HTTP, WorkManager can constrain a job on
+  network state, and the manifest merger unions those into the shipped APK. Neither
+  capability is used here. Four `tools:node="remove"` lines now delete them from the merged
+  result, and `ManifestPermissionScanner` learned to read a removal as a removal — without
+  that it would have failed on the very lines written to satisfy it. `replace` and `merge`
+  are still violations: they keep the permission.
+
+  Worth being plain about: without this, the app's own screen would have said "no network
+  access" while its manifest asked for the internet. BUILD.md rule 8 is a claim made to
+  users, and until this run nothing had ever checked the artifact that claim is about.
+
+- **`IosDatabase` put `journalMode` on the wrong object.** It belongs to
+  `DatabaseConfiguration`, not to `DatabaseConfiguration.Extended`. Written from
+  documentation and never compiled, because Kotlin/Native needs a Mac. The same file also
+  *claimed* the database lives in Application Support and never set `basePath`, so sqliter
+  would have put the index of the user's photo library under Documents — visible in the Files
+  app to anyone who enables file sharing. Both fixed together.
+
 ### The guards guard themselves
 
 - **A rule declares the languages it polices, and must have a planted violation in each.**

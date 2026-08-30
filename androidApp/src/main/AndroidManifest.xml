@@ -27,6 +27,27 @@
     <!-- The morning card notification (USER_JOURNEY.md section 3). -->
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
 
+    <!--
+      The permissions this app refuses, removed from the *merged* manifest.
+
+      Not defensive tidying: `verifyNoInternetPermissionMerged<Variant>` failed on all three
+      variants the first time CI ran it, which is precisely the case that guard was written
+      for and the one a scan of this file alone cannot see. Libraries declare what they might
+      need — Coil can fetch an image over HTTP, WorkManager can constrain a job on network
+      state — and the manifest merger unions those declarations into the APK. Neither
+      capability is used here: Coil only ever decodes a local file the user already has, and
+      the night pass has no network constraint (BUILD.md § 6 gates on charging, screen off,
+      battery and heat).
+
+      Without these four lines the shipped APK asks for INTERNET while the app's own screen
+      says it has no network access. `tools:node="remove"` deletes the permission from the
+      merged result rather than merely not adding it here.
+    -->
+    <uses-permission android:name="android.permission.INTERNET" tools:node="remove" />
+    <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" tools:node="remove" />
+    <uses-permission android:name="android.permission.ACCESS_WIFI_STATE" tools:node="remove" />
+    <uses-permission android:name="android.permission.CHANGE_NETWORK_STATE" tools:node="remove" />
+
     <uses-feature android:name="android.hardware.camera" android:required="false" />
 
     <application

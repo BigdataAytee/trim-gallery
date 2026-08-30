@@ -17,6 +17,7 @@ import org.w3c.dom.Element
 object ManifestPermissionScanner {
 
     private const val ANDROID_NS = "http://schemas.android.com/apk/res/android"
+    private const val TOOLS_NS = "http://schemas.android.com/tools"
 
     /**
      * Permissions that must never appear in a shipped manifest.
@@ -70,11 +71,30 @@ object ManifestPermissionScanner {
             val name = element.getAttributeNS(ANDROID_NS, "name")
                 .takeIf { it.isNotEmpty() }
                 ?: element.getAttribute("android:name")
-            if (name in FORBIDDEN_PERMISSIONS) {
+            if (name in FORBIDDEN_PERMISSIONS && !isRemoval(element)) {
                 violations += Violation(name, manifest)
             }
         }
         return violations
+    }
+
+    /**
+     * Whether this element *deletes* the permission rather than asking for it.
+     *
+     * `tools:node="remove"` is how a manifest refuses a permission a dependency declared, and
+     * it is the only way to keep one out of the merged result — the app's own manifest cannot
+     * say "not this" by omission. Reading it as a declaration would mean the guard failed on
+     * the very line written to satisfy it.
+     *
+     * `replace` and `merge` are *not* removals: those keep the permission and change how it
+     * merges, so they stay violations.
+     */
+    private fun isRemoval(element: Element): Boolean {
+        val node = element.getAttributeNS(TOOLS_NS, "node")
+            .takeIf { it.isNotEmpty() }
+            ?: element.getAttribute("tools:node")
+        return node.trim().equals("remove", ignoreCase = true) ||
+            node.trim().equals("removeAll", ignoreCase = true)
     }
 
     /** Scans several manifests, skipping any that do not exist. */

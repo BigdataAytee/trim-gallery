@@ -19,7 +19,12 @@ pattern='^e: |FAILURE: |What went wrong|Caused by: |> Task .* FAILED|Analysis fa
 for log in "$@"; do
   [ -f "$log" ] || continue
   echo "=== $log ==="
-  grep -E "$pattern" "$log" | head -40 > /tmp/failure-summary.txt || true
+  {
+    grep -E "$pattern" "$log" | head -30 || true
+    # The heading on its own says nothing: the guards and the manifest merger put the whole
+    # explanation in the lines *after* "What went wrong", which no pattern above matches.
+    grep -A4 "What went wrong" "$log" | grep -vE "^--$|What went wrong" | head -20 || true
+  } | grep -vE '^\s*$' | head -40 > /tmp/failure-summary.txt
   cat /tmp/failure-summary.txt
   echo "--- tail ---"
   tail -25 "$log" || true

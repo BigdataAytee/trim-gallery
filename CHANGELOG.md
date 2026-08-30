@@ -74,6 +74,21 @@ most opinionated style, and 3,185 violations. The style is now `intellij_idea` �
 coding conventions — chosen on purpose rather than inherited by accident, and the tree is
 formatted to it.
 
+### What the guards caught once they could run
+
+- **The merged manifest asked for INTERNET.** Coil declares it; WorkManager declares
+  `ACCESS_NETWORK_STATE`; the manifest merger unions both into the APK. The app's own screen
+  says it has no network access, so until this ran that claim was false about the artifact.
+  Four `tools:node="remove"` lines delete them, and the scanner learned that a removal is not
+  a request — otherwise it would have failed on the lines written to satisfy it.
+- **`IosDatabase` had `journalMode` on the wrong object**, and claimed an Application Support
+  path it never set — which would have put the index of someone's photo library under
+  Documents.
+- **The gallery keyed on a `Long` id** the model has never had.
+- **`TriageStep` smart-cast across a module boundary**, which Kotlin does not allow.
+- Two guards failed on the ordinary shape of a library module — no manifest, no sources — and
+  now say where those are required instead.
+
 ### Guard self-tests
 
 Every other guard test checks a case somebody thought of. `GuardSelfTest` checks something
