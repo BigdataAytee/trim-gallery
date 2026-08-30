@@ -102,7 +102,7 @@ documents allow with a note.
 - **The three build guards are plain-JVM Gradle tasks, not Android Lint rules.** Lint
   rules need `lint-api` from Google Maven and only run inside an Android build; the
   guards need to run first, everywhere, including on the iOS plists. They live in the
-  `build-logic` included build with no AGP on the classpath, and have 30 unit and Gradle
+  `build-logic` included build with no AGP on the classpath, and have 39 unit and Gradle
   TestKit tests — including tests that a violating build actually fails.
 - **The no-network guard has two halves.** The manifest/plist scan proves nothing was
   *declared*; a source scan for networking APIs proves nothing was *written*.

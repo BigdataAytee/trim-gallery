@@ -40,7 +40,7 @@ shared/
 androidApp/              MediaCodecFactory, TransformerEncoder, Koin wiring, host Activity
 iosApp/                  Present, not implemented (v1.5). See iosApp/README.md
 benchmark/               Macrobenchmark
-build-logic/             The three build guards, with 30 tests
+build-logic/             The three build guards, with 39 tests
 design/buyer-gallery/    Parked motion prototype -- does not ship
 ```
 

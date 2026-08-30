@@ -75,7 +75,7 @@ and `./gradlew guards` as the two entry points CI gates on.
 
 Everything that does not need the Android SDK or Google Maven was actually run:
 
-- **30 build-guard tests pass** (`./gradlew -p build-logic test`) — unit tests for all
+- **39 build-guard tests pass** (`./gradlew -p build-logic test`) — unit tests for all
   four scanners plus Gradle TestKit tests proving a violating build genuinely fails, for
   each of the three guards.
 - **12 `Triager` tests pass**, compiled with the real Kotlin compiler against the shared
