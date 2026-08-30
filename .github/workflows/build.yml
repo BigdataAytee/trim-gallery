@@ -92,9 +92,12 @@ jobs:
     name: iOS cross-compile
     runs-on: macos-14
     steps:
+      # No submodules. `iosCompile` is Kotlin only — the native metric libraries under
+      # shared/native are not built here — and a recursive checkout of libjxl and jpegli
+      # pulls a dozen nested repositories, then spends the end of every job cleaning them
+      # up. That is minutes of macOS runner time and several hundred lines of log for
+      # nothing.
       - uses: actions/checkout@v4
-        with:
-          submodules: recursive
       - uses: actions/setup-java@v4
         with:
           distribution: temurin
