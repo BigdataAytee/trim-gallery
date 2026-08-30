@@ -27,11 +27,21 @@ const firstName = (buyer: string) => buyer.split(' ')[0]
  * Derived from the id rather than Math.random(): the spread is just as arbitrary across
  * tiles, but it is the same on every render and every reload, so a re-render cannot make
  * the animation jump and a screenshot test stays reproducible.
+ *
+ * FNV-1a followed by a murmur3 finalizer. The finalizer is the point: a plain
+ * `hash * 31 + char` gives sequential ids hashes about 31 apart, so `% 4600` maps `t00`
+ * and `t01` to phases 31ms apart out of 4600 — distinct on paper, identical to the eye,
+ * and the whole reason for the offset is that neighbours must not pulse together.
  */
 function phaseFor(id: string): number {
-  let hash = 0
-  for (let i = 0; i < id.length; i++) hash = (hash * 31 + id.charCodeAt(i)) | 0
-  return -(Math.abs(hash) % BREATH_MS)
+  let hash = 0x811c9dc5
+  for (let i = 0; i < id.length; i++) {
+    hash = Math.imul(hash ^ id.charCodeAt(i), 0x01000193)
+  }
+  hash = Math.imul(hash ^ (hash >>> 16), 0x7feb352d)
+  hash = Math.imul(hash ^ (hash >>> 15), 0x846ca68b)
+  hash ^= hash >>> 16
+  return -((hash >>> 0) % BREATH_MS)
 }
 
 export function GridTile({ tile, index, resetKey, reduced, hidden, onOpen }: Props) {

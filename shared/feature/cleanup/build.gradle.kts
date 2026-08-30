@@ -26,12 +26,12 @@ kotlin {
         commonMain {
             dependencies {
                 implementation(libs.kotlinx.coroutines.core)
-                implementation(projects.shared.core.ui)
+                api(projects.shared.core.ui)
                 implementation(projects.shared.core.domain)
-                implementation(projects.shared.core.model)
-                implementation(compose.runtime)
-                implementation(compose.foundation)
-                implementation(compose.material3)
+                api(projects.shared.core.model)
+                api(compose.runtime)
+                api(compose.foundation)
+                api(compose.animation)
             }
         }
         commonTest {

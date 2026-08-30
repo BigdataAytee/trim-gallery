@@ -22,13 +22,13 @@ kotlin {
         commonMain {
             dependencies {
                 implementation(libs.kotlinx.coroutines.core)
-                implementation(compose.runtime)
-                implementation(compose.foundation)
-                implementation(compose.material3)
-                implementation(compose.ui)
+                api(compose.runtime)
+                api(compose.foundation)
+                api(compose.animation)
+                api(compose.ui)
                 implementation(libs.lifecycle.viewmodel.compose.mp)
                 implementation(libs.navigation.compose.mp)
-                implementation(projects.shared.core.model)
+                api(projects.shared.core.model)
             }
         }
         commonTest {

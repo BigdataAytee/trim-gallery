@@ -119,6 +119,53 @@ environment's egress policy (a confirmed gateway denial, not a tooling fault).
 
 ---
 
+### Added — milestone 8, gallery shell (Compose Multiplatform)
+
+The motion from `design/buyer-gallery/` is now ported into the app, in
+`shared/core/ui` (design system + motion) and `shared/feature/gallery` (grid, tile,
+viewer). Compose Multiplatform, shared by Android and iOS.
+
+**Design system** — built on Compose foundation, **not Material 3**. BUILD.md § 9
+specifies the look directly (dark by default, media on near-black, one typeface, one
+accent colour) and Material would have to be overridden at every turn to reach it. The
+palette is Trim Gallery's own; only the motion came from the reference, which is what the
+reference was for.
+
+**Motion, ported** — `MotionSpec` carries every timing (arrival 600ms with a 70ms
+stagger, breathing at 4.6s, hero open 420ms / close 340ms, sheet 450ms after 120ms, veil
+350ms, press 0.97), `HeroGeometry` the transition arithmetic, `TilePhase` the per-tile
+offset. Modifiers: `breathing()`, `arrival()`, `pressScale()`. The grid → viewer
+transition is a single 0..1 progress driving one interpolated rectangle, so the image
+travels as one shape and an overshoot easing past 1 stays coherent. Drag-down dismissal
+springs, per BUILD.md § 9.
+
+**Verified — 39 JVM tests, all passing.** The timings, geometry, phase hash and palette
+are deliberately Compose-free so they can be tested without a UI toolkit. The hero
+geometry is asserted against the numbers *measured in a browser* from the signed-off
+reference (354dp square at 390dp wide, centred, above centre), which makes it a check on
+the port rather than a restatement of it. The palette tests assert WCAG contrast, one
+shared accent, and that the page is near-black rather than black.
+
+**A real bug, in both codebases.** The per-tile breathing phase used `hash * 31 + char`,
+which gives sequential ids hashes ~31 apart — so neighbouring tiles landed 31ms apart in
+a 4600ms cycle: distinct on paper, identical to the eye, defeating the entire point of
+the offset. Now FNV-1a plus a murmur3 finalizer, fixed in the Kotlin port **and**
+back-ported to the React reference. Caught only because the test asserted the phases
+*spread*, not merely that they differed — the browser test had asserted distinctness and
+passed.
+
+Also fixed: `shared/feature/*` and `shared/core/ui` exposed Compose and model types in
+public signatures through `implementation` dependencies, which no consumer could have
+compiled against. Now `api`.
+
+**Not compiled.** Every Compose Multiplatform version resolves `androidx.annotation`,
+`androidx.collection` and `androidx.lifecycle` from Google Maven, refused by this
+environment — the desktop target included, so there is no way to build the composables
+here at all. The Compose-free half is verified; the composables are not.
+
+**Still to come in milestone 8:** albums, favourites, trash (= undo bin), locked folder,
+the fast-scroll date bar, and pinch between day/month/year grids.
+
 ### Added — buyer gallery screen (design reference, not shipped)
 
 `design/buyer-gallery/` is now complete: the "Photos and clips from buyers" screen from

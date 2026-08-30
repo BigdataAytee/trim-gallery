@@ -180,7 +180,51 @@ Changes made as a result:
 Detekt stays at 1.23.8: it is the newest release, and there is no K2-era line, so it does
 not constrain the Kotlin choice in either direction.
 
+## Milestone 8 — gallery shell
+
+- **No Material 3.** `shared/core/ui` is built on Compose foundation. BUILD.md § 9
+  specifies the look directly — dark by default, media on near-black, *one typeface, one
+  accent colour* — and reaching it through Material would mean overriding its theming,
+  dynamic colour and component defaults at every turn. A gallery is bespoke surfaces over
+  photographs; there is little for Material to contribute and a lot for it to get in the
+  way of. It also removed a dependency whose stable coordinate does not exist at the
+  pinned Compose Multiplatform version (`org.jetbrains.compose.material3:material3:1.12.0`
+  is not published; only alphas are).
+- **The palette is Trim Gallery's own, not the reference's.** The buyer-gallery prototype
+  is cream and light-first; BUILD.md § 9 is dark-first on near-black. What was ported is
+  the *motion*, which is what the reference was for. The token *structure* is kept
+  (page / band / card / text / muted / line / accent) so the two read as relatives.
+  Near-black rather than pure black, because #000000 swallows a photo's own dark tones
+  and erases the boundary between chrome and image on OLED.
+- **The theme does not follow the system setting.** A gallery that did would show the
+  user's photos on a different ground each morning. Dark is the default and a setting
+  flips it.
+- **Motion lives in plain Kotlin, composables consume it.** `MotionSpec`, `HeroGeometry`,
+  `TilePhase` and `TrimPalette` have no Compose types, so the timings, the transition
+  arithmetic and the colour contrasts are unit tested on the JVM (39 tests) and the same
+  numbers drive Android and iOS instead of being retyped per platform.
+- **The hero transition is hand-rolled, not `SharedTransitionLayout`.** A single 0..1
+  progress drives one interpolated rectangle, so the image travels as one shape rather
+  than four independently animated edges, and an overshoot easing past 1 stays coherent.
+  It also avoids depending on an experimental API at a version that could not be
+  compiled here. Revisit once the build runs.
+- **Tile artwork is a slot.** `GalleryScreen` takes `artwork: @Composable (MediaItem) ->
+  Unit`, so `shared/feature/gallery` depends on no image loader and no platform decoder.
+  The Android host wires the real thumbnail pipeline; a preview or test passes a flat
+  colour.
+- **The per-tile breathing phase needed a real hash.** The first implementation, in both
+  the React reference and the port, was `hash * 31 + char`, which gives sequential ids
+  hashes about 31 apart — so `% 4600` mapped neighbouring tiles to phases 31 ms apart out
+  of 4600. Distinct on paper, identical to the eye, and the entire point of the offset is
+  that neighbours must not pulse together. Now FNV-1a plus a murmur3 finalizer, in both
+  codebases. Caught by a test asserting the phases *spread*, not merely that they differ.
+
 ## Open questions added
+- **The Compose layer has never been compiled.** Every Compose Multiplatform version
+  resolves `androidx.annotation`, `androidx.collection` and `androidx.lifecycle` from
+  Google Maven, which this environment refuses, so there is no path to building it here —
+  desktop target included. The Compose-free half of the design system is verified; the
+  composables are not. Expect to fix API details on the first real build.
 - Whether a Compose Multiplatform host on iOS is the right call for the viewer, or
   whether the shared-element motion in BUILD.md § 9 wants SwiftUI there. Revisit at
   milestone 8.

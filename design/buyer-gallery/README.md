@@ -23,7 +23,10 @@ gallery shell:
 | `data-theme` token swap, 350ms crossfade, persisted | Dark by default, chrome fades when idle |
 | `prefers-reduced-motion` fallback throughout | Accessibility floor for the shell |
 
-Treat it as an executable motion spec to port to Compose MP, not a codebase to integrate.
+Treat it as an executable motion spec, not a codebase to integrate. **It has now been
+ported** — see `shared/core/ui/motion/` and `shared/feature/gallery/`. This copy stays as
+the reference the port is checked against: `HeroGeometryTest` asserts the Compose
+transition against numbers measured here in a browser.
 
 ## Running it
 
@@ -61,7 +64,10 @@ The suite exits non-zero on failure, so it can gate a change. `--headed` watches
   playback at threshold 0.5) rather than one per tile.
 - **Breathing phase** — derived from a hash of the tile id, not `Math.random()`: the
   spread across tiles is just as arbitrary, but it is stable across re-renders and
-  reloads, so the animation cannot jump and screenshots stay reproducible.
+  reloads, so the animation cannot jump and screenshots stay reproducible. FNV-1a plus a
+  murmur3 finalizer — the first version used `hash * 31 + char`, which put sequential ids
+  31ms apart in a 4600ms cycle, so neighbours pulsed together. The Compose port's unit
+  tests caught it and the fix was back-ported here.
 
 ## Media
 
