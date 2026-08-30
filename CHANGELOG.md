@@ -1,5 +1,103 @@
 # Changelog
 
+## Milestone 10 — Space, history, Compress now, play-to-compress, settings
+
+The screens where the app has to account for itself, and the one path that is allowed to
+run on battery.
+
+### The Space screen and history
+
+`SpaceScreen` and `History` between them answer "is this worth having on my phone?", and
+every number on them is one the user could in principle check. The running total is a sum
+of what actually happened; the projected saving is labelled an estimate and never dressed
+up as a fact. A paused run is visibly distinguishable from a working one, because a
+progress ring spinning while the pass is stood down for heat is a lie the user can catch by
+feeling the phone.
+
+History is honest about restore in four ways rather than one: from the bin (with the date
+it expires), from an external drive (so the app does not offer a one-tap restore for a file
+in a drawer), already restored, and expired — carrying *when* the original went, so the
+sheet can say so. Only succeeded jobs appear; a failure belongs on the Skipped screen with
+its reason.
+
+`EnergyEstimate` reports whole watt-hours and declines to show a battery percentage below
+1%, because "0%" and "0.4%" are the same claim made with different confidence.
+
+### Compress now
+
+The one relaxation of BUILD.md rule 1 — *never encode on battery unless the user explicitly
+taps Compress now* — and it is scoped so it cannot become a second night pass: one file, one
+tap, nothing that could be applied to a queue.
+
+The decision it exists to make is the split between refusals and warnings:
+
+- **A user's explicit tap overrides "not worth it".** Already-efficient, too small,
+  wouldn't-shrink are triage's judgements about whether a night's battery is well spent, and
+  someone standing in front of the file has different information. They are warned, not
+  refused; the verify gate still refuses to replace a file with a larger one.
+- **It does not override "this would lose data" or "we already tried".** HDR, Motion Photos,
+  Ultra HDR, Live Photos and RAW are refused to Pro users too. So is a file the search
+  already failed on: it is deterministic and would fail again.
+- **A file Trim already optimised cannot be optimised again**, at any tier. Every encode
+  targets VMAF 95 against *what it is given*, so a second pass measures quality against an
+  already-lossy copy. Without this rule Compress now would be a way around the
+  generational-loss guard, five times a day, on the files a user cares about most.
+
+Item facts are checked before the paywall, so a user is never shown a Pro offer for a button
+that would still do nothing after they paid.
+
+Neither number on the sheet is invented: the expected saving comes from triage or the
+predictor and the expected time from a measured encode speed, and each is null — with copy
+that says so — until something has measured it. And Compress now replaces nothing by
+itself. It ends on Share / Replace original / Keep both, and until one is pressed the
+original has not been touched.
+
+### Play-to-compress
+
+A decoder tap driven by a player is a tap driven by a user, and users pause, scrub back,
+skip the middle and leave. Every one of those makes the frames arriving at the encoder stop
+being the source, and the encoder cannot tell. It would produce a file — a shorter one, or
+one missing the middle — that then goes through verify and replace looking like a success.
+
+So `PlayToCompress` holds one rule: **a tap either delivers every frame, in order, from the
+first to the last, or it delivers nothing at all.** Nine ways it can break are named and
+tested — starting mid-stream, seeking back, skipping forward, dropped frames, an
+end-of-stream that is really a stop, leaving early, a pause that never ends, heat, and a
+decoder error. All but the last put the file back in the night queue, where it will be
+encoded from a decode nobody is steering.
+
+The one that matters most is starting mid-stream: a user resuming a half-watched video
+would otherwise get an encode of the second half, and it would pass every later gate — the
+output opens, it is smaller, and VMAF sampled against its own timeline looks fine.
+
+The gap tolerance errs towards giving up. Being wrong that way costs one wasted encode;
+being wrong the other way is a silently shortened video.
+
+### Settings
+
+`SettingsPolicy` sits between the screen and the store, and everything goes through it in
+both directions. On the way in, because a value that cannot be honoured must never be
+persisted — `AndroidGuards` parsed the stop-by time with a `runCatching { … }.getOrNull()`,
+which meant a typo silently became "no stop time" and the phone worked all night. On the way
+out, because entitlements change after the write: a Pro user who set Compact and 90-day
+retention and then lapses gets Standard and 7 days from the very next read, with nothing
+having to remember to re-save.
+
+Writing the tests turned up a contradiction between two of the specs. BUILD.md § 6 gives
+the "Free space" folder mode a default of 30 days; MONETIZATION.md gives the free tier 7.
+Both are kept: the setting's default is 30 and a free user's copy of it is 7. The
+consequence — that the UI must show the sanitised number, not the stored one — is written
+down in PROJECT.md and asserted in a test, because promising a free user 30 days of
+originals and deleting them at 7 is the worst kind of bug this app could have.
+
+`DataStoreSettings` replaces the milestone-4 placeholder that ran the night pass on
+hard-coded defaults. `TrimRepository` reads settings and tier through it now, so the guards,
+the scheduler and the Settings screen cannot disagree about what the user chose.
+
+### Numbers
+
+562 shared JVM tests and 47 build-guard tests pass; the guards scan 141 source files clean.
+
 ## Milestone 9 — the index: hashes, people, search, duplicates, chat media
 
 Everything that *decides* anything is shared, because ARCHITECTURE.md § 6 says the

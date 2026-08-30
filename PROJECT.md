@@ -623,6 +623,76 @@ all of it is unit tested against fakes.
   quality signal and every piece of plumbing are exercised and correct before the model
   arrives — but it is a placeholder, and clustering quality will change when it is replaced.
 
+## Milestone 10 — Space, history, Compress now, play-to-compress, settings
+
+- **Compress now is one file, one tap, and nothing that can be applied to a queue.**
+  BUILD.md rule 1 forbids encoding on battery except on an explicit tap; a bulk "compress
+  everything now" would be the night pass on battery with a different label, so `decide`
+  takes a single item and returns nothing that generalises.
+- **A user's tap overrides "not worth it" but not "this would lose data".**
+  `ALREADY_EFFICIENT`, `TOO_SMALL` and `WOULD_NOT_SHRINK` are triage's judgement about
+  whether a night's battery is well spent; HDR, Motion Photo, Ultra HDR, Live Photo and RAW
+  are facts about the file. The first set warns, the second refuses — to Pro users too.
+- **A file this app already optimised cannot be optimised again, at any tier.** The
+  generational-loss guard behind `MediaItem.optimisedAt`. Without it, Compress now is a
+  way around that protection five times a day.
+- **Item facts are checked before the paywall.** A user whose file cannot be optimised is
+  told that, not shown a Pro offer for a button that would still do nothing.
+- **Compress now replaces nothing by itself.** The night pass replaces because the user
+  asked it to once, in Settings. This ends on Share / Replace original / Keep both
+  (USER_JOURNEY.md § 6), and `Finish.writesToLibrary` marks the two that go through
+  `Replacer` — sharing hands out the app-private temp and never touches the library.
+- **Neither number on the Compress now sheet is invented.** The expected saving comes from
+  triage or the predictor and the expected time from a measured encode speed; both are
+  nullable and null until something has measured them. There is no default real-time
+  multiple because there is no honest one — the same phone encodes 4K HEVC and 1080p H.264
+  at speeds that differ by more than the estimate is worth.
+- **The daily Compress now count and the monthly GB cap are separate limits.**
+  MONETIZATION.md's table says "Background optimisation — 3 GB freed per month" and
+  "Compress now — 5 per day". `bytesFreedSince` sums `run_session`, and a Compress now job
+  has none, so the two never touch. Counted from `started_at`, not completions: the battery
+  is spent whether or not the user lets it finish.
+- **Play-to-compress delivers every frame or nothing.** The decision logic is shared and
+  tested, not platform code, because *when to give up on a tap* is the difference between a
+  smaller video and a video with a hole in it — and iOS must behave identically. Nine break
+  conditions are named; all but a decoder error requeue the file for the night.
+- **The frame-gap tolerance errs towards giving up**, at four frame intervals with a 100 ms
+  floor and a wider 500 ms allowance when the container states no frame rate. A false
+  abandon costs one wasted encode; a missed gap is a silently shortened video. Assuming
+  30 fps when the rate is unknown would wave seven dropped frames through on a 240 fps
+  slow-motion clip.
+- **A pause holds the encoder for two minutes, not indefinitely.** Hardware encoder
+  sessions are device-wide and scarce, and a user who pauses to answer the door and then
+  puts the phone down would otherwise deny one to the camera.
+- **Settings are sanitised in both directions.** On the way in so an unhonourable value is
+  never persisted; on the way out so a lapsed Pro user is clamped on the next read rather
+  than when something remembers to re-save. `AndroidGuards`' `runCatching { LocalTime.parse
+  }.getOrNull()` is now unreachable rather than load-bearing.
+- **BUILD.md and MONETIZATION.md disagree about undo retention, and both are kept.**
+  BUILD.md § 6 gives the "Free space" folder mode a default of 30 days; MONETIZATION.md
+  gives the free tier 7. The setting's default is 30 and a free user's copy of it is 7.
+  **The consequence is a UI requirement:** every screen that shows a retention period must
+  show the sanitised value, not the stored one. Promising a free user 30 days of originals
+  and deleting them at 7 would be the worst bug this app could ship.
+- **Only three settings changes are explained to the user** — Compact, turning face
+  clustering off, and shortening retention. A screen that explains every toggle teaches the
+  user to dismiss explanations, and then the one about quality goes unread too.
+- **Changing the quality target or AV1 invalidates triage; changing the photo format does
+  not.** The first two change *whether* there is a saving; the third changes only what the
+  output is, and re-triaging a hundred thousand photos to discover that is a night spent on
+  nothing.
+- **History shows only succeeded jobs, and names four restore states rather than one.**
+  A failure belongs on the Skipped screen with its reason. `FromExternal` is separate from
+  `FromBin` because offering a one-tap restore for a file on a card in a drawer is a promise
+  the app cannot keep, and `Expired` carries the date so the sheet can say when the original
+  went.
+- **The energy estimate declines to show a battery percentage below 1%.** "0%" and "0.4%"
+  are the same claim made with different confidence, and the Space screen's whole value is
+  that its numbers can be believed.
+- **`currentTier()` is a function, not a value, in the DI graph.** The tier changes while
+  the app is running — at the moment a purchase completes — and a captured copy would leave
+  a paying user on free-tier settings until the next launch.
+
 ## Open questions added
 - **The Compose layer has never been compiled.** Every Compose Multiplatform version
   resolves `androidx.annotation`, `androidx.collection` and `androidx.lifecycle` from
@@ -636,9 +706,6 @@ all of it is unit tested against fakes.
   search → encode → verify → replace; triage is milestone 6, and until it can decide what
   belongs in the queue at all there is nothing honest to bind. Everything around it — the
   scheduler, the guards, the loop, the queue, the checkpoint — is in place.
-- **Settings come from the documented defaults, not DataStore.** The Settings screen is
-  milestone 10; `TrimRepository` takes the reader as a parameter so wiring it later changes
-  one line.
 - **`androidApp` does not use the package layout in ARCHITECTURE.md § 3.** It puts storage
   and scheduler classes in their own `storage/` and `scheduler/` packages; everything is
   currently under `engine/`, because the obvious names (`app.trimgallery.storage`) would
@@ -659,3 +726,17 @@ all of it is unit tested against fakes.
   under — verify, ladder, replace ordering, rollback, offload, guard order, thermal
   hysteresis, budgets, the alarm window and the run loop — is verified on the JVM, which is
   why it was pushed there.
+
+- **The GL tee for play-to-compress is not written.** Feeding the decoder's frames to an
+  encoder input surface while they also reach the screen is a `GlEffect` on
+  `ExoPlayer.setVideoEffects`, and whether that tee costs a dropped frame at 4K60 is not a
+  thing that can be reasoned out — it has to be measured on a device. `PlayToCompressTap`
+  is the finished half: the ExoPlayer callbacks mapped onto the shared state machine, with
+  the encoder behind a four-method `EncoderSink` seam.
+- **"Keep both" needs a way to add a file to a granted folder.** ARCHITECTURE.md § 14 makes
+  `Replacer` the only writer and a build guard enforces it, which is right — but Keep both
+  writes a *new* file rather than replacing one, and `Replacer` has no such method yet. It
+  goes on `Replacer` when the Compress now sheet is built, not around it.
+- **`DataStoreSettings` has not been compiled or run**, for the same Google Maven reason as
+  everything else Android. The rules it enforces are in `SettingsPolicy`, on the JVM, with
+  tests; this file is key-value plumbing around them.

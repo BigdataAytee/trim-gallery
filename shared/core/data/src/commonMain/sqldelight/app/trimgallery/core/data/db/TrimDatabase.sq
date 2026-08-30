@@ -423,5 +423,15 @@ INSERT OR REPLACE INTO run_session(
 bytesFreedSince:
 SELECT COALESCE(SUM(bytes_freed), 0) AS bytes FROM run_session WHERE started_at >= ?;
 
+-- MONETIZATION.md § Phase 1: five "Compress now" runs a day on Free.
+--
+-- Counted from `started_at`, not from completions: the battery is spent whether or not the
+-- user lets it finish, and counting finished jobs would let a user who cancels at 99% run
+-- it all day. The monthly GB cap deliberately does not apply here — that row of the
+-- MONETIZATION.md table says "Background optimisation", and `bytesFreedSince` above sums
+-- `run_session`, which a Compress now job has none of.
+compressNowsSince:
+SELECT COUNT(*) FROM job WHERE user_initiated = 1 AND started_at >= ?;
+
 selectFolderGrants:
 SELECT * FROM folder_grant WHERE enabled = 1;

@@ -126,6 +126,19 @@ class TrimRepository(
         queries.bytesFreedSince(monthStartMs()).executeAsOne()
     }
 
+    /**
+     * How many "Compress now" runs have started since [sinceMs] (MONETIZATION.md: five a
+     * day on Free).
+     *
+     * Not part of `NightFacts` — nothing about the night pass needs it, and putting it
+     * there would suggest the daily count and the monthly cap are the same limit. They are
+     * not: the GB cap is on background optimisation, and a Compress now job has no
+     * `run_session` to be summed into it.
+     */
+    suspend fun compressNowsSince(sinceMs: Long): Int = withContext(io) {
+        queries.compressNowsSince(sinceMs).executeAsOne().toInt()
+    }
+
     override suspend fun nextSavingBytes(): Long = withContext(io) {
         queries.nextCandidateSaving().executeAsOneOrNull() ?: 0L
     }

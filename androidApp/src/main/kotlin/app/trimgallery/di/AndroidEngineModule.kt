@@ -2,9 +2,9 @@ package app.trimgallery.di
 
 import androidx.media3.common.util.UnstableApi
 import app.trimgallery.core.data.AndroidDatabase
+import app.trimgallery.core.data.DataStoreSettings
 import app.trimgallery.core.data.TrimRepository
 import app.trimgallery.core.domain.billing.Tier
-import app.trimgallery.core.model.Settings
 import app.trimgallery.core.model.Uuid7
 import app.trimgallery.core.pipeline.TriageStep
 import app.trimgallery.core.pipeline.index.IndexStep
@@ -23,6 +23,7 @@ import app.trimgallery.engine.OutputProbe
 import app.trimgallery.engine.PhotoCodec
 import app.trimgallery.engine.QualityScorer
 import app.trimgallery.engine.Replacer
+import app.trimgallery.engine.SettingsStore
 import app.trimgallery.engine.UndoStore
 import app.trimgallery.engine.android.ContainerReaderAndroid
 import app.trimgallery.engine.android.MediaCodecFactory
@@ -103,6 +104,17 @@ val androidEngineModule = module {
     // --- The database ---------------------------------------------------------
     single { AndroidDatabase.create(androidContext()) }
 
+    // --- Milestone 10: settings ------------------------------------------------
+    //
+    // Every read goes back through SettingsPolicy.sanitise, so a lapsed Pro user's stored
+    // Compact target and 90-day retention become Standard and 7 days on the very next read
+    // rather than when something remembers to re-save them.
+    //
+    // The tier is a lambda rather than a value for the same reason: it changes while the
+    // app is running, at the moment the purchase completes, and a captured copy would leave
+    // a paying user on free-tier settings until the next launch.
+    single<SettingsStore> { DataStoreSettings(androidContext()) { currentTier() } }
+
     /*
      * One repository implementing several small ports — UndoJournal, OriginalLocator,
      * NightFacts and the night queue — because they all read and write the same tables
@@ -115,10 +127,8 @@ val androidEngineModule = module {
             io = Dispatchers.IO,
             newId = { get<Uuid7>().next(System.currentTimeMillis()) },
             nowMs = System::currentTimeMillis,
-            // DataStore-backed settings land with the Settings screen (milestone 10);
-            // until then the pass runs on the documented defaults (ARCHITECTURE.md § 12).
-            readSettings = { Settings() },
-            readTier = { Tier.FREE },
+            readSettings = { get<SettingsStore>().read() },
+            readTier = { currentTier() },
             monthStartMs = { startOfCurrentMonthMs() },
         )
     }
@@ -188,6 +198,16 @@ val androidEngineModule = module {
  * MONETIZATION.md caps GB freed per calendar month, and "calendar" means the user's
  * calendar: a UTC month boundary would reset someone in Auckland thirteen hours early.
  */
+/**
+ * The tier the app is running under.
+ *
+ * A stub until Play Billing lands (MONETIZATION.md § Phase 1 buys Pro once, with no account
+ * and no network). It is a function rather than a constant so that the day it becomes a
+ * real query, nothing above it changes — and so that `Entitlements` is already being asked
+ * fresh every time rather than at construction.
+ */
+private fun currentTier(): Tier = Tier.FREE
+
 private fun startOfCurrentMonthMs(): Long {
     val zone = TimeZone.currentSystemDefault()
     val today = Clock.System.now().toLocalDateTime(zone).date

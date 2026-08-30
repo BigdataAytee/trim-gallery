@@ -5,6 +5,7 @@ import app.trimgallery.core.model.FolderGrant
 import app.trimgallery.core.model.Label
 import app.trimgallery.core.model.MediaItem
 import app.trimgallery.core.model.MediaRef
+import app.trimgallery.core.model.Settings
 import app.trimgallery.core.model.TextBlock
 import app.trimgallery.core.model.UndoEntry
 import app.trimgallery.core.model.UndoLocation
@@ -213,4 +214,32 @@ interface NightScheduler {
  */
 interface Player {
     suspend fun tapDecodedFrames(ref: MediaRef, onFrame: suspend (YuvWindow) -> Unit)
+}
+
+/**
+ * The settings store (ARCHITECTURE.md § 12).
+ *
+ * A port rather than shared code because the storage differs — `androidx.datastore` on
+ * Android — while the *rules* about what may be stored do not: everything written here has
+ * already been through `SettingsPolicy.sanitise`, and everything read comes back through it
+ * again so that a tier change clamps values that were legal when they were written.
+ *
+ * [settings] is a flow because the Settings screen, the guards and the scheduler all read
+ * the same values and must not disagree about them: a night pass holding a copy taken at
+ * 22:00 would keep working after the user turned it off at 23:00.
+ */
+interface SettingsStore {
+    val settings: Flow<Settings>
+
+    /** The current values, for a caller that needs them once rather than continuously. */
+    suspend fun read(): Settings
+
+    /**
+     * Applies a change.
+     *
+     * Takes a transform rather than a whole `Settings` so that two screens saving at once
+     * cannot lose each other's field — the read and the write happen inside the store's own
+     * transaction.
+     */
+    suspend fun update(transform: (Settings) -> Settings): Settings
 }
