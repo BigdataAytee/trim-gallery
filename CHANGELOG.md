@@ -1,5 +1,90 @@
 # Changelog
 
+## Milestone 9 — the index: hashes, people, search, duplicates, chat media
+
+Everything that *decides* anything is shared, because ARCHITECTURE.md § 6 says the
+perceptual hash is a "shared Kotlin impl" and the same argument applies to all of it: two
+devices grouping faces or hashing pictures differently would take a user's library apart
+the moment it moved between them.
+
+### Perceptual hash
+
+The standard DCT construction, 32×32 working size, and every property it needs is tested:
+a resized copy matches, a brightness shift matches, re-compression noise matches, unrelated
+pictures do not. Two things came out of writing it:
+
+- **The DC bit was dead.** Thresholding the mean-brightness coefficient against the median
+  of its neighbours sets that bit for every image ever hashed — sixty-three working bits
+  where the type says sixty-four. The hash now takes the 64 lowest-frequency coefficients
+  *after* DC, in zig-zag order. A test asserting that every bit is used is what found it.
+- **The hash ignores aspect ratio**, because everything is reduced to a square grid. That
+  is inherent, not a defect — but it means `DuplicateFinder` has to compare shape
+  separately, and there is a test documenting the blind spot rather than papering over it.
+
+### Duplicates
+
+Exact (SHA-256) and near (perceptual), and the difference is explained to the user because
+it matters: deleting one of a set of byte-identical files loses nothing at all, while
+deleting a near-duplicate loses a few pixels.
+
+The best-copy rule is: a favourite always wins, then the most pixels, then the largest file,
+then the oldest, then by id so the suggestion never moves between two openings of the
+screen. **A file this app optimised is not penalised for being smaller** — it is the same
+picture at the same resolution, verified visually identical, and preferring the un-optimised
+copy would quietly undo the night's work. Hidden items never appear; a cleanup screen that
+showed them would be a hole straight through the locked folder.
+
+### People
+
+Greedy single-pass clustering on cosine similarity, ordered by detection quality so the
+clearest faces form the clusters. **Tuned to under-merge**, at 0.72: splitting one person
+into two clusters is a nuisance the user fixes with a tap, while merging two people puts one
+person's photographs under another's name and cannot be undone without opening every
+picture. The splits are offered back as merge suggestions.
+
+A blurred face cannot *start* a cluster — an embedding halfway between everybody absorbs
+strangers — but can still join one good faces formed. A face that clusters with nothing is
+kept, not discarded: a second sighting next month turns two singletons into a person.
+
+### Search
+
+One box, six kinds of answer, no syntax. A term is a candidate label *and* a candidate piece
+of text; "2019" is searched as a year **and** as a word, because it could be a date or the
+number on a race bib and guessing wrong returns nothing. A name is only a person because the
+user named a cluster that, and a place is only a place because a photograph was taken there
+— inferring either from the shape of the word would put every capitalised noun in the people
+facet.
+
+Ranking puts a named person above OCR text above a place above a label scaled by the
+classifier's own confidence. Recency may contribute at most a fifth of the score: enough to
+separate two equal matches, never enough to lift a weak recent match above a strong old one.
+
+### Chat media and the index step
+
+`ChatMediaReview` groups by app and age and offers only what is old *and* never opened —
+never inferred, because "not opened" is the strongest reason to suggest deleting something
+and a wrong inference would offer up photographs the user looks at often. Favourites and
+hidden items are never offered.
+
+`IndexStep` guards each stage independently: a file whose OCR throws keeps its labels,
+because a hundred thousand files guarantees unusual ones. **A bug caught by writing its
+test:** the failure list was an instance field on an object the DI graph makes a singleton,
+so one bad file's failures followed every file indexed after it for the rest of the night.
+
+### Android
+
+`MlKitIndexer` — the **bundled** models, not the Play-services ones, because the
+downloadable variants fetch over the network and this app has no INTERNET permission. A
+model that cannot download is a feature that silently never works. Face detection runs in
+ACCURATE mode: this is a charging phone at night, and the alternative splits someone's child
+across four "people".
+
+### Verified
+
+- **470 shared JVM tests**, all passing (up from 393).
+- **47 build-guard tests**; guards clean across all 127 source files.
+
+
 ## Milestone 7 — photos: jpegli, SSIMULACRA 2, JPEG XL and PNG repack
 
 The still-image half of the pipeline, and the first milestone where the native code is not

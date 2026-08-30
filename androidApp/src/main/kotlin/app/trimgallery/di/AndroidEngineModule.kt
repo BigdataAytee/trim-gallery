@@ -7,6 +7,7 @@ import app.trimgallery.core.domain.billing.Tier
 import app.trimgallery.core.model.Settings
 import app.trimgallery.core.model.Uuid7
 import app.trimgallery.core.pipeline.TriageStep
+import app.trimgallery.core.pipeline.index.IndexStep
 import app.trimgallery.core.pipeline.night.NightFacts
 import app.trimgallery.core.pipeline.night.NightRun
 import app.trimgallery.core.pipeline.photo.PhotoOptimiseStep
@@ -14,6 +15,7 @@ import app.trimgallery.core.pipeline.replace.OriginalLocator
 import app.trimgallery.core.pipeline.replace.UndoJournal
 import app.trimgallery.engine.CodecFactory
 import app.trimgallery.engine.ContainerReader
+import app.trimgallery.engine.Indexer
 import app.trimgallery.engine.LibraryStorage
 import app.trimgallery.engine.MetadataCopier
 import app.trimgallery.engine.NightScheduler
@@ -25,6 +27,7 @@ import app.trimgallery.engine.UndoStore
 import app.trimgallery.engine.android.ContainerReaderAndroid
 import app.trimgallery.engine.android.MediaCodecFactory
 import app.trimgallery.engine.android.MetadataCopierAndroid
+import app.trimgallery.engine.android.MlKitIndexer
 import app.trimgallery.engine.android.NativeQualityScorer
 import app.trimgallery.engine.android.NightWorker
 import app.trimgallery.engine.android.OutputProbeAndroid
@@ -127,6 +130,7 @@ val androidEngineModule = module {
     single<NightRun.Checkpoint> { get<TrimRepository>() }
     single<NightRun.OnInterrupted> { get<TrimRepository>() }
     single<TriageStep.Sink> { get<TrimRepository>() }
+    single<IndexStep.Sink> { get<TrimRepository>() }
 
     // --- Milestone 6: triage ---------------------------------------------------
     single<ContainerReader> { ContainerReaderAndroid(androidContext()) }
@@ -155,11 +159,27 @@ val androidEngineModule = module {
         )
     }
 
-    // NightRun.Step is VideoOptimiseStep, which chains triage → search → encode → verify →
-    // replace. Triage is milestone 6; until it can decide what belongs in the queue at
-    // all, there is nothing honest to bind here.
+    // NightRun.Step is VideoOptimiseStep — the assembly of ProbeAndSearch, the encoder,
+    // VerifyPass, the Replacer and Predictor.learn into the chain ARCHITECTURE.md § 7
+    // describes. Every piece exists and is tested; the assembly itself is not written yet,
+    // and binding a half-built one would be worse than binding none.
     //
-    // The indexer lands with milestone 9.
+    // --- Milestone 9: the index ------------------------------------------------
+    //
+    // ML Kit finds labels, faces and text; everything that *decides* anything — which
+    // faces are one person, which files are duplicates, what a search means — is shared,
+    // because two devices deciding differently would come apart the moment a library
+    // moved between them (ARCHITECTURE.md § 6).
+    single<Indexer> { MlKitIndexer(androidContext()) }
+
+    single {
+        IndexStep(
+            indexer = get(),
+            storage = get(),
+            codec = get(),
+            sink = get(),
+        )
+    }
 }
 
 /**

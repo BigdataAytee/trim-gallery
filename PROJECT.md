@@ -61,7 +61,11 @@ Companion to BUILD.md. Records what was decided and the reasoning, so nobody re-
   milestone 2** (`shared/native/calibration/`, first point: XPSNR y ≈ 39.8 under x265);
   still needs running on device across real content before a constant goes into the search.
 - Whether `MediaTranscodingManager` beats the in-app pipeline on any target device — benchmark in milestone 13.
-- Which small face-embedding model to use for people clustering.
+- Which small face-embedding model to use for people clustering. **Still open, and now
+  load-bearing:** `MlKitIndexer` returns normalised landmark geometry in the embedding's
+  place, which exercises the whole path but is not a face embedding. `FaceClustering`'s 0.72
+  threshold was chosen for the properties of a real embedding and will need re-tuning
+  against whichever model is picked.
 
 ---
 
@@ -565,6 +569,59 @@ all of it is unit tested against fakes.
 - **The build guard now strips comments with a character scan.** One regex over the whole
   file threw `StackOverflowError` on a 2,000-line generated Kotlin file in a submodule;
   Java's regex engine recurses while backtracking, so the failure scaled with file size.
+
+## Milestone 9 — the index
+
+- **Everything that decides anything is shared.** ARCHITECTURE.md § 6 says the perceptual
+  hash is a shared Kotlin implementation; the same argument covers face clustering,
+  duplicate grouping and search ranking. Two devices deciding differently would take a
+  user's library apart the moment it moved between them.
+- **The hash uses the 64 coefficients after DC, in zig-zag order.** Thresholding DC against
+  the median of its neighbours sets that bit for every image ever hashed, so the obvious
+  8×8-block construction has sixty-three working bits and claims sixty-four.
+- **The hash ignores aspect ratio**, so `DuplicateFinder` compares shape separately at a 2%
+  tolerance. Without that, a panorama and a portrait crop of one scene are offered as the
+  same picture — the failure that destroys trust in the whole screen.
+- **Near-duplicate distance is 10 of 64.** Below about six it misses burst frames where the
+  subject moved; above about twelve it joins different photographs taken in the same place.
+- **Face clustering is tuned to under-merge, at cosine 0.72.** Splitting one person in two
+  is a nuisance the user fixes with a tap; merging two people puts one person's photographs
+  under another's name and cannot be undone without opening every picture. The splits come
+  back as merge suggestions.
+- **A poor-quality face cannot seed a cluster but can join one.** An embedding halfway
+  between everybody absorbs strangers if it defines a cluster.
+- **Clusters below three faces are not shown as people.** A single sighting is more often a
+  passer-by than someone the user would name, and they are kept rather than discarded so a
+  later sighting can turn two singletons into a person.
+- **The privacy switch is honoured by not computing.** When face clustering is off, no
+  embedding is made — not made and discarded, not made and hidden.
+- **A year is searched as a year and as a word.** "2019" could be a date or a race bib, and
+  a search box that guessed wrong would return nothing with no way to say what was meant.
+  Years outside 1990–2100 are only words.
+- **People and places are supplied, never inferred.** "Mum" is a person only because the
+  user named a cluster that; inferring from capitalisation would put every proper noun in
+  the people facet.
+- **Recency may contribute at most a fifth of a search score.** Enough to separate equal
+  matches, never enough to lift a weak recent match above a strong old one.
+- **"Not opened" is never inferred for chat media.** It is the strongest reason to suggest
+  deleting something, and inferring it from a missing thumbnail or an access time the
+  filesystem may not keep would offer up photographs the user looks at often.
+- **Chat folders are matched on path.** There is nothing in a JPEG that says it arrived over
+  WhatsApp.
+- **`IndexStep`'s failure list is a parameter, not a field.** It was a field on an object DI
+  makes a singleton, so one bad file's failures followed every file indexed after it for the
+  rest of the night. Caught by its own test.
+- **ML Kit's bundled models, not the Play-services ones.** The downloadable variants fetch
+  over the network and this app has no INTERNET permission; a model that cannot download is
+  a feature that silently never works.
+- **Face embeddings are stored as float32, not the float16 SCHEMA.md's size estimate
+  assumes.** Halving the precision of the number people-clustering depends on is a decision
+  to take with measurements, not with a schema comment.
+- **`MlKitIndexer` returns landmark geometry where the real embedding will go.**
+  ARCHITECTURE.md § 6 puts the embedding on a LiteRT model that has not been chosen (it is
+  still an open question below). Returning normalised landmark geometry means the boxes, the
+  quality signal and every piece of plumbing are exercised and correct before the model
+  arrives — but it is a placeholder, and clustering quality will change when it is replaced.
 
 ## Open questions added
 - **The Compose layer has never been compiled.** Every Compose Multiplatform version

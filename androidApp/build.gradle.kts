@@ -141,6 +141,12 @@ dependencies {
     implementation(libs.androidx.heifwriter)
     // m4: MP4 creation time, GPS and rotation atoms (STACK.md § Metadata).
     implementation(libs.mp4parser.isoparser)
+    // m9: on-device indexing. The bundled models, not the Play-services ones: the
+    // downloadable variants fetch over the network and this app has no INTERNET permission.
+    implementation(libs.mlkit.image.labeling)
+    implementation(libs.mlkit.face.detection)
+    implementation(libs.mlkit.text.recognition)
+
     implementation(libs.coil.compose)
     implementation(libs.coil.video)
 

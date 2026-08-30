@@ -353,6 +353,44 @@ selectExpiredUndo:
 SELECT * FROM undo_entry
 WHERE state = 'ACTIVE' AND expires_at IS NOT NULL AND expires_at <= ?;
 
+-- The index (BUILD.md § 7) ------------------------------------------------------
+--
+-- Re-indexing replaces rather than appends: a file that changed has new labels, and rows
+-- from the old version would keep it in search results for content it no longer contains.
+
+deleteLabelsFor:
+DELETE FROM label WHERE media_id = ?;
+
+insertLabel:
+INSERT OR REPLACE INTO label(media_id, label, confidence, source) VALUES (?, ?, ?, ?);
+
+deleteFacesFor:
+DELETE FROM face WHERE media_id = ?;
+
+insertFace:
+INSERT INTO face(id, media_id, person_id, l, t, r, b, embedding, quality)
+VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?);
+
+deleteTextFor:
+DELETE FROM text_block WHERE media_id = ?;
+
+insertTextBlock:
+INSERT INTO text_block(media_id, text, l, t, r, b, confidence) VALUES (?, ?, ?, ?, ?, ?, ?);
+
+setHashes:
+UPDATE media_item SET phash = :phash, sha256 = :sha256, updated_at = :now WHERE id = :id;
+
+-- Everything the duplicate finder and the search ranker read. Both are shared and pure,
+-- so the database's job is to hand over rows and nothing else.
+selectHashed:
+SELECT * FROM media_item WHERE (flags & 128) = 0 AND (phash IS NOT NULL OR sha256 IS NOT NULL);
+
+selectLabelsFor:
+SELECT * FROM label WHERE media_id = ?;
+
+selectFacesForClustering:
+SELECT * FROM face;
+
 -- Predictor -------------------------------------------------------------------
 
 upsertPredictor:
