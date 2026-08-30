@@ -1,5 +1,120 @@
 # Changelog
 
+## Milestone 11 — the editor
+
+BUILD.md § 9: *"crop, rotate, straighten, light/colour sliders, a few filters, video trim.
+Non-destructive; original kept."* ARCHITECTURE.md § 15 lists this milestone as Compose
+with no platform work, which is true of the pixels and untrue of everything that decides
+what happens to them — so the decisions are here, in shared Kotlin, with tests.
+
+### Doing as little as possible
+
+The editor's most valuable decision is not which pixels to change but **whether to touch
+the pixels at all**, and three of the things a user does here need no encoder:
+
+- **A rotate or a flip is a tag.** EXIF, HEIF and MP4 all carry an orientation, so turning
+  a photograph — the most common edit in any gallery — is a few bytes written, instantly
+  and losslessly.
+- **A trim that starts on a keyframe is a container cut.** The original frames move into a
+  new file untouched. Only the *start* matters: frames at the head of a cut that begins
+  mid-group reference an I-frame that is no longer in the file, while the end may fall
+  anywhere, because truncating the last group loses only frames the user asked to lose.
+  When the start is close to a keyframe the editor offers the shift — *"starting 180 ms
+  earlier keeps the original quality and saves the wait"* — and only ever offers it
+  **backwards**, because snapping forward would drop footage the user chose to keep.
+- **An edit undone back to nothing is nothing**, including four rotations, a filter at zero
+  strength, and sliders the user cancelled by hand.
+
+That matters more here than in most photo apps. Re-encoding a clip this app already
+optimised puts a second generation of loss on the first, and two generations are visible.
+
+### Geometry
+
+`Orientation` is the dihedral group of eight — four quarter-turns, each optionally
+mirrored — written as one closed set rather than a rotation field beside a mirror flag.
+With two independent fields, "rotate right, then mirror, then rotate right" has whichever
+answer the call site happened to compute; here it has an answer, and the tests assert
+associativity, inverses, and that mirroring reverses the sense of a rotation. The EXIF tag
+round-trips for all eight values, 5 and 7 included — get those backwards and a minority of
+photographs come out upside down.
+
+`CropGeometry` holds the straighten fit, which is the number that decides whether
+straightening shows a grey corner. A centred W×H frame rotated by θ fits inside a w×h
+picture exactly when its bounding box does, which gives two bounds on W and the smaller
+wins. A property test asserts the crop fits for four source shapes × four crop shapes ×
+five angles, and a second asserts it is the *largest* one that does — a crop 0.1% bigger
+must not fit, or the editor is zooming further in than it has to.
+
+An aspect-locked drag that overflows the picture shrinks about its own centre and slides
+back inside. Clamping it edge-by-edge, which is what the free drag does, would crop one
+side to the boundary and silently leave the lock the user chose behind.
+
+### Adjustments and filters
+
+Eight sliders, all running −1 to +1 with 0 meaning "leave it alone" rather than each
+carrying its own natural units. That flattening makes "is this edit doing anything?" one
+check, makes a filter a vector that can be scaled, and makes reset the same code
+everywhere.
+
+**A filter is a set of slider positions, not a look-up table.** Picking a filter and then
+adjusting still works, because both live on the same eight sliders; strength 0 is exactly
+the identity and 0.5 exactly half, by arithmetic rather than a second interpolation path
+that could disagree with the first; and nothing has to ship a LUT. The cost — a filter
+cannot do anything the sliders cannot — is the right trade for "a few filters", and is
+written down rather than discovered later.
+
+Writing the tests turned up a small real defect: a filter at 0.3 plus a slider at −0.1
+landed on 0.19999999999999998, so two edits that should compare equal did not, and an
+adjustment a user had cancelled by hand could fail `isNeutral` and write a file for an edit
+that does nothing. Slider positions are now quantised to a millionth — far below anything a
+user can express, and enough to make the type's equality mean something.
+
+### Saving
+
+Two of the optimiser's four gates are *wrong* for an edit, and dropping them is as
+dangerous as keeping them:
+
+- **Not "must be smaller".** A crop re-encoded may be larger than what it replaced.
+  Refusing it would be refusing to do what the user asked.
+- **Not VMAF ≥ 95.** There is no reference; the output is *meant* to differ.
+- **Still openable, still the expected duration, and the original's size and mtime still
+  where they were.** "The edit path skips verification" is one sentence away from "the edit
+  path replaces a file with a truncated one".
+
+A re-encoded save-over sets `optimisedAt`, which is literally what that column means —
+*when this app last replaced this file* — so the night pass does not add a second
+generation. No `Job` row is written and no saving is claimed, because none was measured. A
+rotate or a keyframe cut moves the original bytes, so it leaves the optimisation state
+exactly as it found it; marking those would cost the user the saving.
+
+A save invalidates the index, but not uniformly. A rotation keeps its meaning — same faces,
+same words, same labels, because every detector works in the upright frame — and loses only
+its **hash**, which is built on a grid of pixels that a turn permutes. Everything else
+changes the content: a crop can remove a face outright, a trim the frames a label came from.
+
+A bug the tests caught: with the source duration unknown, a user's trim evaluated as *no
+edit at all* and would have been silently discarded — on exactly the files whose metadata is
+already unreliable. The safe reading of "I don't know" is the one that keeps what the user
+asked for.
+
+### `Replacer.saveCopy`
+
+"Save (new copy, original kept)" writes a new file into a granted folder, and
+ARCHITECTURE.md § 14 allows exactly one component in this app to write there. That method
+did not exist — it was an open question from milestone 10, where "Keep both" needs the same
+thing — so it is now on `Replacer` and implemented in `SafeReplacerAndroid`, inside the
+file the build guard names. Giving an add its own path would have meant a second writer, and
+an allow-list that grows to fit the code has stopped being a guard.
+
+It deliberately takes none of the replace machinery: nothing is parked, nothing is
+snapshotted, no undo row is written, because nothing is at risk. The one rule it owes is
+that a failed write leaves nothing behind — a half-written photograph in the user's gallery
+is worse than none, since they cannot tell it from a real one.
+
+### Numbers
+
+676 shared JVM tests and 47 build-guard tests pass; the guards scan 156 source files clean.
+
 ## Milestone 10 — Space, history, Compress now, play-to-compress, settings
 
 The screens where the app has to account for itself, and the one path that is allowed to

@@ -170,6 +170,15 @@ interface LibraryStorage {
  */
 interface Replacer {
     suspend fun replace(plan: ReplacePlan): ReplaceResult
+
+    /**
+     * Adds a file without replacing one (the editor's "Save", and "Keep both").
+     *
+     * On the same interface as [replace] because the build guard's rule is about the
+     * *writer*, not about swapping: a folder the user granted has exactly one component in
+     * this app that may write into it, whatever kind of write it is.
+     */
+    suspend fun saveCopy(plan: NewCopyPlan): NewCopyResult
 }
 
 /** Parks and restores originals. Inside the write boundary, called by `Replacer`. */

@@ -8,6 +8,8 @@ import app.trimgallery.core.model.UndoLocation
 import app.trimgallery.core.model.UndoState
 import app.trimgallery.engine.LibraryStorage
 import app.trimgallery.engine.MetadataCopier
+import app.trimgallery.engine.NewCopyPlan
+import app.trimgallery.engine.NewCopyResult
 import app.trimgallery.engine.ReplacePlan
 import app.trimgallery.engine.ReplaceResult
 import app.trimgallery.engine.Source
@@ -55,6 +57,7 @@ class ReplaceSequenceTest {
         var libraryNotified = false
         var undoRow: UndoEntry? = null
         var tempDiscarded = false
+        val added = mutableListOf<String>()
         val calls = mutableListOf<String>()
     }
 
@@ -130,6 +133,12 @@ class ReplaceSequenceTest {
             world.calls += "notify"
             if (failAt == "notify") error("scanner refused")
             world.libraryNotified = true
+        }
+
+        override suspend fun saveCopy(plan: NewCopyPlan): NewCopyResult {
+            world.calls += "saveCopy"
+            world.added += plan.preferredName
+            return NewCopyResult.Added(MediaRef("added://${plan.preferredName}"), plan.preferredName, 1_000)
         }
     }
 
@@ -310,6 +319,28 @@ class ReplaceSequenceTest {
         assertEquals(Where.BIN, world.original)
     }
 
+    /**
+     * Adding a file is a write to a granted folder, so it goes through the one writer — but
+     * it has nothing to park, nothing to snapshot and nothing to undo, and taking any of
+     * that machinery would be inventing risk that is not there.
+     */
+    @Test
+    fun `saving a copy takes none of the replace machinery`() = runTest {
+        val world = World()
+        val result = sequence(world).saveCopy(
+            NewCopyPlan(
+                folder = MediaRef("tree://camera"),
+                preferredName = "IMG_0001 edited.jpg",
+                content = TempFile("/data/app/tmp/edited.jpg"),
+            ),
+        )
+
+        assertEquals(listOf("saveCopy"), world.calls)
+        assertEquals(Where.LIBRARY, world.original, "nothing may be parked by an add")
+        assertEquals(null, world.undoRow, "an add has no original to undo to")
+        assertTrue(result is NewCopyResult.Added)
+    }
+
     @Test
     fun `cancellation mid-sequence rolls back before the cancellation propagates`() = runTest {
         // A night pass is cancelled the instant the user unplugs. Unwinding inside a
@@ -323,6 +354,8 @@ class ReplaceSequenceTest {
             override suspend fun uncommit(committed: Committed) { world.calls += "uncommit" }
             override suspend fun restoreTimestamps(committed: Committed, mtime: Long) = Unit
             override suspend fun notifyLibrary(committed: Committed) = Unit
+            override suspend fun saveCopy(plan: NewCopyPlan): NewCopyResult =
+                NewCopyResult.Failed("not used by this test")
         }
 
         var thrown = false

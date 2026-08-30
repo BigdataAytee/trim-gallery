@@ -693,6 +693,81 @@ all of it is unit tested against fakes.
   the app is running — at the moment a purchase completes — and a captured copy would leave
   a paying user on free-tier settings until the next launch.
 
+## Milestone 11 — the editor
+
+- **The editor's first job is to avoid the encoder.** A rotate or flip is an orientation
+  tag (EXIF, HEIF and MP4 all carry one); a trim starting on a keyframe is a container cut;
+  an edit undone back to nothing is nothing. Re-encoding a clip this app already optimised
+  is a second generation of loss on the first, and two are visible — so every path that
+  avoids an encode is taken.
+- **Only a trim's start has to land on a keyframe.** Frames at the head of a cut that begins
+  mid-group reference an I-frame that is no longer in the file; the end may fall anywhere,
+  because truncating the last group loses only frames the user asked to lose.
+- **Keyframe snapping only ever moves the start earlier.** Snapping forward drops footage
+  the user chose to keep; snapping back keeps a fraction of a second they chose to lose,
+  which nobody notices. Under 120 ms it is silent, under 2 s it is offered, beyond that a
+  re-encode is simply the better answer.
+- **A container that lists no keyframes forces a re-encode.** Assuming frame zero is a
+  keyframe would be right for most files and would produce an undecodable one for the rest.
+- **`Orientation` is one closed set of eight, not a rotation plus a flip flag.** Mirroring
+  reverses the sense of a rotation, so with two independent fields "rotate right, then
+  mirror, then rotate right" has whichever answer the call site computed. As a group it has
+  an answer, and associativity, inverses and the conjugation are asserted rather than
+  believed.
+- **The straighten fit is exact, not a fudge factor.** A centred W×H frame rotated by θ fits
+  inside a w×h picture exactly when its bounding box does, giving two bounds on W of which
+  the smaller wins. Tested both ways: the crop always fits, and a crop 0.1% larger does not
+  — otherwise the editor zooms in further than it must.
+- **An aspect-locked drag that overflows shrinks about its centre; a free one clamps
+  edge-by-edge.** Clamping a locked crop per edge would crop one side to the picture's
+  boundary and silently drop the lock the user chose.
+- **All eight sliders share the range −1..+1 with 0 as neutral.** It makes "is this edit
+  doing anything?" one check, makes a filter a vector that a strength can scale, and makes
+  reset the same code everywhere. Each renderer maps the range onto its own units.
+- **A filter is a set of slider positions, not a LUT.** Filters and sliders then combine
+  instead of fighting; strength is exact arithmetic rather than a second interpolation path;
+  nothing ships a cube file. The cost — a filter can do nothing the sliders cannot, so no
+  split toning or film curves — is accepted deliberately, and a v2 wanting real looks should
+  add LUTs on purpose rather than discover it needs them.
+- **Slider positions are quantised to a millionth.** Binary floating point has no exact 0.1,
+  so a filter at 0.3 plus a slider at −0.1 lands on 0.19999999999999998: two equal edits
+  compare unequal, and an adjustment the user cancelled by hand can fail `isNeutral` and
+  write a file for an edit that does nothing. Deciding the resolution is the fix; inheriting
+  whichever one the arithmetic produces is not.
+- **The adjustment pipeline order is fixed in shared code.** Tone before colour, because
+  saturating first and then lifting exposure amplifies the saturation into clipping; black
+  point last within tone, because it is defined against the histogram the earlier sliders
+  produced. Fixed once so the Compose preview and the full-size render cannot disagree — a
+  preview that does not match the saved file is worse than no preview.
+- **Two of the optimiser's four verification gates do not apply to an edit.** Not "must be
+  smaller", because a crop re-encoded may be larger and the user asked for it; not VMAF ≥ 95,
+  because there is no reference and the output is meant to differ. Openable, expected
+  duration and the size/mtime snapshot all still apply — dropping those alongside the
+  quality gate is one sentence from replacing a file with a truncated one.
+- **A re-encoded save-over sets `optimisedAt`; a lossless one does not.** The column means
+  *when this app last replaced this file*, which is literally what happened, and it stops the
+  night pass adding a second generation. No `Job` row is written and no saving is claimed,
+  because none was measured. A rotate or keyframe cut moves the original bytes, so marking it
+  would cost the user the saving the night pass would have found.
+- **A rotation invalidates the hash and nothing else.** The same faces, words and labels,
+  because every detector works in the upright frame — but the perceptual hash is built on a
+  grid of pixels that a turn permutes, so a rotated photograph would otherwise stop matching
+  its own duplicates. Every other edit invalidates all of it: a crop can remove a face
+  outright, a trim the frames a label came from.
+- **A trim on a clip of unknown duration is an edit, not a non-edit.** Without the length
+  there is no way to know whether the range covers the whole clip, and reading "I don't know"
+  as identity discards the user's trim silently, on exactly the files whose metadata is
+  already unreliable. Found by a test.
+- **`Replacer.saveCopy` closes the milestone-10 open question.** "Save (new copy)" and "Keep
+  both" write a new file into a granted folder, and ARCHITECTURE.md § 14 allows one writer.
+  It is on `Replacer`, implemented inside `SafeReplacerAndroid.kt`, rather than given its own
+  path — an allow-list that grows to fit the code has stopped being a guard. It takes none of
+  the replace machinery: nothing parked, nothing snapshotted, no undo row, because nothing is
+  at risk. Its one obligation is to leave nothing behind on failure.
+- **Editing is free at both tiers**, per MONETIZATION.md's first table row, and an edit is
+  never counted against the Compress now daily limit or the monthly GB cap. An edit is not an
+  optimisation.
+
 ## Open questions added
 - **The Compose layer has never been compiled.** Every Compose Multiplatform version
   resolves `androidx.annotation`, `androidx.collection` and `androidx.lifecycle` from
@@ -733,10 +808,19 @@ all of it is unit tested against fakes.
   thing that can be reasoned out — it has to be measured on a device. `PlayToCompressTap`
   is the finished half: the ExoPlayer callbacks mapped onto the shared state machine, with
   the encoder behind a four-method `EncoderSink` seam.
-- **"Keep both" needs a way to add a file to a granted folder.** ARCHITECTURE.md § 14 makes
-  `Replacer` the only writer and a build guard enforces it, which is right — but Keep both
-  writes a *new* file rather than replacing one, and `Replacer` has no such method yet. It
-  goes on `Replacer` when the Compress now sheet is built, not around it.
 - **`DataStoreSettings` has not been compiled or run**, for the same Google Maven reason as
   everything else Android. The rules it enforces are in `SettingsPolicy`, on the JVM, with
   tests; this file is key-value plumbing around them.
+
+- **SCHEMA.md has no table for an edit recipe, and this milestone did not add one.**
+  BUILD.md § 9's *"non-destructive"* is satisfied by keeping the original — Save writes a new
+  copy, Save over parks the original in the undo bin — so nothing needs a stored recipe to be
+  correct. What a recipe table would buy is re-opening an edit to adjust it, the way Apple
+  Photos does, and that is a product decision with a schema migration attached rather than
+  something to slip in. `EditRecipe` is already a plain serialisable value, so the table is a
+  column when it is wanted.
+- **The editor's renderer does not exist.** `EditRecipe` says exactly what to do to the
+  pixels and `EditRender` says how little work it takes, but the shader or effect chain that
+  applies eight sliders to a bitmap and to a video frame is Compose and Media3 work that
+  cannot be built or looked at here. The two halves that would be wrong invisibly — the
+  geometry and the save policy — are the halves that are written.

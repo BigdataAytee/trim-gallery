@@ -3,6 +3,8 @@ package app.trimgallery.core.pipeline.replace
 import app.trimgallery.core.model.MediaRef
 import app.trimgallery.core.model.UndoEntry
 import app.trimgallery.core.model.UndoState
+import app.trimgallery.engine.NewCopyPlan
+import app.trimgallery.engine.NewCopyResult
 import app.trimgallery.engine.TempFile
 
 /**
@@ -44,6 +46,24 @@ interface ReplaceOps {
 
     /** `MediaScannerConnection.scanFile` on Android; PhotoKit does it itself on iOS. */
     suspend fun notifyLibrary(committed: Committed)
+
+    /**
+     * Adds a file to a granted folder without replacing one (the editor's "Save", and
+     * "Keep both" after a Compress now).
+     *
+     * It sits on this interface, rather than anywhere more convenient, for one reason: the
+     * build guard allows writes to a granted tree from the platform `Replacer` file and
+     * nowhere else (ARCHITECTURE.md § 14). An add is a write. Giving it its own path would
+     * mean a second writer, and a guard whose allow-list grows to fit the code has stopped
+     * being a guard.
+     *
+     * Unlike [commit] there is no ordered contract to keep: nothing is parked, nothing is
+     * at risk, and a failure leaves the folder as it was. The one rule the implementation
+     * owes is that a failed write leaves nothing behind — a half-written photograph in the
+     * user's gallery is worse than no photograph, because they cannot tell it from a real
+     * one.
+     */
+    suspend fun saveCopy(plan: NewCopyPlan): NewCopyResult
 }
 
 /** A replacement now living in the library under the original's identity. */

@@ -3,6 +3,8 @@ package app.trimgallery.core.pipeline.replace
 import app.trimgallery.core.model.UndoEntry
 import app.trimgallery.engine.LibraryStorage
 import app.trimgallery.engine.MetadataCopier
+import app.trimgallery.engine.NewCopyPlan
+import app.trimgallery.engine.NewCopyResult
 import app.trimgallery.engine.ReplacePlan
 import app.trimgallery.engine.ReplaceResult
 import app.trimgallery.engine.Replacer
@@ -43,6 +45,16 @@ class ReplaceSequence(
 
     /** One completed step and how to take it back. */
     private class Step(val name: String, val undo: suspend () -> Unit)
+
+    /**
+     * Adding a file, which has no ordering to enforce and so is a straight delegation.
+     *
+     * It passes through here rather than around here because `Replacer` is the interface the
+     * build guard is written against: one component writes to a granted folder, whatever
+     * kind of write it is. There is nothing to unwind — a failed add leaves the folder as it
+     * was, and the platform owes only that it leaves no partial file behind.
+     */
+    override suspend fun saveCopy(plan: NewCopyPlan): NewCopyResult = ops.saveCopy(plan)
 
     @Suppress("ReturnCount")
     override suspend fun replace(plan: ReplacePlan): ReplaceResult {

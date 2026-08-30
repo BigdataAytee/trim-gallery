@@ -170,6 +170,45 @@ data class ReplacePlan(
     val undoLocation: app.trimgallery.core.model.UndoLocation,
 )
 
+/**
+ * Adding a file to a granted folder without replacing anything (USER_JOURNEY.md § 11,
+ * *"Save (new copy, original kept)"*; and "Keep both" after a Compress now).
+ *
+ * It exists because `Replacer` is the only component allowed to write to the user's library
+ * (ARCHITECTURE.md § 14, enforced by a build guard), and that rule has to cover *adding* a
+ * file as much as swapping one. Without this, the editor's Save would need a second writer,
+ * and the guard would either fail the build or be weakened until it did not.
+ *
+ * There is deliberately no original, no snapshot and no undo entry: nothing is at risk, so
+ * none of the machinery that protects an original applies. A failed add leaves the folder
+ * as it was.
+ */
+data class NewCopyPlan(
+    /** The folder to write into, taken from the item the copy came from. */
+    val folder: MediaRef,
+    /**
+     * The name to aim for. The platform makes it unique — SAF appends "(1)" and PhotoKit
+     * does not use names at all — so callers must read the result rather than assume this.
+     */
+    val preferredName: String,
+    val content: TempFile,
+    /**
+     * The file whose date, GPS and camera details the copy inherits, or null for none.
+     *
+     * An edited copy of a photograph is the same photograph: it belongs on the same day, in
+     * the same place, in the same album. A copy that lands under today's date has been
+     * quietly filed somewhere the user will not look for it.
+     */
+    val inheritMetadataFrom: MediaRef? = null,
+)
+
+sealed interface NewCopyResult {
+    data class Added(val ref: MediaRef, val name: String, val size: Long) : NewCopyResult
+
+    /** Nothing was written. */
+    data class Failed(val reason: String) : NewCopyResult
+}
+
 sealed interface ReplaceResult {
     data class Replaced(val undoRef: MediaRef, val newSize: Long) : ReplaceResult
 

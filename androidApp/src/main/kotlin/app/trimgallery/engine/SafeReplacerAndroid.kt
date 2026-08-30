@@ -12,6 +12,8 @@ import app.trimgallery.core.pipeline.replace.ReplaceSequence
 import app.trimgallery.core.pipeline.replace.UndoJournal
 import app.trimgallery.engine.LibraryStorage
 import app.trimgallery.engine.MetadataCopier
+import app.trimgallery.engine.NewCopyPlan
+import app.trimgallery.engine.NewCopyResult
 import app.trimgallery.engine.ReplacePlan
 import app.trimgallery.engine.ReplaceResult
 import app.trimgallery.engine.Replacer
@@ -54,6 +56,20 @@ class SafeReplacerAndroid(
     )
 
     override suspend fun replace(plan: ReplacePlan): ReplaceResult = sequence.replace(plan)
+
+    override suspend fun saveCopy(plan: NewCopyPlan): NewCopyResult = sequence.saveCopy(plan)
+
+    /** The bounded rescan, shared by a replacement and an added copy. */
+    private suspend fun notifyPath(document: Uri) {
+        val path = pathOf(document) ?: return
+        withTimeoutOrNull(SCAN_TIMEOUT_MS) {
+            suspendCancellableCoroutine { continuation ->
+                MediaScannerConnection.scanFile(context, arrayOf(path), null) { _, _ ->
+                    if (continuation.isActive) continuation.resume(Unit)
+                }
+            }
+        }
+    }
 
     /**
      * The SAF half of the contract.
@@ -154,13 +170,56 @@ class SafeReplacerAndroid(
          * pass must not hang on one file.
          */
         override suspend fun notifyLibrary(committed: Committed) {
-            val path = pathOf(Uri.parse(committed.ref.value)) ?: return
-            withTimeoutOrNull(SCAN_TIMEOUT_MS) {
-                suspendCancellableCoroutine { continuation ->
-                    MediaScannerConnection.scanFile(context, arrayOf(path), null) { _, _ ->
-                        if (continuation.isActive) continuation.resume(Unit)
-                    }
+            notifyPath(Uri.parse(committed.ref.value))
+        }
+
+        /**
+         * Adds a file to a granted folder without replacing one — the editor's "Save", and
+         * "Keep both" after a Compress now.
+         *
+         * Much shorter than the commit above because nothing is at risk: there is no original
+         * to park, no snapshot to re-check and no undo entry, since a failed add leaves the
+         * folder exactly as it was. It is inside this class only because of the guard — this
+         * file is the one place in the app allowed to write to a granted tree, and an add is a
+         * write.
+         *
+         * The name SAF gives back is the name the caller must use. Asking for `IMG_0001.jpg`
+         * beside an existing `IMG_0001.jpg` produces `IMG_0001 (1).jpg`, and a caller that
+         * assumed otherwise would file the row under a name no file has.
+         */
+        override suspend fun saveCopy(plan: NewCopyPlan): NewCopyResult = withContext(Dispatchers.IO) {
+            val folder = Uri.parse(plan.folder.value)
+            val source = File(plan.content.path)
+
+            val created = DocumentsContract.createDocument(
+                resolver,
+                folder,
+                mimeFor(plan.preferredName),
+                plan.preferredName,
+            ) ?: return@withContext NewCopyResult.Failed("could not create a document in the granted folder")
+
+            try {
+                resolver.openOutputStream(created, "wt").use { out ->
+                    requireNotNull(out) { "could not open the new document for writing" }
+                    source.inputStream().use { it.copyTo(out) }
                 }
+                val written = lengthOf(created)
+                check(written == source.length()) {
+                    "new document is $written B against a ${source.length()} B copy"
+                }
+                // The same rescan as a replacement, for the same reason: until MediaStore knows,
+                // the file exists to this app and to nothing else on the phone.
+                notifyPath(created)
+                NewCopyResult.Added(
+                    ref = MediaRef(created.toString()),
+                    name = displayNameOf(created) ?: plan.preferredName,
+                    size = written,
+                )
+            } catch (@Suppress("TooGenericExceptionCaught") e: Exception) {
+                // A partial file is worse than none: the user would see a broken photograph in
+                // their gallery and have no way to tell it apart from a real one.
+                runCatching { DocumentsContract.deleteDocument(resolver, created) }
+                NewCopyResult.Failed(e.message ?: e::class.simpleName ?: "the copy could not be written")
             }
         }
     }
