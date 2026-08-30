@@ -119,6 +119,43 @@ environment's egress policy (a confirmed gateway denial, not a tooling fault).
 
 ---
 
+### Added — milestone 8 completed
+
+The rest of the gallery shell: sectioned grid with sticky date headers, pinch between
+day/month/year densities, the fast-scroll date bar, Albums (including auto-albums),
+Favourites, Recently deleted, the locked folder, and the viewer's info sheet.
+
+**Verified — 113 JVM tests, all passing.** Everything that decides what the user sees is
+deliberately free of Compose types so it can be tested without a UI toolkit: date
+sectioning and header wording, scrubber arithmetic, auto-album rules, trash retention,
+the lock gate, and the number formatting.
+
+- `DateSections` / `GridZoom` — day/month/year grouping, relative headers ("Today",
+  "Yesterday", the year dropped in the current year), a 1.35× pinch deadband, never more
+  than one level per gesture. Undated items get their own section rather than vanishing.
+- `FastScroll` — ticks spaced by *item position* rather than by section, so a holiday
+  week that holds more photos than a quiet year does not bunch every label at the top;
+  repeated labels collapsed; thumb ↔ index round-trips.
+- `AutoAlbums` — screenshots, selfies, documents, videos, chat media. Filename beats
+  label for screenshots; a screenshot of a receipt is not filed in Documents; a selfie
+  needs the front camera, not a "portrait" label; locked items appear in no album at all.
+- `TrashPolicy` — only "Free space" expires; countdowns round **up** so nothing
+  recoverable ever shows zero; the subtitle tells the truth about where the original
+  actually is ("On external storage", not "Kept").
+- `LockedFolderGate` — backgrounding re-locks from any state, a two-minute session, and a
+  cancelled prompt is not rendered as a failure.
+- `MediaFormatting` — decimal units matching the phone's own storage figures, saved
+  percentages rounded down, and null rather than a string when nothing was saved, so the
+  app cannot claim a saving that did not happen.
+
+Compose screens: `GalleryScreen` (sections, pinch, scrubber), `FastScrollBar`,
+`AlbumsScreen`, `TrashScreen`, `LockedFolderScreen`, `ViewerInfoSheet`. Schema gains
+`MediaItem.favourite`, `MediaItem.locked`, `Album` and `AlbumMember` — a deviation from
+ARCHITECTURE.md § 4, recorded in PROJECT.md.
+
+Still not compiled, for the same reason: Compose Multiplatform needs androidx artifacts
+from Google Maven.
+
 ### Added — milestone 8, gallery shell (Compose Multiplatform)
 
 The motion from `design/buyer-gallery/` is now ported into the app, in

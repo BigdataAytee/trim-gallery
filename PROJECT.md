@@ -219,6 +219,44 @@ not constrain the Kotlin choice in either direction.
   that neighbours must not pulse together. Now FNV-1a plus a murmur3 finalizer, in both
   codebases. Caught by a test asserting the phases *spread*, not merely that they differ.
 
+## Milestone 8 — the rest of the gallery shell
+
+- **`MediaItem` gains `favourite` and `locked`; `Album` and `AlbumMember` tables added.**
+  A deviation from the ARCHITECTURE.md § 4 schema, recorded here as § 3 requires.
+  Favourites and the locked folder are both screens BUILD.md § 9 asks for, and both need
+  to be readable without a join: locked items are excluded from *every* other view — grid,
+  albums, search, people — so every query filters on it. A column rather than an album
+  membership because a favourite is a property of the item, survives album deletion, and
+  is what every gallery the user has already used does.
+- **Auto-albums are rules, not stored membership.** `AutoAlbums` classifies from labels,
+  filename, folder and camera facing. An album is then always consistent with what the
+  indexer last saw, costs nothing to keep in step, and cannot rot when an item is
+  re-indexed after an edit. Two rules worth naming: filename beats label for screenshots
+  (a screenshot *of* a photograph is labelled as whatever it depicts), and a screenshot of
+  a receipt is filed as a screenshot only — filing it in Documents as well would make
+  Documents useless.
+- **Selfies need the front camera, not a label.** Labels alone put every portrait of
+  another person in there.
+- **Grid densities are 3 / 5 / 9 columns** for day / month / year, with a 1.35× deadband
+  on the pinch and never more than one level per gesture. Without the deadband the grid
+  flickers while the fingers are still moving; skipping a level loses the user's place.
+- **Undated items get their own section rather than being hidden.** A photo copied from a
+  backup often has no EXIF date; showing it under "No date" is better than losing it.
+- **The fast-scroll bar spaces its labels by item position, not by section.** A holiday
+  week can hold more photos than a quiet year, so taking every Nth section would bunch
+  every label into the top of the track.
+- **Sizes use decimal units (MB = 10⁶).** Using 2²⁰ would make the app's "165 MB"
+  disagree with the file manager's for the same file, and the user would rightly trust
+  the file manager. Saved percentages round **down**, and both `optimisedLine` and
+  `freedLine` return null rather than a string when nothing was actually saved — the app
+  must never dress up a no-op as an achievement.
+- **Trash countdowns round up.** An entry with eleven hours left says "1 day", not
+  "0 days": the user should never see a zero next to something they can still save.
+- **The locked folder is a state machine, and backgrounding always re-locks.** The
+  session is two minutes. A long session would defeat the feature the first time the user
+  handed the phone over to show someone a photo. A cancelled prompt is not a failure and
+  must not render as an error.
+
 ## Open questions added
 - **The Compose layer has never been compiled.** Every Compose Multiplatform version
   resolves `androidx.annotation`, `androidx.collection` and `androidx.lifecycle` from

@@ -27,8 +27,18 @@ CREATE TABLE MediaItem (
     sha256       TEXT,
     status       TEXT    NOT NULL DEFAULT 'NEW',
     skipReason   TEXT,
-    mtime        INTEGER NOT NULL
+    mtime        INTEGER NOT NULL,
+    -- Milestone 8. Additions to the ARCHITECTURE.md section 4 schema, noted in
+    -- PROJECT.md: Favourites and the locked folder are both screens BUILD.md section 9
+    -- requires, and both need to be readable without a join -- locked items are excluded
+    -- from every other view, so every query filters on it.
+    favourite    INTEGER NOT NULL DEFAULT 0,
+    locked       INTEGER NOT NULL DEFAULT 0
 );
+
+-- Every gallery query excludes the locked folder, so this index carries the whole grid.
+CREATE INDEX mediaItem_locked ON MediaItem(locked, takenAt DESC);
+CREATE INDEX mediaItem_favourite ON MediaItem(favourite) WHERE favourite = 1;
 
 -- The night pass walks candidates largest-saving-first (BUILD.md § 5).
 CREATE INDEX mediaItem_status ON MediaItem(status);
@@ -119,6 +129,22 @@ CREATE TABLE Predictor (
     PRIMARY KEY (platform, device, cameraModel, codec, w, h, fps, bitrateBucket)
 );
 
+-- User-made albums. Auto-albums are rules over the index rather than rows here, so they
+-- cannot drift out of step with what the indexer last saw (BUILD.md § 7).
+CREATE TABLE Album (
+    id           INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT,
+    name         TEXT    NOT NULL,
+    kind         TEXT    NOT NULL DEFAULT 'USER',
+    coverMediaId INTEGER REFERENCES MediaItem(id) ON DELETE SET NULL
+);
+
+CREATE TABLE AlbumMember (
+    albumId INTEGER NOT NULL REFERENCES Album(id) ON DELETE CASCADE,
+    mediaId INTEGER NOT NULL REFERENCES MediaItem(id) ON DELETE CASCADE,
+    PRIMARY KEY (albumId, mediaId)
+);
+CREATE INDEX albumMember_mediaId ON AlbumMember(mediaId);
+
 CREATE TABLE FolderGrant (
     platformRef TEXT NOT NULL PRIMARY KEY,
     mode        TEXT NOT NULL
@@ -145,6 +171,28 @@ LIMIT :limit;
 
 selectByStatus:
 SELECT * FROM MediaItem WHERE status = ?;
+
+-- The grid. Locked items never appear anywhere but the locked folder.
+selectGallery:
+SELECT * FROM MediaItem WHERE locked = 0 ORDER BY takenAt DESC;
+
+selectFavourites:
+SELECT * FROM MediaItem WHERE favourite = 1 AND locked = 0 ORDER BY takenAt DESC;
+
+selectLocked:
+SELECT * FROM MediaItem WHERE locked = 1 ORDER BY takenAt DESC;
+
+selectAlbumMedia:
+SELECT MediaItem.* FROM MediaItem
+JOIN AlbumMember ON AlbumMember.mediaId = MediaItem.id
+WHERE AlbumMember.albumId = ? AND MediaItem.locked = 0
+ORDER BY MediaItem.takenAt DESC;
+
+setFavourite:
+UPDATE MediaItem SET favourite = ? WHERE id = ?;
+
+setLocked:
+UPDATE MediaItem SET locked = ? WHERE id = ?;
 
 selectExpiredUndo:
 SELECT * FROM UndoEntry WHERE state = 'ACTIVE' AND expiresAt IS NOT NULL AND expiresAt <= ?;

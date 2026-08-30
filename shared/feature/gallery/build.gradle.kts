@@ -27,7 +27,9 @@ kotlin {
             dependencies {
                 implementation(libs.kotlinx.coroutines.core)
                 api(projects.shared.core.ui)
-                implementation(projects.shared.core.domain)
+                // TrashPolicy and LockedFolderGate appear in public signatures.
+                api(projects.shared.core.domain)
+                implementation(libs.kotlinx.datetime)
                 api(projects.shared.core.model)
                 api(compose.runtime)
                 api(compose.foundation)

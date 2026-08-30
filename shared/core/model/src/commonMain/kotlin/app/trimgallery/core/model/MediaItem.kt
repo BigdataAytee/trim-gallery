@@ -77,6 +77,19 @@ data class MediaItem(
     val status: MediaStatus = MediaStatus.NEW,
     val skipReason: SkipReason? = null,
     val mtime: Long,
+    /**
+     * Marked by the user. Not in the ARCHITECTURE.md § 4 schema; added for milestone 8,
+     * which requires a Favourites screen, and recorded in PROJECT.md. A column rather
+     * than an album because it is a property of the item, survives album deletion, and
+     * every gallery the user has ever used treats it that way.
+     */
+    val favourite: Boolean = false,
+    /**
+     * In the locked folder. Also an addition to § 4 (see PROJECT.md). Items in the
+     * locked folder are excluded from every other view — grid, albums, search, people —
+     * so this has to be readable without a join.
+     */
+    val locked: Boolean = false,
 ) {
     /** Pixels per frame; the search cares about this more than the label "4K". */
     val pixels: Long get() = width.toLong() * height.toLong()

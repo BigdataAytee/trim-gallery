@@ -29,6 +29,8 @@ kotlin {
                 implementation(libs.lifecycle.viewmodel.compose.mp)
                 implementation(libs.navigation.compose.mp)
                 api(projects.shared.core.model)
+                // DateSections and FastScroll work in local dates.
+                implementation(libs.kotlinx.datetime)
             }
         }
         commonTest {
