@@ -22,10 +22,13 @@ jobs:
           java-version: '21'
       - uses: gradle/actions/setup-gradle@v4
 
-      # Runs first and on its own: the guards need no Android SDK and no Google Maven,
-      # so a violation is reported in seconds rather than after a full dependency
-      # resolution.
-      - name: Guard unit tests
+      # Runs first and on its own, for two reasons. The guards need no Android SDK and no
+      # Google Maven, so a violation is reported in seconds rather than after a full
+      # dependency resolution — and, more importantly, `GuardSelfTest` plants a deliberate
+      # violation for every rule in every language it claims to police and asserts each one
+      # fires. A guard that has never been shown to fire is not a guard, so it is proved
+      # here before the step below trusts it.
+      - name: Guard self-tests
         run: ./gradlew -p build-logic test --stacktrace
 
       - name: Run guards over every module

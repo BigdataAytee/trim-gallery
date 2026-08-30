@@ -1,5 +1,66 @@
 # Changelog
 
+## Hardening pass — CI, guard self-tests, thermal floor
+
+No new features. Three things that were claims rather than facts, made into facts.
+
+### CI now compiles what this environment cannot
+
+A macOS job compiles every shared module for `iosArm64` and `iosSimulatorArm64`, and the
+workflow runs on every push rather than only on `main`, so the feedback arrives on the
+branch where the work is.
+
+The first thing a real Gradle run found was that **the build had never configured at all**:
+
+```
+Conflicting configuration : 'arm64-v8a' in ndk abiFilters cannot be present
+when splits abi filters are set : arm64-v8a
+```
+
+`androidApp` said "one ABI" twice, in two mutually exclusive ways. AGP rejects that during
+*configuration*, so it failed the guards and shared-test jobs too — jobs that never touch
+Android. Splits exist to produce one APK per ABI; with a single ABI there is nothing to
+split, and `abiFilters` is what every library module already uses. Removed the split.
+
+### Guard self-tests
+
+Every other guard test checks a case somebody thought of. `GuardSelfTest` checks something
+weaker and more important: **that each guard fires at all, in every language it claims to
+police.** Each rule gets a planted violation and the honest version of the same file — a
+rule that matches everything would otherwise pass the firing half while failing at its job.
+
+The manifest and plist guards get the same treatment, including a test that every entry in
+their forbidden lists is one they actually catch.
+
+The binding part is the meta-test: a rule in `DEFAULT_RULES` with no planted violation for a
+language it claims **fails the build**. That is not hypothetical — from milestone 4 to
+milestone 15 the codec and replacer rules carried patterns for `VTCompressionSessionCreate`
+and `PHAssetChangeRequest` while the harness globbed only `.kt`. They had never been run
+against a line of Swift. They were not guards; they were comments written as regular
+expressions, and nothing in the build could tell the difference. Verified by removing a
+probe and watching the meta-test fail.
+
+### A pause floor on the thermal gate
+
+Milestone 15 recorded that iOS's four discrete thermal states leave the hysteresis nothing
+to bite on, so an oscillating OS signal produced a pause and a resume per oscillation. The
+fix is a floor in *time* rather than a second gate: once the pass has stood down it stays
+down for at least a minute.
+
+It works on both platforms because it does not care what shape the reading is. A phone that
+is genuinely cooling loses at most that minute; a phone whose sensor is flapping stops
+costing the user a "paused for heat 400×" line in their History. Six oscillations at the
+five-second poll rate now produce one stand-down rather than six.
+
+**The floor only ever delays resumption, never protection** — heat pauses on the reading
+that reports it, always. `ThermalState.HELD_FAIR` stays the non-default alternative: with
+the floor in place it is belt and braces rather than the only defence, so ARCHITECTURE.md
+§ 6's "run at fair" can hold.
+
+### Numbers
+
+878 shared JVM tests and 67 build-guard tests pass.
+
 ## Milestone 15 — the iOS port
 
 BUILD.md § 13.15: *"iOS port: VideoToolbox, AVAssetWriter, BGProcessingTask, PhotoKit."*

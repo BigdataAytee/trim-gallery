@@ -9,21 +9,43 @@ class ThermalReadingTest {
 
     private fun gate() = ThermalGate()
 
+    /** iOS polls nothing; the OS notifies. Five seconds apart is a busy but plausible rate. */
+    private val pollMs = ThermalGate.POLL_INTERVAL_MS
+
+    private var clock = 0L
+
+    /** One reading, five seconds after the last. */
+    private fun ThermalGate.poll(state: ThermalState): Boolean {
+        clock += pollMs
+        return update(state.headroom, clock)
+    }
+
+    private fun ThermalGate.poll(headroom: Float): Boolean {
+        clock += pollMs
+        return update(headroom, clock)
+    }
+
     /** ARCHITECTURE.md § 6: run at nominal/fair, pause at serious/critical. */
     @Test
     fun `the four states produce exactly the behaviour the spec asks for`() {
         val gate = gate()
-        assertFalse(gate.update(ThermalState.NOMINAL.headroom))
-        assertFalse(gate.update(ThermalState.FAIR.headroom))
-        assertTrue(gate.update(ThermalState.SERIOUS.headroom))
-        assertTrue(gate.update(ThermalState.CRITICAL.headroom))
+        assertFalse(gate.poll(ThermalState.NOMINAL))
+        assertFalse(gate.poll(ThermalState.FAIR))
+        assertTrue(gate.poll(ThermalState.SERIOUS))
+        assertTrue(gate.poll(ThermalState.CRITICAL))
     }
 
+    /**
+     * ARCHITECTURE.md § 6 says fair runs, and it does — once the pause floor has passed.
+     * The floor delays the resume by a minute; it does not change which states run.
+     */
     @Test
     fun `cooling from serious back to fair starts work again`() {
         val gate = gate()
-        assertTrue(gate.update(ThermalState.SERIOUS.headroom))
-        assertFalse(gate.update(ThermalState.FAIR.headroom))
+        assertTrue(gate.poll(ThermalState.SERIOUS))
+        assertTrue(gate.poll(ThermalState.FAIR), "inside the floor")
+        clock += ThermalGate.MINIMUM_PAUSE_MS
+        assertFalse(gate.poll(ThermalState.FAIR), "the floor has passed")
     }
 
     @Test
@@ -42,37 +64,80 @@ class ThermalReadingTest {
         val android = gate()
         val ios = gate()
         // Android's continuous reading crossing 0.7, and iOS reporting serious.
-        assertEquals(android.update(0.8f), ios.update(ThermalState.SERIOUS.headroom))
-        assertEquals(android.update(0.45f), ios.update(ThermalState.FAIR.headroom))
+        assertEquals(android.poll(0.8f), ios.poll(ThermalState.SERIOUS))
+        assertEquals(android.poll(0.45f), ios.poll(ThermalState.FAIR))
         assertEquals(android.pauseCount, ios.pauseCount)
     }
 
     /**
-     * The consequence worth knowing about: iOS has no state between the thresholds, so the
-     * hysteresis does nothing there and an oscillating OS signal is a pause per oscillation.
-     * Asserted rather than hoped, so the trade-off is visible if the field test finds it.
+     * The reason `ThermalGate` grew a pause floor.
+     *
+     * iOS has no state between the two thresholds, so the hysteresis has nothing to bite
+     * on: before the floor, an OS signal oscillating between fair and serious produced a
+     * pause and a resume *per oscillation* — a "paused for heat 400×" line in the user's
+     * History for a phone that was merely sitting near a threshold.
+     *
+     * The floor damps it because it does not care what shape the reading is. Six
+     * oscillations at the 5-second poll rate span 60 s, so the user sees one stand-down.
      */
     @Test
-    fun `an oscillating iOS signal is not damped by the hysteresis`() {
+    fun `a flapping iOS signal produces at most one pause per floor window`() {
         val gate = gate()
-        repeat(3) {
-            gate.update(ThermalState.SERIOUS.headroom)
-            gate.update(ThermalState.FAIR.headroom)
+        // 12 readings at 5 s each: one minute of the sensor going back and forth.
+        repeat(6) {
+            gate.poll(ThermalState.SERIOUS)
+            gate.poll(ThermalState.FAIR)
         }
-        assertEquals(3, gate.pauseCount)
+        assertEquals(1, gate.pauseCount, "the floor should have absorbed the oscillation")
+        assertTrue(gate.isPaused, "and left the pass stood down while it was going on")
     }
 
-    /** And the alternative, kept ready: fair between the thresholds means "carry on as you were". */
+    @Test
+    fun `a signal that flaps for longer pauses once per window, not once per swing`() {
+        val gate = gate()
+        // Five minutes of oscillation at the poll rate: 30 swings, 5 floor windows.
+        repeat(30) {
+            gate.poll(ThermalState.SERIOUS)
+            gate.poll(ThermalState.FAIR)
+        }
+        assertTrue(gate.pauseCount <= 5, "expected at most one pause per minute, got ${gate.pauseCount}")
+        assertTrue(gate.pauseCount >= 1)
+    }
+
+    /** A phone that genuinely cools loses the floor and nothing more. */
+    @Test
+    fun `a real cooldown resumes one floor after the pause`() {
+        val gate = gate()
+        assertTrue(gate.poll(ThermalState.SERIOUS))
+        // Fair readings for the whole minute, then one more.
+        repeat((ThermalGate.MINIMUM_PAUSE_MS / pollMs).toInt() - 1) {
+            assertTrue(gate.poll(ThermalState.FAIR), "still inside the floor")
+        }
+        assertFalse(gate.poll(ThermalState.FAIR), "the floor has passed and the phone is fair")
+    }
+
+    /**
+     * The alternative, kept ready and now doing less work.
+     *
+     * Holding fair between the thresholds damps the oscillation by *shape* where the floor
+     * damps it by *time*. With the floor in place this is belt and braces rather than the
+     * only defence, which is why it stays the non-default: ARCHITECTURE.md § 6 says fair
+     * runs, and now it can.
+     */
     @Test
     fun `holding fair between the thresholds damps it completely`() {
         val gate = gate()
         repeat(3) {
-            gate.update(ThermalState.SERIOUS.headroom)
-            gate.update(ThermalState.HELD_FAIR)
+            gate.poll(ThermalState.SERIOUS)
+            gate.poll(ThermalState.HELD_FAIR)
         }
         assertEquals(1, gate.pauseCount)
-        assertTrue(gate.update(ThermalState.HELD_FAIR), "held fair should keep the pass stood down")
-        assertFalse(gate.update(ThermalState.NOMINAL.headroom))
+        assertTrue(gate.poll(ThermalState.HELD_FAIR), "held fair should keep the pass stood down")
+        // Past the floor, so what resumes is decided by the reading alone — and held fair
+        // is between the thresholds, so it still does not.
+        clock += ThermalGate.MINIMUM_PAUSE_MS
+        assertTrue(gate.poll(ThermalState.HELD_FAIR), "still between the thresholds")
+        assertFalse(gate.poll(ThermalState.NOMINAL))
     }
 
     // ---------------------------------------------------------- the boundary

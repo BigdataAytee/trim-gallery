@@ -50,6 +50,15 @@ object SourceBoundaryScanner {
          * directory, not the name.
          */
         val pathContains: String? = null,
+        /**
+         * The file extensions this rule claims to police.
+         *
+         * Declared rather than inferred so that `GuardSelfTest` can insist on a planted
+         * violation *per language*. A rule that says it covers Swift and has never been run
+         * against any is not a guard, it is a comment — which is exactly what the iOS
+         * patterns were until milestone 15, when the harness first globbed `.swift`.
+         */
+        val languages: Set<String> = setOf("kt", "swift"),
     )
 
     data class Violation(
@@ -162,6 +171,10 @@ object SourceBoundaryScanner {
             "user's file is the safe-replace invariant broken outright — write to " +
             "LibraryStorage.tempFile() and let Replacer commit it.",
         rawSource = true,
+        // Kotlin only. The open modes this matches are Android's SAF strings; on iOS an
+        // "original" is a PhotoKit asset rather than a path, and writing to one goes
+        // through a change request — which REPLACER_ONLY already covers, in Swift.
+        languages = setOf("kt"),
     )
 
     /**
@@ -203,6 +216,8 @@ object SourceBoundaryScanner {
         ),
         allowedFileNames = emptySet(),
         pathContains = "commonMain",
+        // Kotlin only, by construction: commonMain is a Kotlin source set.
+        languages = setOf("kt"),
         rationale = "Shared code must compile for Kotlin/Native as well as the JVM " +
             "(ARCHITECTURE.md § 3). A platform type in commonMain blocks the iOS port and " +
             "will not be noticed by any JVM test — put it behind an engine-api interface, " +

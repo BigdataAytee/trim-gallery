@@ -998,6 +998,48 @@ all of it is unit tested against fakes.
   to the Files app, and a user browsing their own files should not find the index of their
   photo library sitting there.
 
+## Hardening pass — what CI found, and two guards made real
+
+### Errors a real build surfaced (task 1, ongoing)
+
+Recorded by class, as each one is fixed:
+
+- **AGP configuration: `abiFilters` and an `abi` split both set.** `androidApp` expressed
+  "arm64-v8a only" twice, in two ways AGP refuses to accept together, and it refuses during
+  *configuration* — so it failed every job in the workflow, including the guards and shared
+  tests, which never touch Android. This is the class of error that no amount of local
+  reasoning finds: this environment cannot resolve the Android plugin at all, so the build
+  had never been configured anywhere.
+
+### The guards guard themselves
+
+- **A rule declares the languages it polices, and must have a planted violation in each.**
+  `GuardSelfTest` fails the build for a rule in `DEFAULT_RULES` with no probe. Between
+  milestones 4 and 15 the codec and replacer rules carried Swift patterns that had never
+  been run against any Swift, because the harness globbed only `.kt` — they were comments
+  written as regular expressions and nothing could tell the difference.
+- **Every probe carries a clean counterpart.** A rule that matched everything would pass a
+  firing test while failing at its job, so each planted violation ships with the honest
+  version of the same file.
+- **The forbidden lists are enumerated, not sampled.** Every permission in the manifest
+  guard's list and every key in the plist guard's is asserted to be one it actually catches,
+  so adding an entry that the matcher does not see fails here.
+- **Self-tests run before the guards are trusted.** Same CI job, earlier step.
+
+### The thermal pause floor
+
+- **A minimum pause duration, on both platforms, defaulting to 60 s.** Milestone 15 recorded
+  that iOS's four discrete states leave the hysteresis nothing to bite on. The floor damps by
+  *time* rather than by shape, so it works for a continuous Android reading and a discrete
+  iOS one alike — one stand-down per minute instead of one per oscillation.
+- **The floor delays resumption only, never protection.** Heat pauses the pass on the
+  reading that reports it, always. A gate that made a phone wait to start protecting itself
+  would be worse than no gate.
+- **The clock is a parameter, not something the gate reads.** The guards already have one,
+  and a gate that read its own would be a gate no test could wind forward.
+- **`ThermalState.HELD_FAIR` stays the non-default.** With the floor in place it is belt and
+  braces rather than the only defence, so ARCHITECTURE.md § 6's "run at fair" can hold.
+
 ## Open questions added
 - **The Compose layer has never been compiled.** Every Compose Multiplatform version
   resolves `androidx.annotation`, `androidx.collection` and `androidx.lifecycle` from

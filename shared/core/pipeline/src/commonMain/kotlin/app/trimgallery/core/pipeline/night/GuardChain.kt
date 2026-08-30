@@ -109,7 +109,9 @@ class GuardChain(
         // 4. Thermal, with hysteresis so it cannot flap. Fed every reading, even when a
         //    pause is already pending, so the gate's state and its count stay true to what
         //    the sensor actually did.
-        if (thermal.update(conditions.thermalHeadroom)) pause(PauseReason.THERMAL)
+        if (thermal.update(conditions.thermalHeadroom, conditions.now.toEpochMilliseconds())) {
+            pause(PauseReason.THERMAL)
+        }
 
         // 5. The alarm and the stop-by time.
         if (AlarmWindow.reached(conditions.now, conditions.deadline)) return stop(PauseReason.STOP_BY_TIME)
