@@ -14,6 +14,10 @@ concurrency:
   group: ${{ github.workflow }}-${{ github.head_ref || github.ref }}
   cancel-in-progress: true
 
+# Every job ends with its failure summary, after the artifact upload, so the diagnosis is
+# the last thing in the log rather than several hundred lines of submodule cleanup up from
+# the bottom. Gradle failures are mostly stack trace; the interesting lines are the
+# compiler errors and the "What went wrong" block.
 jobs:
   guards:
     name: Build guards
@@ -33,21 +37,16 @@ jobs:
       # fires. A guard that has never been shown to fire is not a guard, so it is proved
       # here before the step below trusts it.
       - name: Guard self-tests
-        run: ./gradlew -p build-logic test --console=plain
+        id: selftest
+        run: |
+          set -o pipefail
+          ./gradlew -p build-logic test --console=plain 2>&1 | tee /tmp/selftest.log
 
       - name: Run guards over every module
+        id: guards
         run: |
           set -o pipefail
           ./gradlew guards --console=plain 2>&1 | tee /tmp/guards.log
-
-      # Gradle failures are mostly stack trace. The interesting lines are compiler errors
-      # and the "What went wrong" block, and a reader — human or otherwise — should not have
-      # to scroll a thousand frames of org.gradle.internal to reach them.
-      - name: Failure summary
-        if: failure()
-        run: |
-          echo "--- compiler errors and causes ---"
-          grep -E "^e: |^w: .*[Ee]rror|FAILURE: |What went wrong|^> |Caused by: " /tmp/guards.log | head -60 || true
 
       - uses: actions/upload-artifact@v4
         if: always()
@@ -57,6 +56,20 @@ jobs:
             build-logic/build/reports/tests/test
             **/build/reports/guards
           if-no-files-found: ignore
+
+      - name: Failure summary
+        if: failure()
+        run: |
+          for log in /tmp/selftest.log /tmp/guards.log; do
+            [ -f "$log" ] || continue
+            echo "=== $log ==="
+            # Deliberately not `^> `: that matches every "> Task :x:y" line Gradle prints,
+            # and there are several hundred of them — they filled the summary and pushed the
+            # actual failure past `head`.
+            grep -E "^e: |FAILURE: |What went wrong|Caused by: |> Task .* FAILED|Analysis failed|VIOLATION" "$log" | head -40 || true
+            echo "--- tail ---"
+            tail -25 "$log" || true
+          done
 
   shared-tests:
     name: Shared JVM tests
@@ -76,21 +89,20 @@ jobs:
           set -o pipefail
           ./gradlew sharedTest --console=plain 2>&1 | tee /tmp/shared.log
 
-      # Gradle failures are mostly stack trace. The interesting lines are compiler errors
-      # and the "What went wrong" block, and a reader — human or otherwise — should not have
-      # to scroll a thousand frames of org.gradle.internal to reach them.
-      - name: Failure summary
-        if: failure()
-        run: |
-          echo "--- compiler errors and causes ---"
-          grep -E "^e: |^w: .*[Ee]rror|FAILURE: |What went wrong|^> |Caused by: " /tmp/shared.log | head -60 || true
-
       - uses: actions/upload-artifact@v4
         if: always()
         with:
           name: shared-test-reports
           path: '**/build/reports/tests'
           if-no-files-found: ignore
+
+      - name: Failure summary
+        if: failure()
+        run: |
+          echo "=== errors ==="
+          grep -E "^e: |FAILURE: |What went wrong|Caused by: |> Task .* FAILED|tests completed" /tmp/shared.log | head -40 || true
+          echo "--- tail ---"
+          tail -25 /tmp/shared.log || true
 
   ios-compile:
     name: iOS cross-compile
@@ -121,14 +133,25 @@ jobs:
           set -o pipefail
           ./gradlew iosCompile --console=plain 2>&1 | tee /tmp/ios.log
 
-      # Gradle failures are mostly stack trace. The interesting lines are compiler errors
-      # and the "What went wrong" block, and a reader — human or otherwise — should not have
-      # to scroll a thousand frames of org.gradle.internal to reach them.
-      - name: Failure summary
-        if: failure()
+      # The Swift half, as far as it can honestly go.
+      #
+      # `xcodebuild build` needs an Xcode project, an app target with a `@main`, and the
+      # shared modules published as an XCFramework. None of that exists: ARCHITECTURE.md § 1
+      # puts iOS at v1.5, and `iosApp/` is four adapters written to documented behaviour,
+      # not an application. Building one is a feature, not hardening.
+      #
+      # `swiftc -parse` is what is left, and it is not nothing: it is the same check that
+      # caught two files in this repository whose entire second half sat inside an unclosed
+      # comment. It parses; it does not resolve `import Photos`, so it cannot catch a wrong
+      # API. That gap is recorded in PROJECT.md § Device-required verification.
+      - name: Parse every Swift source
+        if: always()
         run: |
-          echo "--- compiler errors and causes ---"
-          grep -E "^e: |^w: .*[Ee]rror|FAILURE: |What went wrong|^> |Caused by: " /tmp/ios.log | head -60 || true
+          set -o pipefail
+          find iosApp -name '*.swift' -print0 \
+            | xargs -0 -n1 -t xcrun swiftc -parse \
+                -sdk "$(xcrun --sdk iphonesimulator --show-sdk-path)" \
+                -target arm64-apple-ios17.0-simulator
 
       - uses: actions/upload-artifact@v4
         if: always()
@@ -137,11 +160,23 @@ jobs:
           path: '**/build/reports'
           if-no-files-found: ignore
 
+      - name: Failure summary
+        if: failure()
+        run: |
+          echo "=== errors ==="
+          grep -E "^e: |FAILURE: |What went wrong|Caused by: |> Task .* FAILED" /tmp/ios.log | head -40 || true
+          echo "--- tail ---"
+          tail -25 /tmp/ios.log || true
+
   android:
     name: Android build + lint
     runs-on: ubuntu-latest
     steps:
+      # With submodules: this is the only job that runs CMake, and
+      # `shared/native/CMakeLists.txt` builds xpsnr, vmaf, libjxl and jpegli from source.
       - uses: actions/checkout@v4
+        with:
+          submodules: recursive
       - uses: actions/setup-java@v4
         with:
           distribution: temurin
@@ -150,36 +185,26 @@ jobs:
       - uses: gradle/actions/setup-gradle@v4
 
       - name: Static analysis
-        id: lint
         run: |
           set -o pipefail
           ./gradlew detekt ktlintCheck --console=plain 2>&1 | tee /tmp/lint.log
 
-      # Gradle failures are mostly stack trace. The interesting lines are compiler errors
-      # and the "What went wrong" block, and a reader — human or otherwise — should not have
-      # to scroll a thousand frames of org.gradle.internal to reach them.
-      - name: Failure summary
-        if: failure() && steps.lint.conclusion == 'failure'
+      # Split from the assemble below on purpose. This step is the first and only place
+      # Compose Multiplatform is compiled — the environment the code is written in cannot
+      # resolve androidx from Google Maven at all — and a Compose error should not be
+      # reported as a failure of a CMake build of libjxl.
+      - name: Compile Kotlin for Android
         run: |
-          echo "--- compiler errors and causes ---"
-          grep -E "^e: |^w: .*[Ee]rror|FAILURE: |What went wrong|^> |Caused by: " /tmp/lint.log | head -60 || true
+          set -o pipefail
+          ./gradlew :androidApp:compileDebugKotlin --console=plain 2>&1 | tee /tmp/compile.log
 
       # assembleDebug depends on the merged-manifest guard, so a network permission
-      # arriving through a dependency fails here even if no source changed.
+      # arriving through a dependency fails here even if no source changed. It also runs
+      # the native build, which is why this job checks out submodules.
       - name: Assemble
-        id: assemble
         run: |
           set -o pipefail
           ./gradlew :androidApp:assembleDebug --console=plain 2>&1 | tee /tmp/assemble.log
-
-      # Gradle failures are mostly stack trace. The interesting lines are compiler errors
-      # and the "What went wrong" block, and a reader — human or otherwise — should not have
-      # to scroll a thousand frames of org.gradle.internal to reach them.
-      - name: Failure summary
-        if: failure() && steps.assemble.conclusion == 'failure'
-        run: |
-          echo "--- compiler errors and causes ---"
-          grep -E "^e: |^w: .*[Ee]rror|FAILURE: |What went wrong|^> |Caused by: " /tmp/assemble.log | head -60 || true
 
       - uses: actions/upload-artifact@v4
         if: always()
@@ -187,3 +212,14 @@ jobs:
           name: apk
           path: androidApp/build/outputs/apk/debug/*.apk
           if-no-files-found: ignore
+
+      - name: Failure summary
+        if: failure()
+        run: |
+          for log in /tmp/lint.log /tmp/compile.log /tmp/assemble.log; do
+            [ -f "$log" ] || continue
+            echo "=== $log ==="
+            grep -E "^e: |FAILURE: |What went wrong|Caused by: |> Task .* FAILED|Analysis failed|Lint error" "$log" | head -40 || true
+            echo "--- tail ---"
+            tail -25 "$log" || true
+          done
