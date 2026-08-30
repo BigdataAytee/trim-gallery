@@ -1,6 +1,7 @@
 package app.trimgallery.core.pipeline
 
 import app.trimgallery.core.model.FolderGrant
+import app.trimgallery.core.model.GeoPoint
 import app.trimgallery.core.model.MediaItem
 import app.trimgallery.core.model.MediaStatus
 import app.trimgallery.core.model.SkipReason
@@ -154,9 +155,8 @@ fun ContainerFacts.applyTo(item: MediaItem): MediaItem = item.copy(
     // rather than being lumped into "unknown" with every other metadata-less file.
     cameraModel = cameraModel ?: writer ?: item.cameraModel,
     takenAt = takenAtEpochMs?.let { kotlin.time.Instant.fromEpochMilliseconds(it) } ?: item.takenAt,
-    location = if (latitude != null && longitude != null) {
-        app.trimgallery.core.model.GeoPoint(latitude, longitude)
-    } else {
-        item.location
-    },
+    // Bound to locals rather than smart-cast: `latitude` and `longitude` are public API
+    // properties of a class in another module, and Kotlin will not smart-cast across a
+    // module boundary — another module could, in principle, make the property a `var`.
+    location = latitude?.let { lat -> longitude?.let { lon -> GeoPoint(lat, lon) } } ?: item.location,
 )

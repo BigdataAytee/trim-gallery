@@ -43,9 +43,27 @@ abstract class VerifyNoInternetPermissionTask : DefaultTask() {
     @get:Optional
     abstract val variantName: Property<String>
 
+    /**
+     * Whether scanning nothing is a misconfiguration.
+     *
+     * True where a manifest must exist: the application module's own sources, and the
+     * AGP-merged manifest of every variant. There, an empty scan means the wiring broke and
+     * the guard is passing because it looked at no files — worse than no guard at all.
+     *
+     * False for a library module, which legitimately has none. Only `androidApp` has a
+     * hand-written `AndroidManifest.xml`; every other module in this build gets one
+     * synthesised by AGP, and failing them all was this guard reporting the repository's
+     * ordinary shape as a fault.
+     */
+    @get:org.gradle.api.tasks.Input
+    abstract val requireManifests: Property<Boolean>
+
     init {
         group = "verification"
         description = "Fails the build if the manifest declares a network permission (BUILD.md rule 8)."
+        // Off unless a caller asks for it: most modules have no manifest and are not
+        // expected to. The two places that must have one say so explicitly.
+        requireManifests.convention(false)
     }
 
     @TaskAction
@@ -66,10 +84,20 @@ abstract class VerifyNoInternetPermissionTask : DefaultTask() {
         }
 
         val checked = manifests.filter { it.isFile }
+        val mustHaveOne = requireManifests.getOrElse(false)
         reportFile.writeText(
             buildString {
-                appendLine("OK — no forbidden network permission.")
+                // Says what it did, not what it hoped. A report that reads "OK" after
+                // scanning nothing is how a dead guard survives a code review.
+                appendLine(
+                    if (checked.isEmpty()) {
+                        "SKIPPED — this module has no manifest to scan."
+                    } else {
+                        "OK — no forbidden network permission."
+                    },
+                )
                 appendLine("variant: ${variantName.getOrElse("(none)")}")
+                appendLine("manifest required here: $mustHaveOne")
                 appendLine("forbidden: ${ManifestPermissionScanner.FORBIDDEN_PERMISSIONS.sorted().joinToString(", ")}")
                 appendLine("manifests checked (${checked.size}):")
                 checked.forEach { appendLine("  ${it.path}") }
@@ -77,12 +105,17 @@ abstract class VerifyNoInternetPermissionTask : DefaultTask() {
         )
 
         if (checked.isEmpty()) {
-            // Nothing to check means the wiring is wrong, and a check that silently
-            // passes because it looked at no files is worse than no check at all.
-            throw GradleException(
-                "verifyNoInternetPermission found no manifests to scan. The task is " +
-                    "misconfigured — it must be wired to the merged manifest of each variant.",
-            )
+            if (mustHaveOne) {
+                // Nothing to check means the wiring is wrong, and a check that silently
+                // passes because it looked at no files is worse than no check at all.
+                throw GradleException(
+                    "$path found no manifests to scan. " +
+                        "The task is misconfigured — it must be wired to the merged manifest of " +
+                        "each variant, and to the application module's own sources.",
+                )
+            }
+            logger.lifecycle("No manifest in this module — nothing for BUILD.md rule 8 to check here.")
+            return
         }
 
         logger.lifecycle("No network permission in ${checked.size} manifest(s) — BUILD.md rule 8 holds.")

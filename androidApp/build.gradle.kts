@@ -169,6 +169,9 @@ androidComponents {
         ) {
             variantName.set(variant.name)
             mergedManifest.set(variant.artifacts.get(SingleArtifact.MERGED_MANIFEST))
+            // Every variant has a merged manifest. If this task ever scans nothing, the
+            // wiring has broken and the guard is passing because it looked at no files.
+            requireManifests.set(true)
             report.set(layout.buildDirectory.file("reports/guards/no-internet-${variant.name}.txt"))
         }
 

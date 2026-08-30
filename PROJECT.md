@@ -1079,6 +1079,24 @@ Recorded by class, as each one is fixed:
   `package app.trimgallery.engine.android` from `.../engine/`. Harmless to the compiler,
   noise to every tool that resolves a type by path, and now correct.
 
+- **The `bounds` a compiler could only see across a module boundary.** `TriageStep` built a
+  `GeoPoint` inside `if (latitude != null && longitude != null)`. Kotlin will not smart-cast
+  a public API property declared in *another* module, so that is a compile error in the real
+  build and not in a harness that compiles everything as one module. Fixed by binding to
+  locals — and the harness gap is now closed: `scratchpad/modcheck` is a five-project Gradle
+  build mirroring the real module graph (model → engine-api → domain → pipeline → data),
+  which reproduces this class of error here instead of in CI.
+
+- **The network-permission guard failed every module that has no manifest.** It treated an
+  empty scan as a misconfiguration, on the reasoning that a check which passes because it
+  looked at no files is worse than no check. Sound rule, wrong scope: only `androidApp` has a
+  hand-written `AndroidManifest.xml` — every other module gets one synthesised by AGP — so
+  the guard was reporting the repository's ordinary shape as a fault, and it took until CI
+  ran the guards to find out. `requireManifests` now says where a manifest must exist: the
+  application module's own sources (matched by plugin id, since AGP is deliberately off
+  build-logic's classpath) and the merged manifest of every variant. Both halves have a
+  test, and the report says SKIPPED rather than OK when it scanned nothing.
+
 ### The guards guard themselves
 
 - **A rule declares the languages it polices, and must have a planted violation in each.**

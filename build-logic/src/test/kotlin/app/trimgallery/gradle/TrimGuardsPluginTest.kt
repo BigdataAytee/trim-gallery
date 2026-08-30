@@ -176,6 +176,63 @@ class TrimGuardsPluginTest {
         assertTrue(result.output.contains("found no sources to scan"))
     }
 
+    /**
+     * A library module has no hand-written manifest and is not expected to.
+     *
+     * The guard used to fail on that, which meant every module in this build except the
+     * app was reporting its ordinary shape as a misconfiguration — and it only surfaced
+     * once CI got far enough to run the guards at all.
+     */
+    @Test
+    fun `a module with no manifest is skipped, and the report says so`() {
+        projectDir.newFile("settings.gradle.kts").writeText("""rootProject.name = "fixture"""")
+        projectDir.newFile("build.gradle.kts").writeText(
+            """
+            plugins {
+                base
+                id("trimgallery.guards")
+            }
+            """.trimIndent(),
+        )
+        val result = run(expectFailure = false)
+        assertEquals(
+            TaskOutcome.SUCCESS,
+            result.task(":${TrimGuardsPlugin.NO_INTERNET_TASK}")?.outcome,
+        )
+        val report = File(projectDir.root, "build/reports/guards/no-internet.txt").readText()
+        assertTrue("report claimed to have checked something: $report", report.contains("SKIPPED"))
+    }
+
+    /**
+     * The other half, and the one that matters: where a manifest *must* exist, an empty
+     * scan is still a failure. A guard that passes because it looked at no files is worse
+     * than no guard at all.
+     */
+    @Test
+    fun `a module that must have a manifest fails when it has none`() {
+        projectDir.newFile("settings.gradle.kts").writeText("""rootProject.name = "fixture"""")
+        projectDir.newFile("build.gradle.kts").writeText(
+            """
+            import app.trimgallery.gradle.VerifyNoInternetPermissionTask
+
+            plugins {
+                base
+                id("trimgallery.guards")
+            }
+
+            tasks.named<VerifyNoInternetPermissionTask>("${TrimGuardsPlugin.NO_INTERNET_TASK}") {
+                requireManifests.set(true)
+            }
+            """.trimIndent(),
+        )
+        val result = GradleRunner.create()
+            .withProjectDir(projectDir.root)
+            .withPluginClasspath()
+            .withArguments(TrimGuardsPlugin.NO_INTERNET_TASK)
+            .buildAndFail()
+        assertTrue(result.output.contains("found no manifests to scan"))
+    }
+
     @Test
     fun `verifyGuards runs every guard`() {
         writeProject("""    <uses-permission android:name="android.permission.INTERNET" />""")

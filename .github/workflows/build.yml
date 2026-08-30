@@ -14,10 +14,11 @@ concurrency:
   group: ${{ github.workflow }}-${{ github.head_ref || github.ref }}
   cancel-in-progress: true
 
-# Every job ends with its failure summary, after the artifact upload, so the diagnosis is
-# the last thing in the log rather than several hundred lines of submodule cleanup up from
-# the bottom. Gradle failures are mostly stack trace; the interesting lines are the
-# compiler errors and the "What went wrong" block.
+# Every job ends with a failure summary that both prints the diagnosis and emits it as
+# GitHub error annotations. Gradle failures are mostly stack trace; the interesting lines
+# are the compiler errors and the "What went wrong" block, and a job that checks out
+# submodules buries its own log tail under two hundred lines of post-job cleanup, which an
+# annotation survives.
 jobs:
   guards:
     name: Build guards
@@ -37,13 +38,11 @@ jobs:
       # fires. A guard that has never been shown to fire is not a guard, so it is proved
       # here before the step below trusts it.
       - name: Guard self-tests
-        id: selftest
         run: |
           set -o pipefail
           ./gradlew -p build-logic test --console=plain 2>&1 | tee /tmp/selftest.log
 
       - name: Run guards over every module
-        id: guards
         run: |
           set -o pipefail
           ./gradlew guards --console=plain 2>&1 | tee /tmp/guards.log
@@ -59,17 +58,7 @@ jobs:
 
       - name: Failure summary
         if: failure()
-        run: |
-          for log in /tmp/selftest.log /tmp/guards.log; do
-            [ -f "$log" ] || continue
-            echo "=== $log ==="
-            # Deliberately not `^> `: that matches every "> Task :x:y" line Gradle prints,
-            # and there are several hundred of them — they filled the summary and pushed the
-            # actual failure past `head`.
-            grep -E "^e: |FAILURE: |What went wrong|Caused by: |> Task .* FAILED|Analysis failed|VIOLATION" "$log" | head -40 || true
-            echo "--- tail ---"
-            tail -25 "$log" || true
-          done
+        run: bash .github/failure-summary.sh /tmp/selftest.log /tmp/guards.log
 
   shared-tests:
     name: Shared JVM tests
@@ -98,21 +87,14 @@ jobs:
 
       - name: Failure summary
         if: failure()
-        run: |
-          echo "=== errors ==="
-          grep -E "^e: |FAILURE: |What went wrong|Caused by: |> Task .* FAILED|tests completed" /tmp/shared.log | head -40 || true
-          echo "--- tail ---"
-          tail -25 /tmp/shared.log || true
+        run: bash .github/failure-summary.sh /tmp/shared.log
 
   ios-compile:
     name: iOS cross-compile
     runs-on: macos-14
     steps:
       # No submodules. `iosCompile` is Kotlin only — the native metric libraries under
-      # shared/native are not built here — and a recursive checkout of libjxl and jpegli
-      # pulls a dozen nested repositories, then spends the end of every job cleaning them
-      # up. That is minutes of macOS runner time and several hundred lines of log for
-      # nothing.
+      # shared/native are not built here.
       - uses: actions/checkout@v4
       - uses: actions/setup-java@v4
         with:
@@ -162,21 +144,17 @@ jobs:
 
       - name: Failure summary
         if: failure()
-        run: |
-          echo "=== errors ==="
-          grep -E "^e: |FAILURE: |What went wrong|Caused by: |> Task .* FAILED" /tmp/ios.log | head -40 || true
-          echo "--- tail ---"
-          tail -25 /tmp/ios.log || true
+        run: bash .github/failure-summary.sh /tmp/ios.log
 
   android:
     name: Android build + lint
     runs-on: ubuntu-latest
     steps:
-      # With submodules: this is the only job that runs CMake, and
-      # `shared/native/CMakeLists.txt` builds xpsnr, vmaf, libjxl and jpegli from source.
+      # No submodules: nothing in this job runs CMake, and a recursive checkout of libjxl
+      # and jpegli pulls a dozen nested repositories, then spends two hundred lines of the
+      # post-job step cleaning them up — two hundred lines between this job's failure
+      # summary and the end of its log. The native build lives in `apk` below.
       - uses: actions/checkout@v4
-        with:
-          submodules: recursive
       - uses: actions/setup-java@v4
         with:
           distribution: temurin
@@ -189,18 +167,36 @@ jobs:
           set -o pipefail
           ./gradlew detekt ktlintCheck --console=plain 2>&1 | tee /tmp/lint.log
 
-      # Split from the assemble below on purpose. This step is the first and only place
-      # Compose Multiplatform is compiled — the environment the code is written in cannot
-      # resolve androidx from Google Maven at all — and a Compose error should not be
-      # reported as a failure of a CMake build of libjxl.
+      # The first and only place Compose Multiplatform is compiled: the environment this
+      # code is written in cannot resolve androidx from Google Maven at all. Split from the
+      # assemble so a Compose error is not reported as a failure of a CMake build of libjxl.
       - name: Compile Kotlin for Android
         run: |
           set -o pipefail
           ./gradlew :androidApp:compileDebugKotlin --console=plain 2>&1 | tee /tmp/compile.log
 
+      - name: Failure summary
+        if: failure()
+        run: bash .github/failure-summary.sh /tmp/lint.log /tmp/compile.log
+
+  apk:
+    name: Android APK + native
+    runs-on: ubuntu-latest
+    steps:
+      # The one job that needs submodules: `shared/native/CMakeLists.txt` builds xpsnr,
+      # vmaf, libjxl and jpegli from source, and `assembleDebug` runs it.
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+      - uses: android-actions/setup-android@v3
+      - uses: gradle/actions/setup-gradle@v4
+
       # assembleDebug depends on the merged-manifest guard, so a network permission
-      # arriving through a dependency fails here even if no source changed. It also runs
-      # the native build, which is why this job checks out submodules.
+      # arriving through a dependency fails here even if no source changed.
       - name: Assemble
         run: |
           set -o pipefail
@@ -215,11 +211,4 @@ jobs:
 
       - name: Failure summary
         if: failure()
-        run: |
-          for log in /tmp/lint.log /tmp/compile.log /tmp/assemble.log; do
-            [ -f "$log" ] || continue
-            echo "=== $log ==="
-            grep -E "^e: |FAILURE: |What went wrong|Caused by: |> Task .* FAILED|Analysis failed|Lint error" "$log" | head -40 || true
-            echo "--- tail ---"
-            tail -25 "$log" || true
-          done
+        run: bash .github/failure-summary.sh /tmp/assemble.log

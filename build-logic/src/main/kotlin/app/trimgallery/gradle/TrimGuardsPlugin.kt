@@ -40,6 +40,16 @@ class TrimGuardsPlugin : Plugin<Project> {
         val noInternet = project.tasks.register<VerifyNoInternetPermissionTask>(NO_INTERNET_TASK) {
             sourceManifests.from(manifests)
             report.set(project.layout.buildDirectory.file("reports/guards/no-internet.txt"))
+            // A library module has no hand-written manifest and is not expected to; an
+            // application module without one is a broken checkout, and a guard that passed
+            // on it would be reporting on a file that is not there.
+            requireManifests.set(false)
+        }
+
+        // Matched by plugin id rather than type: the Android Gradle Plugin is deliberately
+        // off this classpath (see the class doc), and `withId` needs only the string.
+        project.plugins.withId("com.android.application") {
+            noInternet.configure { requireManifests.set(true) }
         }
 
         val boundaries = project.tasks.register<VerifySourceBoundariesTask>(BOUNDARIES_TASK) {
