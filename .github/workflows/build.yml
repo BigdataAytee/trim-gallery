@@ -6,8 +6,12 @@ on:
   push:
   pull_request:
 
+# `head_ref` on a pull_request, `ref` on a push — so the push run and the pull-request
+# run for the same branch share a group and one cancels the other. Keyed on `ref` alone
+# they are different groups (refs/heads/x versus refs/pull/1/merge) and every commit
+# builds twice, which on the macOS runner is the expensive half of the workflow.
 concurrency:
-  group: ${{ github.workflow }}-${{ github.ref }}
+  group: ${{ github.workflow }}-${{ github.head_ref || github.ref }}
   cancel-in-progress: true
 
 jobs:

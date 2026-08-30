@@ -87,7 +87,7 @@ class TrimRepository(
         stored
     }
 
-    override suspend fun forget(entry: UndoEntry) = withContext(io) {
+    override suspend fun forget(entry: UndoEntry): Unit = withContext(io) {
         queries.deleteUndoEntry(entry.id)
     }
 
@@ -95,7 +95,7 @@ class TrimRepository(
         queries.selectExpiredUndo(nowEpochMs, ::toUndoEntry).executeAsList()
     }
 
-    override suspend fun setState(entry: UndoEntry, state: UndoState) = withContext(io) {
+    override suspend fun setState(entry: UndoEntry, state: UndoState): Unit = withContext(io) {
         queries.setUndoState(state = state.name, id = entry.id)
     }
 
@@ -173,7 +173,7 @@ class TrimRepository(
 
     // ------------------------------------------------------- NightRun.Checkpoint
 
-    override suspend fun save(session: RunSession) = withContext(io) {
+    override suspend fun save(session: RunSession): Unit = withContext(io) {
         queries.upsertRunSession(
             id = session.id,
             started_at = session.startedAt,
@@ -219,9 +219,9 @@ class TrimRepository(
         queries.selectMediaByGrants(grants.map { it.id }, ::toMediaItem).executeAsList()
     }
 
-    override suspend fun insert(item: MediaItem) = upsert(item)
+    override suspend fun insert(item: MediaItem) { upsert(item) }
 
-    override suspend fun update(item: MediaItem) = upsert(item)
+    override suspend fun update(item: MediaItem) { upsert(item) }
 
     /**
      * Deletes the row, not the file — there is nothing left to delete.
@@ -244,7 +244,7 @@ class TrimRepository(
         status: MediaStatus,
         reason: SkipReason?,
         estSaving: Long?,
-    ) = withContext(io) {
+    ): Unit = withContext(io) {
         queries.setTriage(
             status = status.name,
             skipReason = reason?.name,
@@ -255,7 +255,7 @@ class TrimRepository(
     }
 
     @Suppress("LongMethod")
-    private suspend fun upsert(item: MediaItem) = withContext(io) {
+    private suspend fun upsert(item: MediaItem): Unit = withContext(io) {
         queries.upsertMedia(
             id = item.id,
             platform_ref = item.platformRef.value,
@@ -338,11 +338,11 @@ class TrimRepository(
         }
     }
 
-    override suspend fun hashes(item: MediaItem, phash: Long?, sha256: String?) = withContext(io) {
+    override suspend fun hashes(item: MediaItem, phash: Long?, sha256: String?): Unit = withContext(io) {
         queries.setHashes(phash = phash, sha256 = sha256?.fromHex(), now = nowMs(), id = item.id)
     }
 
-    override suspend fun indexed(item: MediaItem) = withContext(io) {
+    override suspend fun indexed(item: MediaItem): Unit = withContext(io) {
         queries.setStatus(
             status = MediaStatus.INDEXED.name,
             skipReason = null,

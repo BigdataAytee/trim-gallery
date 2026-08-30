@@ -1026,6 +1026,19 @@ Recorded by class, as each one is fixed:
   repository had ever been *configured*, so the errors found first are not the code's, they
   are the build's, and each one hides every error behind it.
 
+- **`core/data` had never been compiled at all, and did not compile.** Every override of a
+  `Unit`-returning port — `UndoJournal.forget`, `NightRun.Checkpoint.save`,
+  `TriageStep.Sink.insert/update/recordVerdict`, `IndexStep.Sink.hashes/indexed` — was
+  written as an expression body over a SQLDelight call, so its inferred return type was
+  `QueryResult<Long>` and none of them actually overrode anything. Eight errors in one
+  file. The module needs SQLDelight's generated interface to compile and the local
+  harness had only ever included `MediaFlagsBits.kt` from it.
+
+  Found by building a harness that applies the real SQLDelight Gradle plugin from Maven
+  Central against the real `.sq` files — the plugin, unlike AGP and Compose, is not behind
+  Google Maven. `shared/core/data` commonMain and jvmMain now compile here, against the
+  generated schema, which also makes the migration tests of task 6(f) writable without CI.
+
 ### The guards guard themselves
 
 - **A rule declares the languages it polices, and must have a planted violation in each.**
