@@ -12,6 +12,12 @@ and nothing ever leaves your phone.
 | [PROJECT.md](PROJECT.md) | Decisions already made, and why. Do not re-litigate these. |
 | [STACK.md](STACK.md) | The only approved library list. Adding anything else needs a decision recorded in PROJECT.md. |
 | [ARCHITECTURE.md](ARCHITECTURE.md) | The module layout, engine interfaces and platform adapter matrix. Build to this. |
+| [SCHEMA.md](SCHEMA.md) | The database schema of record. ARCHITECTURE.md section 4 is the sketch this fills in. |
+| [DESIGN_SYSTEM.md](DESIGN_SYSTEM.md) | Colour, type, shape, motion and copy tone. The tokens are asserted in JVM tests. |
+| [PRD.md](PRD.md) | The product: problem, users, success metrics, non-goals. |
+| [USER_JOURNEY.md](USER_JOURNEY.md) | Every screen, state and flow, first run to uninstall. |
+| [MONETIZATION.md](MONETIZATION.md) | Freemium tiers and the rules the paywall may never break. |
+| [LAUNCH.md](LAUNCH.md) | Release phases, store listing, staged rollout. |
 | [CHANGELOG.md](CHANGELOG.md) | What has actually been built so far, and what is still missing. |
 
 Claude Code skills live in [`.claude/skills/`](.claude/skills). Three are specific to
@@ -19,9 +25,16 @@ this project and encode its hard rules: `codec-priority`, `safe-replace`, `ndk-b
 
 ## Status
 
-Milestone 1 of [BUILD.md section 13](BUILD.md): one video encoded to HEVC with Media3
-Transformer, audio passed through, at background codec priority. See CHANGELOG.md for
-what is done, what was verified and what is knowingly missing.
+Milestones 1, 2, 3, 4 and 8 of [BUILD.md section 13](BUILD.md) are built: the Media3
+Transformer encode, XPSNR and libvmaf over the NDK (both verified against upstream), the
+probe/search/predictor loop, the verify-and-safe-replace path with undo and offload, and
+the gallery shell.
+
+258 shared JVM tests and 43 build-guard tests pass. Nothing Android or Compose has been
+compiled — Google Maven is unreachable from the build environment, which is why every
+decision the app makes lives in platform-free Kotlin that can be tested without it. See
+CHANGELOG.md for what is done and what was verified, and PROJECT.md for what is knowingly
+untested.
 
 ## Layout
 

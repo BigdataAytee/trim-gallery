@@ -97,7 +97,7 @@ fun ViewerInfoSheet(
                     ) {
                         BasicText(
                             text = action.label,
-                            style = TrimTheme.typography.chip.copy(
+                            style = TrimTheme.typography.caption.copy(
                                 color = if (action.selected) colors.page else colors.text,
                             ),
                         )
@@ -110,7 +110,7 @@ fun ViewerInfoSheet(
 
 @Composable
 private fun InfoRow(text: String) {
-    BasicText(text = text, style = TrimTheme.typography.chip.copy(color = TrimTheme.colors.muted))
+    BasicText(text = text, style = TrimTheme.typography.caption.copy(color = TrimTheme.colors.muted))
 }
 
 /**

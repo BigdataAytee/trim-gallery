@@ -22,7 +22,14 @@ class TrashPolicyTest {
         expiresAt: Instant?,
         state: UndoState = UndoState.ACTIVE,
         location: UndoLocation = UndoLocation.BIN,
-    ) = UndoEntry(1, 1, location, MediaRef("ref"), expiresAt, state)
+    ) = UndoEntry(
+        id = "1",
+        mediaId = "1",
+        location = location,
+        ref = MediaRef("ref"),
+        expiresAt = expiresAt,
+        state = state,
+    )
 
     @Test
     fun `only Free space mode expires`() {

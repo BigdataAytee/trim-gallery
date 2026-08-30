@@ -99,4 +99,34 @@ class WindowPlanTest {
         // scale with exactly the files that most need optimising.
         assertEquals(720, WindowPlan.SCORING_HEIGHT)
     }
+
+    @Test
+    fun `Careful mode tiles the whole file with no gaps and no overlap`() {
+        val windows = WindowPlan.fullFileWindows(32_000)
+        assertEquals(7, windows.size)
+        assertEquals(32_000L, WindowPlan.totalMs(windows))
+        windows.zipWithNext().forEach { (a, b) ->
+            assertEquals(a.endMs, b.startMs, "gap or overlap between $a and $b")
+        }
+        assertEquals(0L, windows.first().startMs)
+        assertEquals(32_000L, windows.last().endMs)
+    }
+
+    @Test
+    fun `a file shorter than one window is a single short Careful window`() {
+        val windows = WindowPlan.fullFileWindows(1_200)
+        assertEquals(listOf(WindowPlan.Window(0, 1_200)), windows)
+    }
+
+    @Test
+    fun `an exact multiple of the window length does not produce a zero-length tail`() {
+        val windows = WindowPlan.fullFileWindows(15_000)
+        assertEquals(3, windows.size)
+        assertTrue(windows.none { it.lengthMs == 0L })
+    }
+
+    @Test
+    fun `a file with no duration has nothing to verify`() {
+        assertTrue(WindowPlan.fullFileWindows(0).isEmpty())
+    }
 }

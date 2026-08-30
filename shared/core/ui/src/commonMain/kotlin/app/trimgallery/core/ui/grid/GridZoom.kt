@@ -1,21 +1,27 @@
 package app.trimgallery.core.ui.grid
 
+import app.trimgallery.core.ui.theme.TrimSpacing
+
 /**
  * The three grid densities the user pinches between (BUILD.md § 9: "Pinch-zoom between
  * day / month / year grids").
  *
  * Column counts, not tile sizes: the shell is a fixed-width column, so the number of
  * columns is what actually determines how much library fits on screen.
+ *
+ * Gutters come from DESIGN_SYSTEM.md § Spacing and shape and close as the grid zooms out —
+ * 2, 1, 0 — because at year level the point is the shape of a year, and any gap at all
+ * breaks the block into stripes that read as structure the data does not have.
  */
-enum class GridZoom(val columns: Int) {
+enum class GridZoom(val columns: Int, val gutterDp: Float) {
     /** Individual days. Large enough to recognise a photo without opening it. */
-    DAY(3),
+    DAY(3, TrimSpacing.GUTTER_DAY_DP),
 
     /** A month at a time. The default reading distance for a year-old library. */
-    MONTH(5),
+    MONTH(5, TrimSpacing.GUTTER_MONTH_DP),
 
     /** Whole years. Small enough to scrub a decade. */
-    YEAR(9),
+    YEAR(9, TrimSpacing.GUTTER_YEAR_DP),
     ;
 
     val zoomedIn: GridZoom get() = entries.getOrElse(ordinal - 1) { this }

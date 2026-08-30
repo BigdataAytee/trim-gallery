@@ -92,7 +92,7 @@ private fun AlbumCard(
             // The count is the useful fact; an album with one photo says "1 item", not
             // "1 items".
             text = if (album.count == 1) "1 item" else "${album.count} items",
-            style = TrimTheme.typography.chip.copy(color = colors.muted),
+            style = TrimTheme.typography.caption.copy(color = colors.muted),
         )
     }
 }
@@ -121,9 +121,9 @@ fun sortAlbums(albums: List<Album>): List<Album> = albums.sortedWith(
 
 /** Builds the fixed entries that always exist, whatever is in the library. */
 fun standingAlbums(favouriteCount: Int, trashCount: Int, lockedCount: Int): List<Album> = listOf(
-    Album(id = -1, name = "Favourites", kind = AlbumKind.FAVOURITES, count = favouriteCount),
-    Album(id = -2, name = "Recently deleted", kind = AlbumKind.RECENTLY_DELETED, count = trashCount),
-    Album(id = -3, name = "Locked folder", kind = AlbumKind.LOCKED, count = lockedCount),
+    Album(id = Album.FAVOURITES_ID, name = "Favourites", kind = AlbumKind.FAVOURITES, count = favouriteCount),
+    Album(id = Album.RECENTLY_DELETED_ID, name = "Recently deleted", kind = AlbumKind.RECENTLY_DELETED, count = trashCount),
+    Album(id = Album.LOCKED_ID, name = "Locked folder", kind = AlbumKind.LOCKED, count = lockedCount),
 )
 
 private const val ALBUM_COLUMNS = 2

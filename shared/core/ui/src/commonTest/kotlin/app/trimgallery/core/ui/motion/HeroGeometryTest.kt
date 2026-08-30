@@ -92,10 +92,12 @@ class HeroGeometryTest {
     }
 
     @Test
-    fun `corner radius grows from tile to hero`() {
+    fun `corner radius opens from the thumbnail to a square corner`() {
+        // DESIGN_SYSTEM.md, `shared-element`: radius 4 to 0. The tile is a rounded
+        // thumbnail in a grid; the viewer is full-bleed and has no corners to round.
         assertClose(MotionSpec.Hero.TILE_RADIUS_DP, HeroGeometry.lerpRadius(0f))
         assertClose(MotionSpec.Hero.HERO_RADIUS_DP, HeroGeometry.lerpRadius(1f))
-        assertClose(20f, HeroGeometry.lerpRadius(0.5f))
+        assertClose(2f, HeroGeometry.lerpRadius(0.5f))
     }
 
     @Test

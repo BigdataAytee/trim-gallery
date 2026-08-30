@@ -56,7 +56,7 @@ class PredictorTest {
         fps: Double? = 30.0,
         bitrate: Long? = 12_000_000,
     ) = MediaItem(
-        id = 1, platformRef = MediaRef("ref"), name = "clip.mp4", kind = MediaKind.VIDEO,
+        id = "1", platformRef = MediaRef("ref"), name = "clip.mp4", kind = MediaKind.VIDEO,
         codec = codec, width = width, height = height, fps = fps, bitrate = bitrate,
         size = 100_000_000, duration = 60_000, takenAt = null, location = null,
         cameraModel = camera, phash = null, sha256 = null, mtime = 0,

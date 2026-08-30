@@ -1,5 +1,132 @@
 # Changelog
 
+## Milestone 4 — verify, safe replace, undo and offload
+
+The gate in front of the user's only copy of their photos, and the swap behind it.
+
+### Verification (shared, `core/pipeline/verify/`)
+
+`Verifier` implements BUILD.md § 5's gate: VMAF `vmaf_v0.6.1` at 1080p, `n_subsample=10`,
+on three 5-second windows at the start, middle and end. Around it, `VerifyPass` runs the
+step-up ladder — one encode plus at most two re-encodes at a higher bitrate — and is the
+**only** way to obtain a `ReplacePlan`, so no caller can construct one for a file that
+never passed.
+
+Decisions worth knowing about:
+
+- **The worst window decides, not the mean.** 99, 99, 88 averages to 95.3 and would pass
+  on a mean. Three windows exist precisely to catch the one place an encode fell apart.
+- **Losing the audio track is a failure, not a saving.** Audio is passed through, never
+  re-encoded; a smaller file with no sound would otherwise sail through the size gate.
+- **Only a quality failure is retryable.** A truncated mux and an output that is not
+  smaller are both terminal — a higher bitrate cannot fix either, and stepping up would
+  produce two more bad files at a cost of two encodes each.
+- **A step up is 15%**, chosen against `SettingSearch`'s own 12% convergence: a smaller
+  notch would land inside the bracket the search already called indistinguishable.
+- **Careful mode tiles the whole file**, exactly, with no gaps and no overlap.
+
+### The replace contract (shared, `core/pipeline/replace/`)
+
+`ReplaceSequence` is the one implementation of ARCHITECTURE.md § 7 — copy metadata → park
+original → commit → restore timestamps → notify library → write `UndoEntry` — with every
+completed step reversed on failure, in order. Both platforms delegate to it, which is what
+makes § 14's *"Replacer plan/rollback with fake storage"* a JVM unit test rather than a
+device test nobody runs.
+
+- **Rollback is uncancellable.** A night pass is cancelled the instant the phone is
+  unplugged; unwinding inside a cancelled coroutine would abandon the swap exactly halfway
+  — original in the bin, nothing in the library. The unwind runs under `NonCancellable`
+  and the cancellation is rethrown afterwards.
+- **Untidy loses to lost.** Every inverse is attempted even if an earlier one failed: a
+  stray replacement is a swept file, an unreachable original is a deleted photograph.
+- **A journal failure unwinds the whole swap.** An optimised file with no undo row cannot
+  be restored by the UI, so keeping the original and losing the saving is the better trade.
+- **The snapshot is re-checked inside the Replacer**, immediately before the first
+  mutation, as well as by the pipeline — only a check taken there closes the window.
+
+`OffloadMove` holds the cross-volume ordering on its own: copy → verify → *then* remove.
+Every platform ships a convenient `move` that silently degrades to copy-and-delete across a
+mount point with no way to tell whether the destination write finished; SD cards are pulled
+mid-write, and counterfeit ones report a write as complete while dropping the data. The
+source delete is unreachable except through a verification that returned true.
+
+### Android
+
+`SafeReplacerAndroid` (SAF: staged create, stream, then an atomic rename onto the
+original's name), `UndoBinAndroid` (bin and offload, both via `OffloadMove`; restore stages
+the original back before removing what holds its identity), `MetadataCopierAndroid` (EXIF
+and XMP tag by tag, MP4 `mvhd` creation time and `tkhd` rotation matrix),
+`OutputProbeAndroid` (`MediaExtractor`, longest track), and `SafStorage`.
+
+Every SAF write in the app is inside the two files the build guard's allow-list names.
+
+### Build guard, strengthened
+
+Writing the implementation found a hole in the guard: the write rule was anchored on the
+literal receiver `contentResolver`, and `SafeReplacerAndroid` holds
+`private val resolver: ContentResolver`. Aliasing the resolver would have walked straight
+past it. The pattern now matches any receiver, and a fourth rule was added — opening a
+user's file with a write mode (`"w"`, `"rw"`, `"wa"`) is now a build failure anywhere
+outside the four writer files. It matches raw source, because the mode is a string literal
+and the scanner blanks those.
+
+## Applied: PRD, USER_JOURNEY, DESIGN_SYSTEM, SCHEMA, MONETIZATION, LAUNCH
+
+Six new governing documents landed and were applied where they bear on code.
+
+### SCHEMA.md → the model layer and the database
+
+- **Ids are TEXT UUIDv7**, not autoincrementing integers. `core.model.Uuid7` generates
+  them from an injected clock and randomness so the layout is asserted on a JVM rather
+  than assumed. Version 7 because SCHEMA.md's hot indexes — `(status, est_saving DESC)`,
+  `(state, expires_at)`, `(finished_at DESC)` — are appended to in id order, and a random
+  v4 key would scatter those B-tree writes across the whole index on phone flash.
+  **A real bug, caught by its own test:** a clock stepping backwards re-seeded the
+  intra-millisecond counter randomly, which could hand out an id sorting *before* one
+  already issued. It now holds the timestamp and counts up.
+- `MediaItem` gains `folder_grant_id`, `mime`, `est_saving`, `created_at`/`updated_at`;
+  `favourite` and `locked` move into `MediaFlags` as the bitmask SCHEMA.md specifies, with
+  `locked` renamed `hidden`.
+- `Job` gains the metrics BUILD.md § 14 asks to log: `run_session_id`,
+  `stage_before_pause`, `ssim2`, `encode_ms`, `verify_ms`, `realtime_multiple`,
+  `attempts`, `user_initiated`.
+- `UndoEntry` gains `job_id`, `original_size` and `created_at`; `FolderGrant` gains
+  `offload_ref` — the destination volume is written to, so it needs its own persisted
+  grant, and offload is refused rather than guessed without one.
+- `Predictor` gains `setting_var`. Confidence is now sample count **and** spread: the mean
+  alone cannot tell a predictable family from one whose files merely average out.
+- The SQLDelight schema was rewritten to match, including SCHEMA.md's indexes.
+
+### DESIGN_SYSTEM.md → the palette, type, shape and motion
+
+- `TrimPalette` is now the DESIGN_SYSTEM.md token table: dark default, mint accent,
+  `accent-on`, `danger`, `warning`, `scrim`, and hairlines as `text` at 8%.
+- **One deviation, and it is deliberate.** DESIGN_SYSTEM.md pairs the light accent
+  `#16A37B` with white, which is 3.2:1 — below the 4.5:1 the same document requires for
+  text, and a button label is text. The accent is kept exactly; only the ink on it changes,
+  to the dark used on dark's mint, giving 5.3:1.
+- New Compose-free `TrimType`, `TrimShape`, `TrimSpacing`, `TrimSpring` and
+  `ReducedMotion`. The hero transition is now `spring-standard` with the corner radius
+  going 4 → 0, superseding the reference prototype's duration-and-Bézier version; grid
+  gutters close 2 → 1 → 0 as the grid zooms out.
+
+### MONETIZATION.md → a testable entitlements policy
+
+`core/domain/billing/Entitlements`: 3 GB freed per month free, Compress now five a day,
+7-day undo retention against Pro's 90, and the Pro feature set. Three rules are structural
+rather than conventional — **restore is never gated**, indexing continues after the cap,
+and retention is clamped to the tier rather than rejected so a lapsed Pro user gets 7 days
+instead of an error. A first file larger than the whole allowance is still allowed through,
+because otherwise a user whose first video would save 4 GB never gets to use the free tier
+at all.
+
+### Verified
+
+- **258 shared JVM tests**, all passing.
+- **43 build-guard tests**, all passing, plus the guards run clean across all 74 source
+  files in the repo.
+
+
 All notable changes to Trim Gallery. Newest first.
 
 ## [Unreleased]

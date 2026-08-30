@@ -1,5 +1,9 @@
 package app.trimgallery.core.ui.motion
 
+import app.trimgallery.core.ui.theme.ReducedMotion
+import app.trimgallery.core.ui.theme.TrimShape
+import app.trimgallery.core.ui.theme.TrimSpring
+
 /**
  * The gallery's motion, as numbers.
  *
@@ -17,6 +21,7 @@ package app.trimgallery.core.ui.motion
  * directly onto Compose's `CubicBezierEasing`.
  */
 object MotionSpec {
+
 
     /** A cubic-Bézier easing curve. */
     data class Easing(val x1: Float, val y1: Float, val x2: Float, val y2: Float)
@@ -45,6 +50,7 @@ object MotionSpec {
      */
     object Breathing {
         const val PERIOD_MS = 4600
+        /** DESIGN_SYSTEM.md, `progress-ring`: 2-px stroke in the accent, at 60 fps. */
         const val RING_DP = 2f
         const val HALO_DP = 30f
         const val HALO_SPREAD_DP = 6f
@@ -55,15 +61,59 @@ object MotionSpec {
         const val STATIC_RING_ALPHA = 0.4f
     }
 
-    /** Grid tile to full-bleed viewer, and back. */
+    /**
+     * Grid tile to full-bleed viewer, and back (DESIGN_SYSTEM.md, `shared-element`).
+     *
+     * The design system specifies `spring-standard` on the bounds with the corner radius
+     * going 4 → 0, which supersedes the reference prototype's duration-and-Bézier version
+     * of the same transition. The durations below are kept only as the reduce-motion
+     * fallback and as the Macrobenchmark budget: a spring has no duration to assert
+     * against, and the frame budget still has to be met.
+     */
     object Hero {
-        const val OPEN_MS = 420
-        const val CLOSE_MS = 340
-        /** Slight overshoot on the way out; none on the way back. */
+        val SPRING = TrimSpring.STANDARD
+        /** Thumbnail radius, opening out to a full-bleed square corner. */
+        const val TILE_RADIUS_DP = TrimShape.THUMBNAIL_DP
+        const val HERO_RADIUS_DP = 0f
+        /** Reduce-motion fallback, and the window Macrobenchmark measures. */
+        const val OPEN_MS = ReducedMotion.DURATION_MS
+        const val CLOSE_MS = ReducedMotion.DURATION_MS
         val OPEN_EASING = Easing(0.2f, 0.9f, 0.25f, 1.1f)
         val CLOSE_EASING = Easing(0.3f, 0.7f, 0.3f, 1f)
-        const val TILE_RADIUS_DP = 14f
-        const val HERO_RADIUS_DP = 26f
+    }
+
+    /**
+     * Closing the viewer (DESIGN_SYSTEM.md, `dismiss`).
+     *
+     * The drag follows the finger exactly — 1:1, no rubber-banding — because the image is
+     * the thing being moved, not a proxy for it. On release it springs back into the grid
+     * slot it came from, and the chrome fades over 120 ms so it is gone before the image
+     * lands rather than arriving with it.
+     */
+    object Dismiss {
+        const val DRAG_RATIO = 1f
+        val SPRING = TrimSpring.STANDARD
+        const val CHROME_FADE_MS = 120
+    }
+
+    /** Pinch between day / month / year (DESIGN_SYSTEM.md, `grid-zoom`). */
+    object GridZoomMotion {
+        /** Cells scale continuously under the fingers, then snap to the level. */
+        val SNAP_SPRING = TrimSpring.GENTLE
+    }
+
+    /** The morning card (DESIGN_SYSTEM.md, `result-card`). */
+    object ResultCard {
+        val SPRING = TrimSpring.GENTLE
+        /** "Freed 6.2 GB" counts up. Decoration, so reduce-motion drops it entirely. */
+        const val COUNT_UP_MS = 800
+    }
+
+    /** List rows arriving (DESIGN_SYSTEM.md, `reveal`). */
+    object Reveal {
+        const val DURATION_MS = 150
+        const val FROM_TRANSLATION_Y_DP = 8f
+        const val FROM_ALPHA = 0f
     }
 
     /** The dimmed, blurred backdrop behind an open viewer. */

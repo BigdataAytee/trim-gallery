@@ -105,7 +105,7 @@ fun HeroViewer(
             Modifier
                 .fillMaxSize()
                 .graphicsLayer { alpha = progress.value * (1f - dismissProgress) }
-                .background(colors.veil)
+                .background(colors.scrim)
                 .pointerInput(Unit) { detectTapGestures { scope.launch { dismiss() } } }
         )
 

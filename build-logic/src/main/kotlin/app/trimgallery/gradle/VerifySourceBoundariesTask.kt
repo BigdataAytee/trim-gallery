@@ -81,7 +81,8 @@ abstract class VerifySourceBoundariesTask : DefaultTask() {
 
         logger.lifecycle(
             "Boundaries hold across ${sourceFiles.size} source file(s): codecs only in " +
-                "CodecFactory, library writes only in Replacer, no networking API.",
+                "CodecFactory, library writes only in Replacer, originals opened read-only, " +
+                "no networking API.",
         )
     }
 }

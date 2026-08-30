@@ -22,7 +22,7 @@ class TriagerTest {
         duration: Long = 60_000,
         flags: MediaFlags = MediaFlags(),
     ) = MediaItem(
-        id = 1,
+        id = "1",
         platformRef = MediaRef("ref"),
         name = "clip.mp4",
         kind = MediaKind.VIDEO,
@@ -43,7 +43,7 @@ class TriagerTest {
     )
 
     private fun photo(codec: String, size: Long, flags: MediaFlags = MediaFlags()) = MediaItem(
-        id = 2,
+        id = "2",
         platformRef = MediaRef("ref"),
         name = "photo.jpg",
         kind = MediaKind.PHOTO,

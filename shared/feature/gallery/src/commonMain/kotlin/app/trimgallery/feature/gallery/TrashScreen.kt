@@ -110,7 +110,7 @@ private fun TrashRow(
             )
             BasicText(
                 text = "Tap to restore",
-                style = TrimTheme.typography.chip.copy(color = colors.muted),
+                style = TrimTheme.typography.caption.copy(color = colors.muted),
             )
         }
     }

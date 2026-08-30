@@ -1,6 +1,7 @@
 package app.trimgallery.core.pipeline
 
 import app.trimgallery.core.model.MediaItem
+import kotlin.math.sqrt
 
 /**
  * The table that collapses the search after the app has seen enough of a phone's video.
@@ -16,6 +17,15 @@ import app.trimgallery.core.model.MediaItem
  * on one device. Cross-device sharing would need a server, and this app has no network.
  */
 object Predictor {
+
+    /**
+     * How much spread a confident family may have, as a fraction of its mean.
+     *
+     * A quarter: `Predictor.bounds` narrows a confident family to roughly ±18%, so a
+     * family whose own settings scatter wider than that is one the narrow bracket would
+     * routinely miss — and a missed bracket costs the whole probe budget.
+     */
+    const val MAX_RELATIVE_SPREAD = 0.25
 
     /** Below this many samples the prediction is not trusted enough to narrow the search. */
     const val CONFIDENT_SAMPLES = 20
@@ -41,9 +51,27 @@ object Predictor {
         val bitrateBucket: Int,
     )
 
-    /** What the table remembers for one [Key]. */
-    data class Entry(val key: Key, val settingBps: Int, val samples: Int) {
-        val confident: Boolean get() = samples >= CONFIDENT_SAMPLES
+    /**
+     * What the table remembers for one [Key] (SCHEMA.md `predictor`).
+     *
+     * [settingVar] is the population variance of the settings that have passed
+     * verification for this family, carried because the mean alone cannot tell a family
+     * that is genuinely predictable from one whose files merely average out. A wide
+     * variance is the signal that a narrow bracket would be wrong however many samples
+     * back it.
+     */
+    data class Entry(
+        val key: Key,
+        val settingBps: Int,
+        val samples: Int,
+        val settingVar: Double = 0.0,
+    ) {
+        val confident: Boolean
+            get() = samples >= CONFIDENT_SAMPLES && relativeSpread <= MAX_RELATIVE_SPREAD
+
+        /** Standard deviation as a fraction of the mean; 0 when there is nothing to spread. */
+        val relativeSpread: Double
+            get() = if (settingBps <= 0) 0.0 else sqrt(settingVar) / settingBps
     }
 
     /**
@@ -100,10 +128,18 @@ object Predictor {
      * search happened to try.
      */
     fun learn(existing: Entry?, key: Key, winningBps: Int): Entry {
-        if (existing == null) return Entry(key, winningBps, samples = 1)
+        if (existing == null) return Entry(key, winningBps, samples = 1, settingVar = 0.0)
         val samples = existing.samples + 1
-        val mean = existing.settingBps.toLong() * existing.samples + winningBps
-        return Entry(key, (mean / samples).toInt(), samples)
+        val previousMean = existing.settingBps.toDouble()
+        val mean = previousMean + (winningBps - previousMean) / samples
+
+        // Welford, adapted to a stored mean and variance rather than a running sum of
+        // squares: the table is a database row that survives restarts, so the update has
+        // to work from what was persisted and nothing else.
+        val previousM2 = existing.settingVar * existing.samples
+        val m2 = previousM2 + (winningBps - previousMean) * (winningBps - mean)
+
+        return Entry(key, mean.toInt(), samples, settingVar = m2 / samples)
     }
 
     /** Frame rates cluster on a few values; 29.97 and 30 are the same family. */

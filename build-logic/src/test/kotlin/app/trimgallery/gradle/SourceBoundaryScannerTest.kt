@@ -141,4 +141,48 @@ class SourceBoundaryScannerTest {
         assertTrue(message.contains("Bad.kt"))
         assertTrue(message.contains("BUILD.md"))
     }
+
+    @Test
+    fun `opening a user file with a write mode is a violation`() {
+        // The safe-replace invariant broken directly rather than by accident.
+        listOf(
+            """val fd = resolver.openFileDescriptor(uri, "w")""",
+            """val fd = resolver.openFileDescriptor(uri, "rw")""",
+            """resolver.openAssetFileDescriptor(uri, "wa")""",
+        ).forEach { line ->
+            val file = kt("Thumbnailer.kt", line)
+            val found = SourceBoundaryScanner.scan(file)
+            assertEquals("not caught: $line", 1, found.size)
+            assertEquals("readOnlyOriginals", found.single().rule.id)
+        }
+    }
+
+    @Test
+    fun `opening a user file read-only is fine`() {
+        val file = kt("Thumbnailer.kt", """val fd = resolver.openFileDescriptor(uri, "r")""")
+        assertTrue(SourceBoundaryScanner.scan(file).isEmpty())
+    }
+
+    @Test
+    fun `the write-mode rule does not fire on prose that mentions the modes`() {
+        // It matches raw source, so it has to be specific enough that documentation and
+        // the rule's own rationale cannot trip it.
+        val file = kt(
+            "Notes.kt",
+            """
+            // Never open an original with "w", "rw" or "wa".
+            val modes = listOf("w", "rw", "wa")
+            """.trimIndent(),
+        )
+        assertTrue(SourceBoundaryScanner.scan(file).isEmpty())
+    }
+
+    @Test
+    fun `a content resolver aliased to another name is still caught`() {
+        // SafeReplacerAndroid holds `private val resolver: ContentResolver`; a pattern
+        // anchored on the literal name `contentResolver` would have walked past it.
+        val file = kt("Indexer.kt", """resolver.openOutputStream(uri, "wt")""")
+        val found = SourceBoundaryScanner.scan(file)
+        assertTrue(found.toString(), found.any { it.rule.id == "replacer" })
+    }
 }

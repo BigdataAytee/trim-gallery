@@ -60,7 +60,7 @@ fun <T> FastScrollBar(
             ticks.forEach { tick ->
                 BasicText(
                     text = tick.label,
-                    style = TrimTheme.typography.chip.copy(color = colors.muted),
+                    style = TrimTheme.typography.caption.copy(color = colors.muted),
                     modifier = Modifier
                         .align(Alignment.TopEnd)
                         .offset { IntOffset(0, (tick.fraction * trackHeight.toPx()).toInt()) }

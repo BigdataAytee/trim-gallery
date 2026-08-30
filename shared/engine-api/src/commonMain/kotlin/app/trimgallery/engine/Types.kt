@@ -95,6 +95,20 @@ sealed interface EncodeOutcome {
     data class Failed(val reason: String) : EncodeOutcome
 }
 
+/**
+ * What re-opening an encoded output actually reports.
+ *
+ * Every field here has caught a real class of bug elsewhere: a truncated mux reports a
+ * short duration, a dropped audio track means the passthrough silently failed, and a
+ * zero-byte file opens as nothing at all.
+ */
+data class ProbedOutput(
+    val durationMs: Ms,
+    val hasVideo: Boolean,
+    val hasAudio: Boolean,
+    val sizeBytes: Long,
+)
+
 /** Metadata read from the container without decoding a frame (BUILD.md § 5, triage). */
 data class Stat(val size: Long, val mtime: Long, val exists: Boolean)
 
@@ -111,6 +125,14 @@ interface Source : AutoCloseable {
  */
 data class ReplacePlan(
     val original: MediaRef,
+    /**
+     * The `MediaItem` row this replaces.
+     *
+     * Not in the ARCHITECTURE.md § 5 sketch (recorded in PROJECT.md): the § 7 contract
+     * ends by writing an `UndoEntry`, and an undo row that cannot name the item it came
+     * from is an original nobody can restore.
+     */
+    val mediaId: String,
     val replacement: TempFile,
     val expectedSize: Long,
     val expectedMtime: Long,

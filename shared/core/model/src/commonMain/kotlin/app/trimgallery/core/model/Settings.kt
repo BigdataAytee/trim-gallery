@@ -25,14 +25,27 @@ data class Settings(
     }
 }
 
-/** One night's work, for the Space screen and the morning card. */
+/**
+ * Why a night stopped (SCHEMA.md `run_session.stop_reason`).
+ *
+ * Recorded because "it stopped" and "it finished" look identical in a total, and the
+ * History screen has to be able to say which (USER_JOURNEY.md § 14).
+ */
+enum class StopReason { UNPLUGGED, FOREGROUND, THERMAL, CAP, STORAGE, STOP_BY, COMPLETE, CAP_FREE_TIER }
+
+/** One night's work, for the Space screen and the morning card (SCHEMA.md `run_session`). */
 data class RunSession(
-    val id: Long,
+    val id: String,
     val startedAt: Long,
     val finishedAt: Long?,
+    val stopReason: StopReason? = null,
     val filesDone: Int = 0,
+    val filesSkipped: Int = 0,
+    val filesFailed: Int = 0,
     val bytesFreed: Long = 0,
-    val minutesWorked: Int = 0,
-    val wh: Double = 0.0,
+    val minutesWorked: Double = 0.0,
+    val energyWh: Double = 0.0,
+    /** How often the pass stood down for heat; shown in History, never as an alarm. */
+    val thermalPauses: Int = 0,
     val seen: Boolean = false,
 )

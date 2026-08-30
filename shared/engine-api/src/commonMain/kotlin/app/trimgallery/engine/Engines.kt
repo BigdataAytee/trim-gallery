@@ -45,6 +45,29 @@ interface ProbeEncoder {
 /** Decodes probe windows. Windows are decoded once and cached (PROJECT.md § Speed). */
 interface YuvSource {
     suspend fun decodeWindow(ref: MediaRef, start: Ms, len: Ms, width: Int): YuvWindow
+
+    /**
+     * The same, over a file the app produced.
+     *
+     * Verification has to compare the original against the *encoded output*, which is a
+     * temp file and deliberately has no `MediaRef` — shared code must not be able to
+     * name a place in the user's library that it could then hand to something that
+     * writes. Two overloads keeps that separation intact (milestone 4).
+     */
+    suspend fun decodeWindow(file: TempFile, start: Ms, len: Ms, width: Int): YuvWindow
+}
+
+/**
+ * Reads a finished temp file back the way a player would.
+ *
+ * The verify gate is not "the encoder said it succeeded" — it is BUILD.md § 5's *"confirm
+ * the file opens and reports full duration"*. That means re-opening the muxed output with
+ * the platform extractor and asking it, rather than trusting the numbers the encode
+ * returned.
+ */
+fun interface OutputProbe {
+    /** null when the file cannot be opened or holds no readable track. */
+    suspend fun probe(file: TempFile): ProbedOutput?
 }
 
 /**
@@ -83,6 +106,16 @@ interface LibraryStorage {
     suspend fun stat(ref: MediaRef): Stat
     suspend fun openRead(ref: MediaRef): Source
     suspend fun tempFile(): TempFile
+
+    /**
+     * Throws away a temp file the app made and no longer wants.
+     *
+     * The counterpart to [tempFile], and the only delete in this interface. It is safe
+     * because a `TempFile` is app-private by construction — a rejected encode has to go
+     * somewhere, and a night that verifies a thousand files and deletes none of the
+     * rejects fills the disk by morning.
+     */
+    suspend fun discard(file: TempFile)
 }
 
 /**

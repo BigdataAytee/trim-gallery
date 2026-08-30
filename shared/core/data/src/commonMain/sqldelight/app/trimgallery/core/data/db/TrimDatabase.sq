@@ -1,216 +1,322 @@
--- ARCHITECTURE.md § 4. One schema on every platform; only MediaItem.platformRef differs
--- (Android: SAF document URI, iOS: PHAsset localIdentifier).
+-- SCHEMA.md is the schema of record; ARCHITECTURE.md § 4 is the sketch it fills in.
+-- One schema on every platform; only media_item.platform_ref differs (Android: SAF
+-- document URI, iOS: PHAsset localIdentifier).
+--
+-- Conventions from SCHEMA.md: timestamps are epoch milliseconds UTC, sizes are bytes,
+-- booleans are INTEGER 0/1, and ids are TEXT UUIDv7 (see core.model.Uuid7 — v7 so that
+-- ids sort by creation time and the hot indexes below are appended to rather than
+-- scattered across).
 
-CREATE TABLE MediaItem (
-    id           INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT,
-    platformRef  TEXT    NOT NULL UNIQUE,
-    name         TEXT    NOT NULL,
-    kind         TEXT    NOT NULL,
-    codec        TEXT,
-    width        INTEGER NOT NULL DEFAULT 0,
-    height       INTEGER NOT NULL DEFAULT 0,
-    fps          REAL,
-    bitrate      INTEGER,
-    size         INTEGER NOT NULL,
-    duration     INTEGER,
-    takenAt      INTEGER,
-    lat          REAL,
-    lon          REAL,
-    cameraModel  TEXT,
-    hdr          INTEGER NOT NULL DEFAULT 0,
-    motionPhoto  INTEGER NOT NULL DEFAULT 0,
-    ultraHdr     INTEGER NOT NULL DEFAULT 0,
-    livePhoto    INTEGER NOT NULL DEFAULT 0,
-    raw          INTEGER NOT NULL DEFAULT 0,
-    inCloudOnly  INTEGER NOT NULL DEFAULT 0,
-    phash        INTEGER,
-    sha256       TEXT,
-    status       TEXT    NOT NULL DEFAULT 'NEW',
-    skipReason   TEXT,
-    mtime        INTEGER NOT NULL,
-    -- Milestone 8. Additions to the ARCHITECTURE.md section 4 schema, noted in
-    -- PROJECT.md: Favourites and the locked folder are both screens BUILD.md section 9
-    -- requires, and both need to be readable without a join -- locked items are excluded
-    -- from every other view, so every query filters on it.
-    favourite    INTEGER NOT NULL DEFAULT 0,
-    locked       INTEGER NOT NULL DEFAULT 0
+CREATE TABLE media_item (
+    id              TEXT    NOT NULL PRIMARY KEY,
+    platform_ref    TEXT    NOT NULL UNIQUE,
+    folder_grant_id TEXT    REFERENCES folder_grant(id) ON DELETE SET NULL,
+    name            TEXT    NOT NULL,
+    kind            TEXT    NOT NULL,
+    mime            TEXT,
+    codec           TEXT,
+    width           INTEGER NOT NULL DEFAULT 0,
+    height          INTEGER NOT NULL DEFAULT 0,
+    fps             REAL,
+    bitrate         INTEGER,
+    duration_ms     INTEGER,
+    size            INTEGER NOT NULL,
+    mtime           INTEGER NOT NULL,
+    taken_at        INTEGER,
+    lat             REAL,
+    lon             REAL,
+    camera_model    TEXT,
+    -- Bitmask, per SCHEMA.md: hdr=1, motion_photo=2, ultra_hdr=4, live_photo=8, raw=16,
+    -- in_cloud_only=32, favourite=64, hidden=128.
+    flags           INTEGER NOT NULL DEFAULT 0,
+    phash           INTEGER,
+    -- BLOB rather than hex TEXT: 32 bytes against 64 characters, over 100k rows.
+    -- core.model.MediaItem carries it as a hex String, because a ByteArray field would
+    -- silently break data-class equality (see FaceEmbedding, which had to override it).
+    sha256          BLOB,
+    status          TEXT    NOT NULL DEFAULT 'NEW',
+    skip_reason     TEXT,
+    -- Bytes triage thinks this file could give back. The queue's ordering key: BUILD.md
+    -- § 6 works largest-saving-first so an interrupted night still delivers most of the
+    -- space it was going to.
+    est_saving      INTEGER,
+    created_at      INTEGER NOT NULL,
+    updated_at      INTEGER NOT NULL
 );
 
--- Every gallery query excludes the locked folder, so this index carries the whole grid.
-CREATE INDEX mediaItem_locked ON MediaItem(locked, takenAt DESC);
-CREATE INDEX mediaItem_favourite ON MediaItem(favourite) WHERE favourite = 1;
+CREATE INDEX media_item_queue ON media_item(status, est_saving DESC);
+CREATE INDEX media_item_taken_at ON media_item(taken_at DESC);
+CREATE INDEX media_item_grant ON media_item(folder_grant_id);
+CREATE INDEX media_item_phash ON media_item(phash);
+CREATE INDEX media_item_sha256 ON media_item(sha256);
+CREATE INDEX media_item_flags ON media_item(flags);
 
--- The night pass walks candidates largest-saving-first (BUILD.md § 5).
-CREATE INDEX mediaItem_status ON MediaItem(status);
-CREATE INDEX mediaItem_size ON MediaItem(size DESC);
-CREATE INDEX mediaItem_takenAt ON MediaItem(takenAt DESC);
--- Duplicate detection groups on these two (BUILD.md § 8).
-CREATE INDEX mediaItem_phash ON MediaItem(phash);
-CREATE INDEX mediaItem_sha256 ON MediaItem(sha256);
+-- SCHEMA.md indexes `flags` whole, which serves equality on the mask but not the two
+-- bitwise predicates every gallery query actually uses. These partial indexes are what
+-- carry the grid and the Favourites screen; recorded in PROJECT.md.
+CREATE INDEX media_item_visible ON media_item(taken_at DESC) WHERE (flags & 128) = 0;
+CREATE INDEX media_item_favourite ON media_item(taken_at DESC) WHERE (flags & 64) != 0;
 
-CREATE TABLE Job (
-    id            INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT,
-    mediaId       INTEGER NOT NULL REFERENCES MediaItem(id) ON DELETE CASCADE,
-    state         TEXT    NOT NULL DEFAULT 'QUEUED',
-    startedAt     INTEGER,
-    finishedAt    INTEGER,
-    engine        TEXT,
-    setting       TEXT,
-    probes        INTEGER NOT NULL DEFAULT 0,
-    xpsnr         REAL,
-    vmaf          REAL,
-    originalSize  INTEGER,
-    newSize       INTEGER,
-    energyEstimate REAL,
-    thermalStart  REAL,
-    thermalEnd    REAL,
-    error         TEXT
+CREATE TABLE job (
+    id                 TEXT    NOT NULL PRIMARY KEY,
+    media_id           TEXT    NOT NULL REFERENCES media_item(id) ON DELETE CASCADE,
+    run_session_id     TEXT    REFERENCES run_session(id) ON DELETE SET NULL,
+    state              TEXT    NOT NULL DEFAULT 'QUEUED',
+    stage_before_pause TEXT,
+    engine             TEXT,
+    setting            TEXT,
+    probes             INTEGER NOT NULL DEFAULT 0,
+    xpsnr              REAL,
+    vmaf               REAL,
+    ssim2              REAL,
+    original_size      INTEGER,
+    new_size           INTEGER,
+    encode_ms          INTEGER,
+    verify_ms          INTEGER,
+    realtime_multiple  REAL,
+    thermal_start      REAL,
+    thermal_end        REAL,
+    energy_wh          REAL,
+    attempts           INTEGER NOT NULL DEFAULT 0,
+    error              TEXT,
+    user_initiated     INTEGER NOT NULL DEFAULT 0,
+    started_at         INTEGER,
+    finished_at        INTEGER
 );
-CREATE INDEX job_mediaId ON Job(mediaId);
+CREATE INDEX job_media ON job(media_id);
+CREATE INDEX job_run_session ON job(run_session_id);
+CREATE INDEX job_state ON job(state);
+CREATE INDEX job_finished ON job(finished_at DESC);
 
-CREATE TABLE UndoEntry (
-    id        INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT,
-    mediaId   INTEGER NOT NULL REFERENCES MediaItem(id) ON DELETE CASCADE,
-    location  TEXT    NOT NULL,
-    ref       TEXT    NOT NULL,
-    expiresAt INTEGER,
-    state     TEXT    NOT NULL DEFAULT 'ACTIVE'
+-- The row that makes an optimisation reversible. SCHEMA.md: never drop a column here,
+-- restore depends on them. ReplaceSequence writes this last (ARCHITECTURE.md § 7), which
+-- is what guarantees it exists before any space is reported as freed.
+CREATE TABLE undo_entry (
+    id            TEXT    NOT NULL PRIMARY KEY,
+    media_id      TEXT    NOT NULL REFERENCES media_item(id) ON DELETE CASCADE,
+    job_id        TEXT    REFERENCES job(id) ON DELETE SET NULL,
+    location      TEXT    NOT NULL,
+    ref           TEXT    NOT NULL,
+    original_size INTEGER,
+    -- NULL = never expires (KEEP / OFFLOAD).
+    expires_at    INTEGER,
+    state         TEXT    NOT NULL DEFAULT 'ACTIVE',
+    created_at    INTEGER NOT NULL
 );
-CREATE INDEX undo_expiresAt ON UndoEntry(expiresAt);
+CREATE INDEX undo_sweep ON undo_entry(state, expires_at);
+CREATE INDEX undo_media ON undo_entry(media_id);
 
-CREATE TABLE Label (
-    mediaId    INTEGER NOT NULL REFERENCES MediaItem(id) ON DELETE CASCADE,
-    text       TEXT    NOT NULL,
-    confidence REAL    NOT NULL
-);
-CREATE INDEX label_text ON Label(text);
-
-CREATE TABLE Face (
-    id      INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT,
-    mediaId INTEGER NOT NULL REFERENCES MediaItem(id) ON DELETE CASCADE,
-    personId INTEGER REFERENCES Person(id) ON DELETE SET NULL,
-    -- The embedding never leaves the device (BUILD.md § 7).
-    vector  BLOB    NOT NULL,
-    left    REAL    NOT NULL,
-    top     REAL    NOT NULL,
-    right   REAL    NOT NULL,
-    bottom  REAL    NOT NULL
-);
-CREATE INDEX face_personId ON Face(personId);
-
-CREATE TABLE Person (
-    id          INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT,
-    displayName TEXT,
-    coverMediaId INTEGER REFERENCES MediaItem(id) ON DELETE SET NULL
+CREATE TABLE folder_grant (
+    id              TEXT    NOT NULL PRIMARY KEY,
+    platform_ref    TEXT    NOT NULL UNIQUE,
+    display_name    TEXT,
+    mode            TEXT    NOT NULL,
+    -- Tree URI of the SD/USB target when mode = 'OFFLOAD'. A second grant, not a path:
+    -- the destination volume is written to, so it needs its own persisted permission.
+    offload_ref     TEXT,
+    enabled         INTEGER NOT NULL DEFAULT 1,
+    last_scanned_at INTEGER
 );
 
-CREATE TABLE TextBlock (
-    mediaId INTEGER NOT NULL REFERENCES MediaItem(id) ON DELETE CASCADE,
-    text    TEXT    NOT NULL,
-    left    REAL    NOT NULL,
-    top     REAL    NOT NULL,
-    right   REAL    NOT NULL,
-    bottom  REAL    NOT NULL
+CREATE TABLE run_session (
+    id             TEXT    NOT NULL PRIMARY KEY,
+    started_at     INTEGER NOT NULL,
+    finished_at    INTEGER,
+    stop_reason    TEXT,
+    files_done     INTEGER NOT NULL DEFAULT 0,
+    files_skipped  INTEGER NOT NULL DEFAULT 0,
+    files_failed   INTEGER NOT NULL DEFAULT 0,
+    bytes_freed    INTEGER NOT NULL DEFAULT 0,
+    minutes_worked REAL    NOT NULL DEFAULT 0.0,
+    energy_wh      REAL    NOT NULL DEFAULT 0.0,
+    thermal_pauses INTEGER NOT NULL DEFAULT 0,
+    seen           INTEGER NOT NULL DEFAULT 0
 );
-CREATE INDEX textBlock_text ON TextBlock(text);
 
 -- After ~20 matching files the search collapses to one probe (PROJECT.md § Speed).
-CREATE TABLE Predictor (
-    platform      TEXT    NOT NULL,
-    device        TEXT    NOT NULL,
-    cameraModel   TEXT    NOT NULL,
-    codec         TEXT    NOT NULL,
-    w             INTEGER NOT NULL,
-    h             INTEGER NOT NULL,
-    fps           INTEGER NOT NULL,
-    bitrateBucket INTEGER NOT NULL,
-    -- The winning bitrate in bits per second. INTEGER rather than the TEXT in
-    -- ARCHITECTURE.md section 4: the search runs on bitrate and the table holds a running
-    -- mean of it, which is arithmetic, not a label. Noted in PROJECT.md.
-    setting       INTEGER NOT NULL,
-    samples       INTEGER NOT NULL DEFAULT 0,
-    PRIMARY KEY (platform, device, cameraModel, codec, w, h, fps, bitrateBucket)
+CREATE TABLE predictor (
+    platform       TEXT    NOT NULL,
+    device         TEXT    NOT NULL,
+    camera_model   TEXT    NOT NULL,
+    codec          TEXT    NOT NULL,
+    width          INTEGER NOT NULL,
+    height         INTEGER NOT NULL,
+    fps_bucket     INTEGER NOT NULL,
+    bitrate_bucket INTEGER NOT NULL,
+    -- The winning bitrate in bits per second, and its spread. Both come from
+    -- Predictor.learn, which folds each result into a running mean and variance; doing it
+    -- in SQL would put the arithmetic somewhere it cannot be unit tested.
+    setting_mean   REAL    NOT NULL,
+    setting_var    REAL    NOT NULL DEFAULT 0.0,
+    samples        INTEGER NOT NULL DEFAULT 0,
+    updated_at     INTEGER NOT NULL,
+    PRIMARY KEY (platform, device, camera_model, codec, width, height, fps_bucket, bitrate_bucket)
 );
 
--- User-made albums. Auto-albums are rules over the index rather than rows here, so they
--- cannot drift out of step with what the indexer last saw (BUILD.md § 7).
-CREATE TABLE Album (
-    id           INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT,
-    name         TEXT    NOT NULL,
-    kind         TEXT    NOT NULL DEFAULT 'USER',
-    coverMediaId INTEGER REFERENCES MediaItem(id) ON DELETE SET NULL
+CREATE TABLE album (
+    id             TEXT NOT NULL PRIMARY KEY,
+    name           TEXT NOT NULL,
+    kind           TEXT NOT NULL DEFAULT 'USER',
+    cover_media_id TEXT REFERENCES media_item(id) ON DELETE SET NULL
 );
 
-CREATE TABLE AlbumMember (
-    albumId INTEGER NOT NULL REFERENCES Album(id) ON DELETE CASCADE,
-    mediaId INTEGER NOT NULL REFERENCES MediaItem(id) ON DELETE CASCADE,
-    PRIMARY KEY (albumId, mediaId)
+CREATE TABLE album_member (
+    album_id TEXT NOT NULL REFERENCES album(id) ON DELETE CASCADE,
+    media_id TEXT NOT NULL REFERENCES media_item(id) ON DELETE CASCADE,
+    PRIMARY KEY (album_id, media_id)
 );
-CREATE INDEX albumMember_mediaId ON AlbumMember(mediaId);
+CREATE INDEX album_member_media ON album_member(media_id);
 
-CREATE TABLE FolderGrant (
-    platformRef TEXT NOT NULL PRIMARY KEY,
-    mode        TEXT NOT NULL
+-- Index tables (BUILD.md § 7). Everything below is produced on device and never leaves
+-- it. The FTS5 virtual tables SCHEMA.md specifies land with search, in milestone 9.
+
+CREATE TABLE label (
+    media_id   TEXT NOT NULL REFERENCES media_item(id) ON DELETE CASCADE,
+    label      TEXT NOT NULL,
+    confidence REAL NOT NULL,
+    source     TEXT,
+    PRIMARY KEY (media_id, label)
+);
+CREATE INDEX label_text ON label(label);
+
+CREATE TABLE person (
+    id            TEXT    NOT NULL PRIMARY KEY,
+    name          TEXT,
+    cover_face_id TEXT,
+    hidden        INTEGER NOT NULL DEFAULT 0,
+    is_pet        INTEGER NOT NULL DEFAULT 0,
+    created_at    INTEGER NOT NULL
 );
 
-CREATE TABLE RunSession (
-    id            INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT,
-    startedAt     INTEGER NOT NULL,
-    finishedAt    INTEGER,
-    filesDone     INTEGER NOT NULL DEFAULT 0,
-    bytesFreed    INTEGER NOT NULL DEFAULT 0,
-    minutesWorked INTEGER NOT NULL DEFAULT 0,
-    wh            REAL    NOT NULL DEFAULT 0.0,
-    seen          INTEGER NOT NULL DEFAULT 0
+CREATE TABLE face (
+    id        TEXT    NOT NULL PRIMARY KEY,
+    media_id  TEXT    NOT NULL REFERENCES media_item(id) ON DELETE CASCADE,
+    person_id TEXT    REFERENCES person(id) ON DELETE SET NULL,
+    l         REAL    NOT NULL,
+    t         REAL    NOT NULL,
+    r         REAL    NOT NULL,
+    b         REAL    NOT NULL,
+    embedding BLOB    NOT NULL,
+    quality   REAL
+);
+CREATE INDEX face_media ON face(media_id);
+CREATE INDEX face_person ON face(person_id);
+
+CREATE TABLE text_block (
+    media_id   TEXT NOT NULL REFERENCES media_item(id) ON DELETE CASCADE,
+    text       TEXT NOT NULL,
+    l          REAL NOT NULL,
+    t          REAL NOT NULL,
+    r          REAL NOT NULL,
+    b          REAL NOT NULL,
+    confidence REAL
+);
+CREATE INDEX text_block_media ON text_block(media_id);
+
+CREATE TABLE duplicate_group (
+    id         TEXT    NOT NULL PRIMARY KEY,
+    kind       TEXT    NOT NULL,
+    created_at INTEGER NOT NULL,
+    resolved   INTEGER NOT NULL DEFAULT 0
+);
+
+CREATE TABLE duplicate_member (
+    group_id TEXT    NOT NULL REFERENCES duplicate_group(id) ON DELETE CASCADE,
+    media_id TEXT    NOT NULL REFERENCES media_item(id) ON DELETE CASCADE,
+    is_best  INTEGER NOT NULL DEFAULT 0,
+    distance INTEGER,
+    PRIMARY KEY (group_id, media_id)
 );
 
 -- Queries -------------------------------------------------------------------
 
+-- The night queue: largest estimated saving first (BUILD.md § 6).
 selectCandidatesBySaving:
-SELECT * FROM MediaItem
-WHERE status = 'CANDIDATE'
-ORDER BY size DESC
+SELECT * FROM media_item
+WHERE status = 'CANDIDATE' AND (flags & 128) = 0
+ORDER BY est_saving DESC
 LIMIT :limit;
 
 selectByStatus:
-SELECT * FROM MediaItem WHERE status = ?;
+SELECT * FROM media_item WHERE status = ?;
 
--- The grid. Locked items never appear anywhere but the locked folder.
+-- The grid. Hidden items never appear anywhere but the locked folder.
 selectGallery:
-SELECT * FROM MediaItem WHERE locked = 0 ORDER BY takenAt DESC;
+SELECT * FROM media_item WHERE (flags & 128) = 0 ORDER BY taken_at DESC;
 
 selectFavourites:
-SELECT * FROM MediaItem WHERE favourite = 1 AND locked = 0 ORDER BY takenAt DESC;
+SELECT * FROM media_item
+WHERE (flags & 64) != 0 AND (flags & 128) = 0
+ORDER BY taken_at DESC;
 
-selectLocked:
-SELECT * FROM MediaItem WHERE locked = 1 ORDER BY takenAt DESC;
+selectHidden:
+SELECT * FROM media_item WHERE (flags & 128) != 0 ORDER BY taken_at DESC;
 
 selectAlbumMedia:
-SELECT MediaItem.* FROM MediaItem
-JOIN AlbumMember ON AlbumMember.mediaId = MediaItem.id
-WHERE AlbumMember.albumId = ? AND MediaItem.locked = 0
-ORDER BY MediaItem.takenAt DESC;
+SELECT media_item.* FROM media_item
+JOIN album_member ON album_member.media_id = media_item.id
+WHERE album_member.album_id = ? AND (media_item.flags & 128) = 0
+ORDER BY media_item.taken_at DESC;
 
-setFavourite:
-UPDATE MediaItem SET favourite = ? WHERE id = ?;
+-- Bit twiddling in SQL so a flag change is one statement rather than read-modify-write,
+-- which would race the indexer.
+setFlagBit:
+UPDATE media_item SET flags = flags | :bit, updated_at = :now WHERE id = :id;
 
-setLocked:
-UPDATE MediaItem SET locked = ? WHERE id = ?;
+clearFlagBit:
+UPDATE media_item SET flags = flags & ~:bit, updated_at = :now WHERE id = :id;
 
+setStatus:
+UPDATE media_item SET status = :status, skip_reason = :skipReason, updated_at = :now WHERE id = :id;
+
+-- Replace bookkeeping ---------------------------------------------------------
+
+-- The last step of the ARCHITECTURE.md § 7 contract. Nothing may report space as freed
+-- before this row exists.
+insertUndoEntry:
+INSERT INTO undo_entry(id, media_id, job_id, location, ref, original_size, expires_at, state, created_at)
+VALUES (?, ?, ?, ?, ?, ?, ?, 'ACTIVE', ?);
+
+selectUndoForMedia:
+SELECT * FROM undo_entry WHERE media_id = ? AND state = 'ACTIVE';
+
+markUndoRestored:
+UPDATE undo_entry SET state = 'RESTORED' WHERE id = ?;
+
+markUndoExpired:
+UPDATE undo_entry SET state = 'EXPIRED' WHERE id = ?;
+
+deleteUndoEntry:
+DELETE FROM undo_entry WHERE id = ?;
+
+-- undo.sweep(). Only ACTIVE rows with a deadline are candidates: KEEP and OFFLOAD have
+-- no expiry at all, and a restored row must never be swept.
 selectExpiredUndo:
-SELECT * FROM UndoEntry WHERE state = 'ACTIVE' AND expiresAt IS NOT NULL AND expiresAt <= ?;
+SELECT * FROM undo_entry
+WHERE state = 'ACTIVE' AND expires_at IS NOT NULL AND expires_at <= ?;
 
--- Both values come from Predictor.learn, which folds the new result into a running mean.
--- Doing it here instead would put the arithmetic somewhere it cannot be unit tested, and
--- last-write-wins would let one unusually busy clip replace what twenty files agreed on.
+-- Predictor -------------------------------------------------------------------
+
 upsertPredictor:
-INSERT OR REPLACE INTO Predictor(platform, device, cameraModel, codec, w, h, fps, bitrateBucket, setting, samples)
-VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?);
+INSERT OR REPLACE INTO predictor(
+    platform, device, camera_model, codec, width, height, fps_bucket, bitrate_bucket,
+    setting_mean, setting_var, samples, updated_at
+) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);
 
 selectPredictor:
-SELECT * FROM Predictor
-WHERE platform = ? AND device = ? AND cameraModel = ? AND codec = ?
-  AND w = ? AND h = ? AND fps = ? AND bitrateBucket = ?;
+SELECT * FROM predictor
+WHERE platform = ? AND device = ? AND camera_model = ? AND codec = ?
+  AND width = ? AND height = ? AND fps_bucket = ? AND bitrate_bucket = ?;
+
+-- Sessions --------------------------------------------------------------------
 
 lastRunSession:
-SELECT * FROM RunSession ORDER BY startedAt DESC LIMIT 1;
+SELECT * FROM run_session ORDER BY started_at DESC LIMIT 1;
+
+-- MONETIZATION.md § Phase 1: the free tier caps GB freed per calendar month, so the cap
+-- is measured from the sessions themselves rather than a counter that could drift.
+bytesFreedSince:
+SELECT COALESCE(SUM(bytes_freed), 0) AS bytes FROM run_session WHERE started_at >= ?;
+
+selectFolderGrants:
+SELECT * FROM folder_grant WHERE enabled = 1;

@@ -29,8 +29,12 @@ data class TrimColors(
     val muted: Color,
     val line: Color,
     val accent: Color,
+    val accentOn: Color,
+    val danger: Color,
+    val warning: Color,
+    val chrome: Color,
     val glowAlpha: Float,
-    val veil: Color,
+    val scrim: Color,
 ) {
     companion object {
         fun from(palette: TrimPalette) = TrimColors(
@@ -41,38 +45,65 @@ data class TrimColors(
             muted = Color(palette.muted),
             line = Color(palette.line),
             accent = Color(palette.accent),
+            accentOn = Color(palette.accentOn),
+            danger = Color(palette.danger),
+            warning = Color(palette.warning),
+            chrome = Color(palette.chrome),
             glowAlpha = palette.glowAlpha,
-            veil = Color(palette.veil),
+            scrim = Color(palette.scrim),
         )
     }
 }
 
 /**
- * One typeface, four roles. BUILD.md § 9 asks for a single family; the scale does the
- * work that extra families usually would.
+ * One typeface, six roles (DESIGN_SYSTEM.md § Typography). BUILD.md § 9 asks for a single
+ * family; the scale does the work that extra families usually would.
  */
 @Immutable
 data class TrimTypography(
+    val display: TextStyle,
     val title: TextStyle,
+    val heading: TextStyle,
     val body: TextStyle,
     val label: TextStyle,
-    val chip: TextStyle,
+    val caption: TextStyle,
 ) {
     companion object {
-        fun of(family: FontFamily) = TrimTypography(
-            title = TextStyle(fontFamily = family, fontSize = 23.sp, fontWeight = FontWeight.Bold, letterSpacing = (-0.46).sp),
-            body = TextStyle(fontFamily = family, fontSize = 17.sp, fontWeight = FontWeight.Normal),
-            label = TextStyle(fontFamily = family, fontSize = 13.sp, fontWeight = FontWeight.Medium),
-            chip = TextStyle(fontFamily = family, fontSize = 12.sp, fontWeight = FontWeight.SemiBold),
+        /**
+         * Built from [TrimType], so the scale lives in one Compose-free place and is
+         * asserted on the JVM rather than eyeballed.
+         *
+         * Tabular figures throughout (DESIGN_SYSTEM.md § Typography): the morning card
+         * counts "Freed 6.2 GB" up over 800 ms, and proportional digits make the whole
+         * line jitter while it does.
+         */
+        fun from(family: FontFamily) = TrimTypography(
+            display = style(family, TrimType.DISPLAY),
+            title = style(family, TrimType.TITLE),
+            heading = style(family, TrimType.HEADING),
+            body = style(family, TrimType.BODY),
+            label = style(family, TrimType.LABEL),
+            caption = style(family, TrimType.CAPTION),
         )
+
+        private fun style(family: FontFamily, role: TrimType) = TextStyle(
+            fontFamily = family,
+            fontSize = role.size.sp,
+            lineHeight = role.lineHeight.sp,
+            fontWeight = FontWeight(role.weight),
+            fontFeatureSettings = TABULAR_FIGURES,
+        )
+
+        private const val TABULAR_FIGURES = "tnum"
     }
+}
 }
 
 val LocalTrimColors: ProvidableCompositionLocal<TrimColors> =
     staticCompositionLocalOf { TrimColors.from(TrimPalette.Dark) }
 
 val LocalTrimTypography: ProvidableCompositionLocal<TrimTypography> =
-    staticCompositionLocalOf { TrimTypography.of(FontFamily.SansSerif) }
+    staticCompositionLocalOf { TrimTypography.from(FontFamily.SansSerif) }
 
 /**
  * Whether the viewer has asked for reduced motion.
@@ -108,7 +139,7 @@ fun TrimTheme(
 ) {
     CompositionLocalProvider(
         LocalTrimColors provides TrimColors.from(TrimPalette.of(dark)),
-        LocalTrimTypography provides TrimTypography.of(fontFamily),
+        LocalTrimTypography provides TrimTypography.from(fontFamily),
         LocalReduceMotion provides reduceMotion,
         content = content,
     )

@@ -30,6 +30,14 @@ object SourceBoundaryScanner {
         val patterns: List<Regex>,
         val allowedFileNames: Set<String>,
         val rationale: String,
+        /**
+         * Match against the raw source instead of the comment- and string-stripped form.
+         *
+         * Needed for exactly one thing: an open mode is a string literal, so a rule about
+         * *how* a file is opened cannot see it once literals are blanked. Patterns that
+         * set this must be specific enough that prose cannot trip them.
+         */
+        val rawSource: Boolean = false,
     )
 
     data class Violation(
@@ -76,8 +84,11 @@ object SourceBoundaryScanner {
     val REPLACER_ONLY = Rule(
         id = "replacer",
         patterns = listOf(
-            Regex("""DocumentsContract\s*\.\s*(rename|move|delete|create)Document"""),
-            Regex("""contentResolver\s*\.\s*openOutputStream"""),
+            Regex("""DocumentsContract\s*\.\s*(rename|move|delete|create|copy)Document"""),
+            // Any receiver, not just a property literally called `contentResolver`:
+            // writing `private val resolver: ContentResolver` and calling through that
+            // would otherwise walk straight past this guard.
+            Regex("""\.\s*openOutputStream\s*\("""),
             Regex("""DocumentFile[^\n]*\.\s*(createFile|createDirectory|renameTo|delete)\s*\("""),
             Regex("""\bPHAssetChangeRequest\b"""),
             Regex("""\bdeleteAssets\s*\("""),
@@ -115,7 +126,33 @@ object SourceBoundaryScanner {
             "open a socket, and no code may name the INTERNET permission.",
     )
 
-    val DEFAULT_RULES = listOf(CODEC_FACTORY_ONLY, REPLACER_ONLY, NO_NETWORK_API)
+    /**
+     * Opening a user's file with any write mode.
+     *
+     * The safe-replace skill lists this among the things that must never appear:
+     * originals are read-only until the single atomic replace, so a `"w"`, `"rw"` or
+     * `"wa"` on a content URI is the invariant being broken directly rather than by
+     * accident. Its own rule because the mode is a string literal, which the stripped
+     * source deliberately cannot see.
+     */
+    val NO_WRITE_MODE_OPEN = Rule(
+        id = "readOnlyOriginals",
+        patterns = listOf(
+            Regex("""open(FileDescriptor|AssetFileDescriptor|InputStream)\s*\([^)]*"(?:rw|wa|wt|w)"""),
+        ),
+        allowedFileNames = setOf(
+            "SafeReplacerAndroid.kt",
+            "SafeReplacerIos.kt",
+            "UndoBinAndroid.kt",
+            "UndoBinIos.kt",
+        ),
+        rationale = "Originals are opened read-only (ARCHITECTURE.md § 2.2). A write mode on a " +
+            "user's file is the safe-replace invariant broken outright — write to " +
+            "LibraryStorage.tempFile() and let Replacer commit it.",
+        rawSource = true,
+    )
+
+    val DEFAULT_RULES = listOf(CODEC_FACTORY_ONLY, REPLACER_ONLY, NO_NETWORK_API, NO_WRITE_MODE_OPEN)
 
     private val BLOCK_COMMENT = Regex("""/\*.*?\*/""", RegexOption.DOT_MATCHES_ALL)
 
@@ -140,16 +177,20 @@ object SourceBoundaryScanner {
         val applicable = rules.filterNot { file.name in it.allowedFileNames }
         if (applicable.isEmpty()) return emptyList()
 
-        val lines = strip(file.readText()).lines()
+        val raw = file.readText()
+        val strippedLines = strip(raw).lines()
+        val rawLines = raw.lines()
+
         val violations = mutableListOf<Violation>()
-        lines.forEachIndexed { index, line ->
-            applicable.forEach { rule ->
+        applicable.forEach { rule ->
+            val lines = if (rule.rawSource) rawLines else strippedLines
+            lines.forEachIndexed { index, line ->
                 if (rule.patterns.any { it.containsMatchIn(line) }) {
                     violations += Violation(rule, file, index + 1, line)
                 }
             }
         }
-        return violations
+        return violations.sortedWith(compareBy({ it.line }, { it.rule.id }))
     }
 
     fun scanAll(files: Iterable<File>, rules: List<Rule> = DEFAULT_RULES): List<Violation> =

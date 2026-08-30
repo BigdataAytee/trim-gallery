@@ -2,6 +2,7 @@ package app.trimgallery.core.domain.album
 
 import app.trimgallery.core.model.AutoAlbum
 import app.trimgallery.core.model.Label
+import app.trimgallery.core.model.MediaFlags
 import app.trimgallery.core.model.MediaItem
 import app.trimgallery.core.model.MediaKind
 import app.trimgallery.core.model.MediaRef
@@ -14,9 +15,9 @@ class AutoAlbumsTest {
     private fun item(
         name: String = "IMG_0001.jpg",
         kind: MediaKind = MediaKind.PHOTO,
-        locked: Boolean = false,
+        hidden: Boolean = false,
     ) = MediaItem(
-        id = 1,
+        id = "1",
         platformRef = MediaRef("ref"),
         name = name,
         kind = kind,
@@ -33,10 +34,10 @@ class AutoAlbumsTest {
         phash = null,
         sha256 = null,
         mtime = 0,
-        locked = locked,
+        flags = MediaFlags(hidden = hidden),
     )
 
-    private fun label(text: String, confidence: Float = 0.9f) = Label(1, text, confidence)
+    private fun label(text: String, confidence: Float = 0.9f) = Label("1", text, confidence)
 
     @Test
     fun `videos are filed by kind, not by label`() {
@@ -129,7 +130,7 @@ class AutoAlbumsTest {
     fun `a locked item appears in no auto-album at all`() {
         // The locked folder is excluded from every other view, auto-albums included.
         val albums = AutoAlbums.albumsFor(
-            item(name = "Screenshot_1.png", kind = MediaKind.VIDEO, locked = true),
+            item(name = "Screenshot_1.png", kind = MediaKind.VIDEO, hidden = true),
             path = "/sdcard/WhatsApp/Media/v.mp4",
         )
         assertEquals(emptySet(), albums)

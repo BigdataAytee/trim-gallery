@@ -63,9 +63,49 @@ class TrimPaletteTest {
     }
 
     @Test
-    fun `there is exactly one accent, shared by both themes`() {
-        // BUILD.md section 9: "One typeface, one accent colour."
-        assertEquals(TrimPalette.Light.accent, TrimPalette.Dark.accent)
+    fun `the accent is one hue, tuned per theme rather than reused as one value`() {
+        // DESIGN_SYSTEM.md gives mint on dark and a darker green on light. One accent
+        // colour (BUILD.md section 9) means one hue, not one hex: mint on paper fails
+        // contrast, and a palette that fails contrast is not a palette.
+        assertTrue(contrast(TrimPalette.Light.accent, TrimPalette.Light.page) >= 3.0)
+        assertTrue(contrast(TrimPalette.Dark.accent, TrimPalette.Dark.page) >= 3.0)
+    }
+
+    @Test
+    fun `what sits on the accent is readable against it`() {
+        listOf(TrimPalette.Dark, TrimPalette.Light).forEach { p ->
+            assertTrue(
+                contrast(p.accentOn, p.accent) >= 4.5,
+                "accentOn/accent contrast was ${contrast(p.accentOn, p.accent)}",
+            )
+        }
+    }
+
+    @Test
+    fun `danger and warning are distinguishable from the accent and from each other`() {
+        listOf(TrimPalette.Dark, TrimPalette.Light).forEach { p ->
+            assertTrue(p.danger != p.warning && p.danger != p.accent)
+            assertTrue(contrast(p.danger, p.page) >= 3.0, "danger/page was ${contrast(p.danger, p.page)}")
+            assertTrue(contrast(p.warning, p.page) >= 3.0, "warning/page was ${contrast(p.warning, p.page)}")
+        }
+    }
+
+    @Test
+    fun `chrome is the surface at 85 percent, so media shows through it`() {
+        listOf(TrimPalette.Dark, TrimPalette.Light).forEach { p ->
+            assertEquals(0xD9L, (p.chrome ushr 24) and 0xFF)
+            assertEquals(p.band and 0xFFFFFF, p.chrome and 0xFFFFFF)
+        }
+    }
+
+    @Test
+    fun `hairlines are the text colour at 8 percent, not a solid grey`() {
+        // DESIGN_SYSTEM.md: elevation is blur plus a 1-px hairline, never a shadow. A
+        // solid line would band visibly over media.
+        listOf(TrimPalette.Dark, TrimPalette.Light).forEach { p ->
+            assertEquals(p.text and 0xFFFFFF, p.line and 0xFFFFFF)
+            assertEquals(0x14L, (p.line ushr 24) and 0xFF)
+        }
     }
 
     @Test
@@ -81,17 +121,20 @@ class TrimPaletteTest {
     }
 
     @Test
-    fun `the veil is translucent so the grid stays legible behind it`() {
+    fun `the scrim is translucent, and heavier on dark than on light`() {
+        // rgba(0,0,0,.6) against rgba(0,0,0,.4): a dark UI needs more separation between
+        // the viewer and the grid behind it, because both are already dark.
+        assertTrue((TrimPalette.Dark.scrim ushr 24) and 0xFF > (TrimPalette.Light.scrim ushr 24) and 0xFF)
         listOf(TrimPalette.Dark, TrimPalette.Light).forEach { p ->
-            val alpha = (p.veil ushr 24) and 0xFF
-            assertTrue(alpha in 0xC0..0xF0, "veil alpha was ${alpha.toString(16)}")
+            val alpha = (p.scrim ushr 24) and 0xFF
+            assertTrue(alpha in 0x40..0xC0, "scrim alpha was ${alpha.toString(16)}")
         }
     }
 
     @Test
-    fun `every token is fully opaque except the veil`() {
+    fun `every solid token is fully opaque`() {
         listOf(TrimPalette.Dark, TrimPalette.Light).forEach { p ->
-            listOf(p.page, p.band, p.card, p.text, p.muted, p.line, p.accent).forEach { c ->
+            listOf(p.page, p.band, p.card, p.text, p.muted, p.accent, p.accentOn, p.danger, p.warning).forEach { c ->
                 assertEquals(0xFFL, (c ushr 24) and 0xFF, "token ${c.toString(16)} should be opaque")
             }
         }

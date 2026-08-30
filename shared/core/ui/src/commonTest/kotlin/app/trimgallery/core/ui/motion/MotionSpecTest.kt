@@ -1,5 +1,11 @@
 package app.trimgallery.core.ui.motion
 
+import app.trimgallery.core.ui.grid.GridZoom
+import app.trimgallery.core.ui.theme.ReducedMotion
+import app.trimgallery.core.ui.theme.TrimShape
+import app.trimgallery.core.ui.theme.TrimSpacing
+import app.trimgallery.core.ui.theme.TrimSpring
+import app.trimgallery.core.ui.theme.TrimType
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertTrue
@@ -24,9 +30,84 @@ class MotionSpecTest {
     }
 
     @Test
-    fun `closing is quicker than opening`() {
-        // Opening is a reveal and can luxuriate; closing is a dismissal and must not.
-        assertTrue(MotionSpec.Hero.CLOSE_MS < MotionSpec.Hero.OPEN_MS)
+    fun `the hero transition is a spring, with a duration only as the reduced fallback`() {
+        // DESIGN_SYSTEM.md replaced the reference prototype's duration-and-Bezier hero
+        // with `spring-standard` on the bounds. A spring has no duration to assert
+        // against; what is left to check is that the fallback is the reduce-motion one
+        // rather than a second, competing set of timings.
+        assertEquals(TrimSpring.STANDARD, MotionSpec.Hero.SPRING)
+        assertEquals(ReducedMotion.DURATION_MS, MotionSpec.Hero.OPEN_MS)
+        assertEquals(ReducedMotion.DURATION_MS, MotionSpec.Hero.CLOSE_MS)
+    }
+
+    @Test
+    fun `the dismiss drag follows the finger exactly`() {
+        // Rubber-banding an image the user is dragging makes it feel like a proxy for the
+        // photo rather than the photo (DESIGN_SYSTEM.md, `dismiss`).
+        assertEquals(1f, MotionSpec.Dismiss.DRAG_RATIO)
+        // Chrome is gone before the image lands, not arriving with it.
+        assertTrue(MotionSpec.Dismiss.CHROME_FADE_MS < ReducedMotion.DURATION_MS)
+    }
+
+    @Test
+    fun `every spring overshoots once and settles`() {
+        // Critically damped (ratio 1.0) is indistinguishable from an ease-out, which
+        // gives up the reason for using a spring; below about 0.6 a second bounce becomes
+        // visible and reads as a glitch on a gallery.
+        TrimSpring.entries.forEach { spring ->
+            assertTrue(
+                spring.dampingRatio in 0.6f..0.95f,
+                "${spring.name} damping ratio is ${spring.dampingRatio}",
+            )
+        }
+    }
+
+    @Test
+    fun `snappy is faster than standard, which is faster than gentle`() {
+        assertTrue(TrimSpring.SNAPPY.stiffness > TrimSpring.STANDARD.stiffness)
+        assertTrue(TrimSpring.STANDARD.stiffness > TrimSpring.GENTLE.stiffness)
+    }
+
+    @Test
+    fun `reduce-motion drops count-ups entirely`() {
+        // A number counting up is decoration, not information; the figure it lands on is
+        // the information, and reduce-motion should show it immediately.
+        assertTrue(!ReducedMotion.COUNT_UP_ENABLED)
+        assertTrue(MotionSpec.ResultCard.COUNT_UP_MS > ReducedMotion.DURATION_MS)
+    }
+
+    @Test
+    fun `grid gutters close as the grid zooms out`() {
+        // At year level any gap breaks the block into stripes that read as structure the
+        // data does not have (DESIGN_SYSTEM.md § Spacing and shape).
+        assertTrue(GridZoom.DAY.gutterDp > GridZoom.MONTH.gutterDp)
+        assertTrue(GridZoom.MONTH.gutterDp > GridZoom.YEAR.gutterDp)
+        assertEquals(0f, GridZoom.YEAR.gutterDp)
+    }
+
+    @Test
+    fun `the type scale steps upward without collision`() {
+        val roles = TrimType.entries
+        roles.zipWithNext().forEach { (bigger, smaller) ->
+            assertTrue(bigger.size > smaller.size, "${bigger.name} must be larger than ${smaller.name}")
+            assertTrue(bigger.lineHeight > smaller.lineHeight)
+        }
+        // Every line height leaves room for descenders at its own size.
+        roles.forEach { assertTrue(it.lineHeight > it.size, "${it.name} line height crowds its glyphs") }
+    }
+
+    @Test
+    fun `every control clears the minimum touch target`() {
+        // DESIGN_SYSTEM.md § Accessibility: all controls at least 48 dp.
+        assertEquals(48f, TrimSpacing.MIN_TOUCH_TARGET_DP)
+        assertTrue(TrimSpacing.MIN_TOUCH_TARGET_DP % TrimSpacing.GRID_DP == 0f, "off the 4-pt grid")
+    }
+
+    @Test
+    fun `radii sit on the 4-pt grid, and a chip is a pill`() {
+        listOf(TrimShape.THUMBNAIL_DP, TrimShape.CARD_DP, TrimShape.SHEET_DP, TrimShape.BUTTON_DP)
+            .forEach { assertTrue(it % TrimSpacing.GRID_DP == 0f, "$it is off the 4-pt grid") }
+        assertTrue(TrimShape.CHIP_DP >= 999f)
     }
 
     @Test

@@ -55,6 +55,25 @@ object WindowPlan {
     fun verifyWindows(durationMs: Long): List<Window> =
         if (durationMs <= 0) emptyList() else spread(durationMs, count = 3)
 
+    /**
+     * Every window of the file, back to back, for the opt-in "Careful" verify.
+     *
+     * BUILD.md § 5 makes full-file verification a setting rather than the default because
+     * VMAF costs roughly as much as the encode itself; when a user turns it on they are
+     * asking for gaps to be impossible, so these tile the duration exactly — no overlap,
+     * no holes, a short final window rather than one that runs past the end.
+     */
+    fun fullFileWindows(durationMs: Long): List<Window> {
+        if (durationMs <= 0) return emptyList()
+        val out = ArrayList<Window>()
+        var start = 0L
+        while (start < durationMs) {
+            out += Window(start, minOf(WINDOW_MS, durationMs - start))
+            start += WINDOW_MS
+        }
+        return out
+    }
+
     /** One window centred on the file, clamped to what actually exists. */
     private fun centred(durationMs: Long): Window {
         val length = minOf(WINDOW_MS, durationMs)

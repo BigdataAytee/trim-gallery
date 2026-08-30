@@ -342,6 +342,91 @@ all of it is unit tested against fakes.
 - **The scoring width is forced even.** Chroma planes are half-width in 4:2:0, and an odd
   width leaves the last column without a sample.
 
+## Milestone 4 — verify, safe replace, undo
+
+- **`ReplaceSequence` is shared, not written twice.** ARCHITECTURE.md § 15 assigns
+  `SafeReplacerAndroid` and `SafeReplacerIos` to the platforms, but the *ordering* in § 7
+  is the part that must never drift, so it lives in `shared/core/pipeline/replace` and both
+  platforms delegate to it. That is what turns § 14's "Replacer plan/rollback with fake
+  storage" into a JVM unit test.
+- **Two new pipeline-internal ports, `ReplaceOps` and `UndoJournal`,** for the § 7 steps
+  ARCHITECTURE.md § 5 has no interface for. Metadata copying, parking and reading all reuse
+  the § 5 interfaces unchanged.
+- **`UndoJournal` is separate from `UndoStore`.** § 7 parks the original in the middle of
+  the sequence but writes the row at the *end*. Two collaborators make that ordering
+  something the code states rather than something a comment claims.
+- **`ReplacePlan` gains `mediaId`.** An addition to the § 5 sketch: the contract ends by
+  writing an `UndoEntry`, and an undo row that cannot name the item it came from is an
+  original nobody can restore.
+- **`LibraryStorage` gains `discard(TempFile)`,** `YuvSource` gains a `TempFile` overload,
+  and `OutputProbe` is new. Verification has to read the encoded output back, and it is a
+  temp file with deliberately no `MediaRef` — shared code must not be able to name a place
+  in the user's library. A night that verifies a thousand files and deletes no rejects
+  fills the disk by morning, hence `discard`.
+- **The size gate is not hoisted above the VMAF pass.** It is cheaper, but skip reasons are
+  shown to the user (BUILD.md § 9), and a file that is both larger and visibly worse should
+  be reported as the quality failure it is. Nothing is wasted: `NotSmaller` is terminal, so
+  the ladder never re-encodes because of it.
+- **The verifier takes the worst window, not the mean.** `ProbeAndSearch` uses the mean
+  because one hard window should not set the bitrate for a whole file; the verifier is the
+  place that must catch exactly that file, so it takes the minimum.
+- **A step up is 15%.** `SettingSearch` stops bisecting within 12% of the bracket top, so
+  anything smaller lands inside the noise the search already declared indistinguishable.
+- **`SYSTEM_TRASH` maps to the app's own bin on Android.** `MediaStore.createTrashRequest`
+  needs a user confirmation dialog per call, which a night pass cannot show.
+- **Parking into the bin uses `OffloadMove` too.** The bin is on internal storage and the
+  granted tree is not, so it is a cross-volume move like the SD card, and gets the same
+  copy → verify → remove order.
+- **Restore stages the original back before removing what holds its identity.** The
+  optimised file is the disposable one — it can always be made again — so it is deleted
+  only once the original is confirmed back in the tree.
+- **The sweep marks a row `EXPIRED` only after the bytes are gone,** so a failed delete is
+  retried next sweep rather than recorded as done. It marks rather than deletes, so Restore
+  can say *"the original was removed on <date>"* instead of having nothing to say.
+- **The build guard was strengthened, because writing the implementation broke it.** The
+  write rule matched the literal receiver `contentResolver`; `SafeReplacerAndroid` holds
+  `private val resolver: ContentResolver` and would have walked past. It now matches any
+  receiver. A fourth rule bans opening a user's file with a write mode, and matches raw
+  source because the mode is a string literal the scanner otherwise blanks.
+
+## Applied from PRD, USER_JOURNEY, DESIGN_SYSTEM, SCHEMA, MONETIZATION, LAUNCH
+
+- **Ids are TEXT UUIDv7** (SCHEMA.md). ARCHITECTURE.md § 4 named the columns but not their
+  types, so this is new information rather than a conflict. `core.model.Uuid7` takes its
+  clock and randomness as parameters so the bit layout is asserted rather than assumed, and
+  must be confined to one thread — ARCHITECTURE.md § 8 puts every database write on IO.
+- **`favourite` and `locked` move into `MediaFlags`,** and `locked` becomes `hidden`.
+  SCHEMA.md's `flags` bitmask blesses both fields — they were previously noted here as
+  deviations — and names them. `MediaItem.favourite`/`.hidden` stay as derived properties
+  so call sites read the same.
+- **Two partial indexes were added beyond SCHEMA.md.** It indexes `flags` whole, which
+  serves equality on the mask but not the bitwise predicates every gallery query actually
+  uses; `media_item_visible` and `media_item_favourite` are what carry the grid.
+- **`sha256` is a BLOB in the database and a hex `String` in the model.** 32 bytes against
+  64 characters over 100k rows, but a `ByteArray` field would silently break data-class
+  equality — the hazard `FaceEmbedding` already had to override around.
+- **Standing albums get named string ids** (`standing:favourites`) rather than reserved
+  negative numbers, now that ids are TEXT.
+- **`Predictor.confident` now requires low spread as well as 20 samples.** SCHEMA.md's
+  `setting_var` made this possible; the mean alone cannot distinguish a predictable family
+  from one whose files merely average out, and a wrong narrow bracket costs the whole probe
+  budget.
+- **DESIGN_SYSTEM.md's light accent pair fails its own contrast rule.** White on `#16A37B`
+  is 3.2:1; the same document requires 4.5:1 for text, and a button label is text. The
+  accent is kept exactly as specified — it is the brand colour — and only `accent-on`
+  changes, to the dark ink already used on dark's mint, giving 5.3:1.
+- **The hero transition is now a spring with radius 4 → 0**, per DESIGN_SYSTEM.md,
+  superseding the buyer-gallery prototype's 420/340 ms Béziers. Those durations survive
+  only as the reduce-motion fallback and as the Macrobenchmark window.
+- **Free-tier accounting is derived, not counted.** `bytesFreedSince` sums `run_session`
+  rows rather than keeping a counter, so the cap cannot drift from what actually happened.
+- **A first file larger than the whole monthly allowance is still optimised.** Otherwise a
+  user whose first video would save 4 GB never gets to use the free tier at all — a worse
+  first run than going over the cap once.
+- **Retention is clamped to the tier, never rejected,** so a lapsed Pro user gets 7 days
+  rather than an error. Existing undo rows keep the expiry they were created with:
+  shortening it retroactively would delete originals the user was promised.
+
 ## Open questions added
 - **The Compose layer has never been compiled.** Every Compose Multiplatform version
   resolves `androidx.annotation`, `androidx.collection` and `androidx.lifecycle` from
@@ -351,3 +436,12 @@ all of it is unit tested against fakes.
 - Whether a Compose Multiplatform host on iOS is the right call for the viewer, or
   whether the shared-element motion in BUILD.md § 9 wants SwiftUI there. Revisit at
   milestone 8.
+- **The `UndoJournal` and `OriginalLocator` bindings are not wired.** The SQLDelight schema
+  they read is in place (SCHEMA.md `undo_entry`), but the repository layer that implements
+  them lands with milestone 5; until then `SafeReplacerAndroid` cannot be constructed by
+  Koin. The shared ordering it delegates to is fully tested.
+- **Nothing Android in milestone 4 has been compiled or run**, for the same Google Maven
+  reason as the Compose layer. The SAF mechanics, the mp4parser rewrite-and-rename and the
+  `MediaExtractor` probe are all written to documented behaviour and reviewed, not
+  executed. The decision logic they sit under — verify, ladder, replace ordering, rollback,
+  offload — is verified on the JVM, which is why it was pushed there.

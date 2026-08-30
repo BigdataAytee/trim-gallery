@@ -8,6 +8,7 @@ import app.trimgallery.engine.Ms
 import app.trimgallery.engine.ProbeEncoder
 import app.trimgallery.engine.QualityScorer
 import app.trimgallery.engine.Setting
+import app.trimgallery.engine.TempFile
 import app.trimgallery.engine.YuvSource
 import app.trimgallery.engine.YuvWindow
 import kotlin.test.Test
@@ -29,6 +30,9 @@ class ProbeAndSearchTest {
             decoded += start to len
             return YuvWindow(width, height, frameCount = 1, y = ByteArray(1), u = ByteArray(1), v = ByteArray(1))
         }
+
+        override suspend fun decodeWindow(file: TempFile, start: Ms, len: Ms, width: Int): YuvWindow =
+            YuvWindow(width, height, frameCount = 1, y = ByteArray(1), u = ByteArray(1), v = ByteArray(1))
     }
 
     private class FakeProbeEncoder : ProbeEncoder {
@@ -67,7 +71,7 @@ class ProbeAndSearchTest {
     }
 
     private fun item(durationMs: Long = 60_000, width: Int = 1920, height: Int = 1080) = MediaItem(
-        id = 1, platformRef = MediaRef("ref"), name = "clip.mp4", kind = MediaKind.VIDEO,
+        id = "1", platformRef = MediaRef("ref"), name = "clip.mp4", kind = MediaKind.VIDEO,
         codec = "avc1", width = width, height = height, fps = 30.0, bitrate = 12_000_000,
         size = 100_000_000, duration = durationMs, takenAt = null, location = null,
         cameraModel = "Pixel 9 rear", phash = null, sha256 = null, mtime = 0,
@@ -118,6 +122,9 @@ class ProbeAndSearchTest {
                 requestedWidth = width
                 return YuvWindow(width, 720, 1, ByteArray(1), ByteArray(1), ByteArray(1))
             }
+
+            override suspend fun decodeWindow(file: TempFile, start: Ms, len: Ms, width: Int): YuvWindow =
+                YuvWindow(width, 720, 1, ByteArray(1), ByteArray(1), ByteArray(1))
         }
         val scorer = FakeScorer(3_300_000)
         ProbeAndSearch(source, RecordingEncoder(scorer), scorer).run(
@@ -135,6 +142,9 @@ class ProbeAndSearchTest {
                 requestedWidth = width
                 return YuvWindow(width, 480, 1, ByteArray(1), ByteArray(1), ByteArray(1))
             }
+
+            override suspend fun decodeWindow(file: TempFile, start: Ms, len: Ms, width: Int): YuvWindow =
+                YuvWindow(width, 480, 1, ByteArray(1), ByteArray(1), ByteArray(1))
         }
         val scorer = FakeScorer(3_300_000)
         ProbeAndSearch(source, RecordingEncoder(scorer), scorer).run(
@@ -153,6 +163,9 @@ class ProbeAndSearchTest {
                     requestedWidth = width
                     return YuvWindow(width, 720, 1, ByteArray(1), ByteArray(1), ByteArray(1))
                 }
+
+                override suspend fun decodeWindow(file: TempFile, start: Ms, len: Ms, width: Int): YuvWindow =
+                    YuvWindow(width, 720, 1, ByteArray(1), ByteArray(1), ByteArray(1))
             }
             val scorer = FakeScorer(3_300_000)
             ProbeAndSearch(source, RecordingEncoder(scorer), scorer).run(

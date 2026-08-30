@@ -48,7 +48,7 @@ object AutoAlbums {
         facingCamera: Boolean = false,
     ): Set<AutoAlbum> {
         // The locked folder is excluded from every other view, auto-albums included.
-        if (item.locked) return emptySet()
+        if (item.hidden) return emptySet()
 
         val result = mutableSetOf<AutoAlbum>()
         val confident = labels.filter { it.confidence >= MIN_LABEL_CONFIDENCE }.map { it.text.lowercase() }

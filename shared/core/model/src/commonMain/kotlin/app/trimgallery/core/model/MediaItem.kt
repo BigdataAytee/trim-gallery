@@ -50,14 +50,25 @@ data class MediaFlags(
     val livePhoto: Boolean = false,
     val raw: Boolean = false,
     val inCloudOnly: Boolean = false,
+    /** Marked by the user. SCHEMA.md `media_item.flags` bit 64. */
+    val favourite: Boolean = false,
+    /**
+     * In the locked folder. SCHEMA.md `media_item.flags` bit 128.
+     *
+     * Hidden items are excluded from every other view — grid, albums, search, people —
+     * so this has to be readable without a join, which is why SCHEMA.md indexes `flags`.
+     */
+    val hidden: Boolean = false,
 )
 
 /** A point on the earth, as recorded by the camera. */
 data class GeoPoint(val lat: Double, val lon: Double)
 
-/** ARCHITECTURE.md § 4. One row per file in the user's library. */
+/**
+ * ARCHITECTURE.md § 4 and SCHEMA.md `media_item`. One row per file in the user's library.
+ */
 data class MediaItem(
-    val id: Long,
+    val id: String,
     val platformRef: MediaRef,
     val name: String,
     val kind: MediaKind,
@@ -77,20 +88,23 @@ data class MediaItem(
     val status: MediaStatus = MediaStatus.NEW,
     val skipReason: SkipReason? = null,
     val mtime: Long,
+    /** Which grant this was found under; decides the folder mode and offload target. */
+    val folderGrantId: String? = null,
+    val mime: String? = null,
     /**
-     * Marked by the user. Not in the ARCHITECTURE.md § 4 schema; added for milestone 8,
-     * which requires a Favourites screen, and recorded in PROJECT.md. A column rather
-     * than an album because it is a property of the item, survives album deletion, and
-     * every gallery the user has ever used treats it that way.
+     * Bytes triage thinks this file could give back (SCHEMA.md `est_saving`).
+     *
+     * The queue's ordering key: BUILD.md § 6 works largest-saving-first so an interrupted
+     * night still delivers most of the space it was going to.
      */
-    val favourite: Boolean = false,
-    /**
-     * In the locked folder. Also an addition to § 4 (see PROJECT.md). Items in the
-     * locked folder are excluded from every other view — grid, albums, search, people —
-     * so this has to be readable without a join.
-     */
-    val locked: Boolean = false,
+    val estSaving: Long? = null,
+    val createdAt: Long = 0,
+    val updatedAt: Long = 0,
 ) {
     /** Pixels per frame; the search cares about this more than the label "4K". */
     val pixels: Long get() = width.toLong() * height.toLong()
+
+    /** SCHEMA.md keeps these in the `flags` bitmask; call sites read them by name. */
+    val favourite: Boolean get() = flags.favourite
+    val hidden: Boolean get() = flags.hidden
 }

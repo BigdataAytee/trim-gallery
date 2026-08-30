@@ -40,11 +40,24 @@ enum class AutoAlbum(val displayName: String) {
 }
 
 data class Album(
-    val id: Long,
+    val id: String,
     val name: String,
     val kind: AlbumKind,
     /** Set for [AlbumKind.AUTO]; identifies which rule produced it. */
     val auto: AutoAlbum? = null,
-    val coverMediaId: Long? = null,
+    val coverMediaId: String? = null,
     val count: Int = 0,
-)
+) {
+    companion object {
+        /**
+         * The three albums that always exist and are not rows in `album`.
+         *
+         * Named constants rather than reserved negative numbers: SCHEMA.md makes ids
+         * TEXT, so a standing album can simply say what it is instead of relying on a
+         * convention every query has to remember.
+         */
+        const val FAVOURITES_ID = "standing:favourites"
+        const val RECENTLY_DELETED_ID = "standing:recently-deleted"
+        const val LOCKED_ID = "standing:locked"
+    }
+}
