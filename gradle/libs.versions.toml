@@ -4,19 +4,25 @@
 # and recording the reason in PROJECT.md.
 #
 # VERIFICATION STATUS
-#   [central]  Version resolved against repo1.maven.org while authoring. Trustworthy.
-#   [google]   Hosted only on Google Maven (dl.google.com), which was unreachable
-#              from the authoring environment (egress policy 403). The version is a
-#              best-known-good guess and MUST be confirmed before the first build.
-#              Run `tools/verify-versions.sh` from an environment that can reach
-#              Google Maven; it prints the latest stable for every [google] entry.
+#   [central]  The exact coordinate below was fetched from repo1.maven.org (or
+#              plugins.gradle.org) and returned 200. Verified 30 Aug 2026.
+#   [google]   Hosted only on Google Maven (dl.google.com), which this environment's
+#              egress policy refuses (403 at the gateway, confirmed — not a tooling
+#              fault). The version is a best-known-good guess and MUST be confirmed
+#              before the first build.
+#
+# `tools/verify-versions.sh` checks every entry in this file: it resolves the latest
+# stable and confirms the pinned coordinate exists. It reads the catalog rather than
+# a hand-maintained list, so it cannot drift out of step with it.
 
 [versions]
 # --- Build tooling ---
-composeMultiplatform = "1.12.0"   # [central] org.jetbrains.compose
+composeMultiplatform = "1.12.0"   # [central] latest stable. JetBrains: "the latest Compose
+                                  # Multiplatform is always compatible with the latest version of
+                                  # Kotlin", and the Compose compiler plugin ships with Kotlin, so
+                                  # these two versions are deliberately not pinned to each other.
 agp = "8.13.0"                    # [google] com.android.tools.build:gradle
-kotlin = "2.3.21"                 # [central] latest stable that KSP 2.3.11 pairs with
-ksp = "2.3.11"                    # [central]
+kotlin = "2.4.10"                 # [central] latest stable; Compose Multiplatform tracks latest Kotlin
 detekt = "1.23.8"                 # [central]
 ktlint-gradle = "14.2.0"          # [central] plugins.gradle.org
 
@@ -29,14 +35,13 @@ targetSdk = "36"                  # [google]
 composeBom = "2026.01.00"         # [google] androidx.compose:compose-bom
 activityCompose = "1.11.0"        # [google]
 lifecycle = "2.9.4"               # [google]
-navigationCompose = "2.9.5"       # [google]
 media3 = "1.9.0"                  # [google] androidx.media3:*
 work = "2.10.5"                   # [google]
-room = "2.8.2"                    # [google]
 datastore = "1.1.7"               # [google]
 exifinterface = "1.4.1"           # [google]
 documentfile = "1.1.0"            # [google]
 benchmark = "1.4.1"               # [google]
+uiautomator = "2.3.0"             # [google]
 
 # --- KMP (ARCHITECTURE.md; additions to STACK.md recorded in PROJECT.md) ---
 sqldelight = "2.3.2"              # [central] replaces Room: Room KMP has no Kotlin/Native iOS target
@@ -65,7 +70,6 @@ jimagehash = "1.0.0"              # [central]
 junit = "4.13.2"                  # [central]
 turbine = "1.2.1"                 # [central]
 androidxTestJunit = "1.3.0"       # [google]
-espresso = "3.7.0"                # [google]
 
 [libraries]
 # --- Shared / KMP ---
@@ -116,6 +120,17 @@ kotlinx-coroutines-android = { group = "org.jetbrains.kotlinx", name = "kotlinx-
 
 # DI
 
+# Later milestones, coordinates pinned now so the version cannot sit here unverifiable.
+# All STACK.md entries; each lands with the milestone named.
+telephoto-zoomable-coil3 = { group = "me.saket.telephoto", name = "zoomable-image-coil3", version.ref = "telephoto" }   # m8 viewer
+lottie-compose = { group = "com.airbnb.android", name = "lottie-compose", version.ref = "lottie" }                      # m10 progress ring
+accompanist-permissions = { group = "com.google.accompanist", name = "accompanist-permissions", version.ref = "accompanist" }
+litr = { group = "com.linkedin.android.litr", name = "litr", version.ref = "litr" }                                     # fallback transcoder
+simplestorage = { group = "com.anggrayudi", name = "storage", version.ref = "simpleStorage" }                           # m4 SAF move/rename
+mp4parser-isoparser = { group = "org.mp4parser", name = "isoparser", version.ref = "isoparser" }                        # m4 MP4 atoms
+jimagehash = { group = "dev.brachtendorf", name = "JImageHash", version.ref = "jimagehash" }                            # m9 duplicates
+litert = { group = "com.google.ai.edge.litert", name = "litert", version.ref = "litert" }                               # m9 face embeddings
+
 # Storage / metadata
 androidx-datastore-preferences = { group = "androidx.datastore", name = "datastore-preferences", version.ref = "datastore" }
 androidx-work-runtime-ktx = { group = "androidx.work", name = "work-runtime-ktx", version.ref = "work" }
@@ -124,7 +139,7 @@ androidx-exifinterface = { group = "androidx.exifinterface", name = "exifinterfa
 
 # Benchmark
 androidx-benchmark-macro-junit4 = { group = "androidx.benchmark", name = "benchmark-macro-junit4", version.ref = "benchmark" }
-androidx-test-uiautomator = { group = "androidx.test.uiautomator", name = "uiautomator", version = "2.3.0" }
+androidx-test-uiautomator = { group = "androidx.test.uiautomator", name = "uiautomator", version.ref = "uiautomator" }
 
 # Test
 junit = { group = "junit", name = "junit", version.ref = "junit" }
@@ -143,6 +158,5 @@ compose-multiplatform = { id = "org.jetbrains.compose", version.ref = "composeMu
 sqldelight = { id = "app.cash.sqldelight", version.ref = "sqldelight" }
 kotlin-android = { id = "org.jetbrains.kotlin.android", version.ref = "kotlin" }
 kotlin-compose = { id = "org.jetbrains.kotlin.plugin.compose", version.ref = "kotlin" }
-ksp = { id = "com.google.devtools.ksp", version.ref = "ksp" }
 detekt = { id = "io.gitlab.arturbosch.detekt", version.ref = "detekt" }
 ktlint = { id = "org.jlleitschuh.gradle.ktlint", version.ref = "ktlint-gradle" }

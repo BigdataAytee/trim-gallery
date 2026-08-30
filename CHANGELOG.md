@@ -84,13 +84,31 @@ Everything that does not need the Android SDK or Google Maven was actually run:
   manifest.
 - `trim_native.h` and the placeholder C compile under `-Wall -Wextra -Werror`.
 
+### Fixed — dependency catalog verified
+
+Ran `tools/verify-versions.sh`: **60 pinned coordinates, 35 resolved, 0 missing, 0 behind
+latest stable**; the 25 unchecked are all on Google Maven, still refused by this
+environment's egress policy (a confirmed gateway denial, not a tooling fault).
+
+- Removed **KSP** — dead since Hilt and Room were replaced by Koin and SQLDelight.
+- **Kotlin 2.3.21 → 2.4.10.** KSP was the only reason for the old pin. Shared sources
+  recompiled and the `Triager` tests re-run under 2.4.10.
+- Removed the superseded `room`, `navigationCompose` and `espresso` pins.
+- Gave the eight STACK.md libraries that had a version but no coordinate a full
+  coordinate, so they can actually be verified.
+- Rewrote `verify-versions.sh` to parse `libs.versions.toml` rather than carry its own
+  list, which had already drifted. It now checks the **exact pinned coordinate** (not
+  just the group), and separates *missing* (catalog bug, exit 1) from *unchecked*
+  (repository unreachable, exit 0).
+
 ### Known gaps
 
 - **Nothing Android has been compiled.** Google Maven (`dl.google.com`) is blocked by
-  this environment's egress policy, so there is no Android SDK and no AGP. Every
-  `[google]` version in `gradle/libs.versions.toml` is a best-known-good guess;
-  `[central]` versions were resolved for real. Run `tools/verify-versions.sh` from a
-  machine with access before the first build.
+  this environment's egress policy, so there is no Android SDK and no AGP. The 25
+  `[google]` versions in `gradle/libs.versions.toml` remain best-known-good guesses —
+  AGP, androidx, Compose BOM, Media3, ML Kit, LiteRT. Run `tools/verify-versions.sh`
+  from a machine with access before the first build; it exits non-zero only on a real
+  catalog error.
 - **`Milestone1EncodeTest` has not been executed.** It needs a device or emulator with a
   hardware HEVC encoder. It is written to run, not yet observed running.
 - `shared/core/{domain,data,ui}` and the eight `feature/*` modules are build files and

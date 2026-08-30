@@ -139,14 +139,48 @@ documents allow with a note.
   executable motion spec for the gallery shell at milestone 8;
   `design/buyer-gallery/README.md` maps each behaviour onto BUILD.md § 9.
 
-## Open questions added
+## Catalog verification (30 Aug 2026)
 
-- Dependency versions for everything on Google Maven (AGP, androidx, Compose, Media3,
-  ML Kit, LiteRT) are **unverified**: the environment this was written in could not reach
-  `dl.google.com`, so nothing has been compiled. They are marked `[google]` in
-  `gradle/libs.versions.toml`; `tools/verify-versions.sh` resolves them all in one run.
-  Entries marked `[central]` were resolved for real. No STACK.md library was substituted
-  — only version numbers are in doubt.
+`tools/verify-versions.sh` was run. Result: **60 pinned coordinates — 35 resolved, 0
+missing, 25 unchecked, 0 behind latest stable**, plus 6 entries whose version comes from
+the Compose BOM.
+
+- Every one of the 25 unchecked entries is on Google Maven, which this environment's
+  egress policy still refuses. Confirmed a gateway policy denial (403 on CONNECT,
+  recorded by the proxy) rather than a tooling fault, so it was not worked around.
+  Those versions remain best-known-good guesses and must be confirmed before the first
+  build.
+- Everything on Maven Central and the Gradle Plugin Portal was verified at the **exact
+  pinned coordinate**, not merely at group level — which is what catches a typo'd
+  artifact name. All 35 resolved, and none is behind its latest stable.
+
+Changes made as a result:
+
+- **KSP removed.** It was in the catalog only for Hilt and Room, both of which are gone
+  (Koin and SQLDelight replaced them). Nothing applied the plugin.
+- **Kotlin 2.3.21 → 2.4.10.** The old pin existed solely because KSP 2.3.11 was the
+  newest KSP available; with KSP gone that constraint disappeared. JetBrains states that
+  "the latest Compose Multiplatform is always compatible with the latest version of
+  Kotlin" and that the Compose compiler plugin ships with Kotlin, so CMP 1.12.0 and
+  Kotlin 2.4.10 are deliberately not pinned to each other. The shared sources were
+  recompiled under 2.4.10 and the `Triager` tests still pass.
+- **`room`, `navigationCompose` and `espresso` version pins removed** — superseded by
+  SQLDelight, the JetBrains multiplatform navigation artifact, and nothing respectively.
+- **Eight STACK.md libraries had a version pinned but no coordinate** (Telephoto, Lottie,
+  Accompanist, LiTr, SimpleStorage, mp4parser, JImageHash, LiteRT). A version with no
+  artifact cannot be checked and quietly rots, so each now has a full coordinate,
+  annotated with the milestone it lands in.
+- **`verify-versions.sh` rewritten to parse the catalog** instead of carrying its own
+  list. The hand-maintained list had already drifted within a single commit — it still
+  named Hilt and Room and knew nothing of the KMP additions. It now also distinguishes
+  *missing* (the repository answered and does not have it — a catalog bug, exit 1) from
+  *unchecked* (the repository was unreachable — a network problem, exit 0), because
+  conflating the two is what made the first run look like 25 broken entries.
+
+Detekt stays at 1.23.8: it is the newest release, and there is no K2-era line, so it does
+not constrain the Kotlin choice in either direction.
+
+## Open questions added
 - Whether a Compose Multiplatform host on iOS is the right call for the viewer, or
   whether the shared-element motion in BUILD.md § 9 wants SwiftUI there. Revisit at
   milestone 8.
