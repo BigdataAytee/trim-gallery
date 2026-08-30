@@ -1,5 +1,107 @@
 # Changelog
 
+## Milestone 13 — the field test
+
+BUILD.md § 13.13: *"Field test on 3+ devices; measure GB/hour and Wh/GB."*
+
+**The run has not happened, and nothing here is presented as a field-test result.** It needs
+three phones, a fortnight and a real library, none of which exist in this build environment.
+What is written is everything the run needs and everything that can be got wrong quietly:
+the metrics it collects, the arithmetic it reduces them to, the gate it is judged against,
+the file it exports, and the fit that turns a sweep into a threshold. FIELD_TEST.md is the
+procedure itself.
+
+### Two metrics BUILD.md asks for were not being recorded
+
+§ 14's per-night list includes *"files indexed, duplicates found"*, and neither `RunSession`
+nor SCHEMA.md's `run_session` table had them. That is not only bookkeeping: BUILD.md § 7
+runs indexing in the *same* pass as the optimisation, and MONETIZATION.md promises indexing
+keeps going after the free cap is reached — so a night that optimised nothing because the
+cap was spent but indexed four hundred files did exactly what the user was promised, and
+with only `filesDone` to go on it looked like a night that did nothing at all.
+
+### The arithmetic
+
+`FieldMetrics` reduces the logged rows to the numbers LAUNCH.md wants published. Three
+decisions in it are the ones a spreadsheet would get wrong:
+
+- **GB per hour is per hour of *work*, not of wall clock.** A night plugged in for eight
+  hours that worked for forty minutes freed its gigabytes in forty minutes; the other seven
+  hours were the guards doing their job. Dividing by wall clock would make a well-behaved
+  build look slow and reward one that ignored the thermal gate.
+- **The saving is a median.** One 4K drone clip that compresses to a tenth pulls a mean up
+  by several points on its own, and the gate is about what a typical file does.
+- **Skipped and failed files contribute no saving rather than a zero.** Counting them would
+  report a device as saving less the more carefully it declined to touch things.
+
+Video and photo savings are reported apart, because LAUNCH.md's gate is about video and a
+library of screenshots must not answer for it.
+
+### The gate
+
+`AlphaGate` is LAUNCH.md's private-alpha criteria as something that can be evaluated rather
+than argued about: *≥ 30% median video saving, restore rate < 2%, zero thermal complaints*,
+plus three devices and five nights each.
+
+- **It is judged on the worst device, not the average.** The entire point of testing on
+  three is to find the one that behaves differently, and PRD.md names the low-end chip as
+  the risk. Pooling would let two good phones carry a bad one.
+- **A criterion with no data fails.** Not "n/a" — the field test exists to produce the
+  evidence, and a build that shipped because nobody measured the restore rate is the exact
+  failure the gate is for.
+- *"Zero thermal complaints"* is made measurable as thermal stand-downs per night. A
+  complaint is a person and cannot be counted from a log; a phone pausing three times a
+  night is getting hot whether or not anybody filed one.
+
+Two reporting defects turned up while testing it, both of the kind that make a "no" useless:
+a criterion failing for *missing* evidence reported the partial number and said FAILS, which
+sends someone off to fix a build that was never the problem; and a passing 0.5% restore rate
+formatted to "0", which reads as missing data in the one report where that difference
+matters.
+
+### Export diagnostics
+
+**The only file this app ever produces that is meant to leave the device.** There is no
+`INTERNET` permission and a build guard enforces it, so nothing can send it — the user
+exports and shares it themselves. That makes the whole design question *what is a user
+agreeing to when they tap this?*
+
+The contents are built as an explicit list of permitted fields rather than by serialising
+the rows the app already holds. That is the difference between a redaction that holds and
+one that lasts until somebody adds a column. Never included: filenames, paths and SAF URIs
+(a URI carries the folder and usually the filename, which between them can name a person or
+an employer); locations; any timestamp but the export's own date (when a photo was taken
+says where somebody was, when the night ran says when they sleep); content hashes, exact or
+perceptual, which identify files and say nothing about compression; anything the index
+produced; and row ids, because a UUIDv7 embeds the millisecond it was minted, so a list of
+them is a timeline. Files are numbered from one. An error is a flag, never its message,
+because an exception message quotes paths.
+
+A test builds the report from an item whose every string is a distinctive sentinel and
+asserts none of them appear anywhere in the output — which is what will catch the next field
+added carelessly. The file's own header lists what it left out, so a user can read what they
+are about to share.
+
+The Android side writes into its own cache subdirectory, not the cache root: the root also
+holds the encoder's temp files, which are copies of the user's originals mid-optimisation,
+and a `FileProvider` pointed at the root would make one of those reachable.
+
+### Fitting the threshold
+
+PROJECT.md has carried this open since milestone 2 — the shipped XPSNR threshold comes from
+software x265 on one 640×360 clip. `ThresholdFit` is the arithmetic that turns a measured
+sweep into a per-bucket threshold, tested against the one real sweep that exists: it
+reproduces the published 39.8 for VMAF 95 from milestone 2's table. It **refuses** to
+extrapolate past the ends of a sweep, refuses a sweep that is not monotone (both metrics
+measure the same thing badly and well, so one that does not rise is a broken measurement,
+and fitting through it would bake the noise into a threshold governing the whole library),
+and rounds the shipped value *up* — a tenth of a decibel too high costs a sliver of space,
+a tenth too low costs quality on an app that sells "you will not see the difference".
+
+### Numbers
+
+763 shared JVM tests and 47 build-guard tests pass; the guards scan 167 source files clean.
+
 ## Milestone 12 — the AV1 path
 
 BUILD.md § 10: *"HEVC via MediaCodec on all devices; AV1 where `MediaCodecList` reports a

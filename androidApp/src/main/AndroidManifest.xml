@@ -46,6 +46,25 @@
             android:foregroundServiceType="mediaProcessing|dataSync"
             tools:node="merge" />
 
+        <!--
+          Milestone 13. "Export diagnostics" (LAUNCH.md section Support) hands the user a
+          file to share themselves. The app still cannot send anything — there is no network
+          permission and the guards keep it that way — so a provider is the only way a file
+          can leave, and it leaves because the user picked a destination in the system sheet.
+
+          grantUriPermissions with no static grants: every URI is granted per share, for the
+          one file, and expires with the activity that received it.
+        -->
+        <provider
+            android:name="androidx.core.content.FileProvider"
+            android:authorities="${applicationId}.diagnostics"
+            android:exported="false"
+            android:grantUriPermissions="true">
+            <meta-data
+                android:name="android.support.FILE_PROVIDER_PATHS"
+                android:resource="@xml/diagnostics_paths" />
+        </provider>
+
         <activity
             android:name=".ui.MainActivity"
             android:exported="true"

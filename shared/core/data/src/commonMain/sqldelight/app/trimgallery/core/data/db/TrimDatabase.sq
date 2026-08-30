@@ -135,6 +135,12 @@ CREATE TABLE run_session (
     minutes_worked REAL    NOT NULL DEFAULT 0.0,
     energy_wh      REAL    NOT NULL DEFAULT 0.0,
     thermal_pauses INTEGER NOT NULL DEFAULT 0,
+    -- BUILD.md § 14 lists both on the per-night metrics; a supplement to SCHEMA.md's table,
+    -- recorded in PROJECT.md. Indexing runs in the same pass as the optimisation and keeps
+    -- running after the free cap is reached, so a night with files_done = 0 may still have
+    -- done exactly what the user was promised.
+    files_indexed  INTEGER NOT NULL DEFAULT 0,
+    duplicates_found INTEGER NOT NULL DEFAULT 0,
     seen           INTEGER NOT NULL DEFAULT 0
 );
 
@@ -420,8 +426,8 @@ SELECT * FROM run_session ORDER BY started_at DESC LIMIT 1;
 upsertRunSession:
 INSERT OR REPLACE INTO run_session(
     id, started_at, finished_at, stop_reason, files_done, files_skipped, files_failed,
-    bytes_freed, minutes_worked, energy_wh, thermal_pauses, seen
-) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);
+    bytes_freed, minutes_worked, energy_wh, thermal_pauses, files_indexed, duplicates_found, seen
+) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);
 
 -- MONETIZATION.md § Phase 1: the free tier caps GB freed per calendar month, so the cap
 -- is measured from the sessions themselves rather than a counter that could drift.

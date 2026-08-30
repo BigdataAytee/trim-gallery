@@ -47,5 +47,18 @@ data class RunSession(
     val energyWh: Double = 0.0,
     /** How often the pass stood down for heat; shown in History, never as an alarm. */
     val thermalPauses: Int = 0,
+    /**
+     * Files indexed and duplicate groups found this night (BUILD.md § 14).
+     *
+     * Both are on that section's per-night list and neither was recorded until milestone 13
+     * — a supplement to SCHEMA.md's `run_session` table, noted in PROJECT.md. They matter
+     * beyond bookkeeping: BUILD.md § 7 puts indexing in the *same* pass as the optimisation,
+     * and MONETIZATION.md promises indexing keeps running after the free cap is reached. A
+     * night that optimised nothing because the cap was spent but indexed four hundred files
+     * did work the user was promised, and with only [filesDone] to go on it looks like a
+     * night that did nothing at all.
+     */
+    val filesIndexed: Int = 0,
+    val duplicatesFound: Int = 0,
     val seen: Boolean = false,
 )

@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  The one directory this app ever shares out of (LAUNCH.md § Support, USER_JOURNEY.md § 13).
+
+  Scoped to a single subdirectory of the app's cache rather than to the cache root, because
+  the cache root also holds the temp files the encoder writes — copies of the user's
+  originals mid-optimisation. A FileProvider pointed at the root would make a granted URI
+  for one of those reachable, which is the opposite of what an app with no network
+  permission is for.
+-->
+<paths>
+    <cache-path name="diagnostics" path="diagnostics/" />
+</paths>

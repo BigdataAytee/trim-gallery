@@ -186,6 +186,8 @@ class TrimRepository(
             minutes_worked = session.minutesWorked,
             energy_wh = session.energyWh,
             thermal_pauses = session.thermalPauses.toLong(),
+            files_indexed = session.filesIndexed.toLong(),
+            duplicates_found = session.duplicatesFound.toLong(),
             seen = if (session.seen) 1L else 0L,
         )
     }

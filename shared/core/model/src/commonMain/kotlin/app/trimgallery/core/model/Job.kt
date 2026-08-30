@@ -54,4 +54,22 @@ data class Job(
     /** Bytes saved, or null while the job is still running. */
     val saved: Long?
         get() = if (originalSize != null && newSize != null) originalSize - newSize else null
+
+    /**
+     * New size as a fraction of the old — BUILD.md § 14's *"factor"*.
+     *
+     * The field test's headline number, and the one LAUNCH.md's alpha gate is written
+     * against (*"≥ 30% median video saving"*). Derived rather than stored, so it cannot
+     * disagree with the two sizes it comes from.
+     */
+    val factor: Double?
+        get() {
+            val from = originalSize ?: return null
+            val to = newSize ?: return null
+            return if (from <= 0) null else to.toDouble() / from
+        }
+
+    /** The saving as a fraction, 0..1. Null until both sizes are known. */
+    val savedFraction: Double?
+        get() = factor?.let { (1.0 - it).coerceIn(0.0, 1.0) }
 }

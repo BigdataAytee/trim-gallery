@@ -822,6 +822,62 @@ all of it is unit tested against fakes.
   one, and the verifier is what makes a wrong threshold cost a re-encode rather than
   quality.
 
+## Milestone 13 — the field test
+
+- **`files_indexed` and `duplicates_found` were missing from `run_session`.** BUILD.md § 14
+  lists both on the per-night metrics (a supplement to SCHEMA.md's table, recorded here).
+  Indexing runs in the same pass as the optimisation and keeps running after the free cap is
+  reached, so a night with `files_done = 0` may have done exactly what the user was
+  promised — and with only `filesDone` to go on it looked like a night that did nothing.
+- **GB per hour is measured against time worked, not wall clock.** A night plugged in for
+  eight hours that worked for forty minutes freed its gigabytes in forty minutes; the rest
+  was the guards doing their job. Wall clock would make a well-behaved build look slow and
+  reward one that ignored the thermal gate.
+- **The saving is a median, and declined files contribute nothing rather than zero.** One
+  drone clip that compresses to a tenth carries a mean on its own; and counting skips as
+  zero-saving would report a device as saving less the more carefully it declined to touch
+  things.
+- **Video and photo savings are reported apart.** LAUNCH.md's gate is about video, and a
+  library of screenshots must not answer for it.
+- **The restore rate counts only entries that reached a decision.** One still in the bin has
+  not been declined, it has not been looked at, and counting it as a success would flatter
+  the number for the whole retention period.
+- **The alpha gate is judged on the worst device, not the average.** The point of testing on
+  three is to find the one that behaves differently, and PRD.md names the low-end chip as
+  the risk. Pooling lets two good phones carry a bad one.
+- **A criterion with no data fails.** Not "n/a": the field test exists to produce the
+  evidence, and a build that shipped because nobody measured the restore rate is the failure
+  the gate is for. Reporting distinguishes the two cases — a criterion failing for missing
+  evidence says so and names how many devices reported, rather than blaming a partial number
+  and sending someone to fix a build that was never wrong.
+- **"Zero thermal complaints" is measured as stand-downs per night, at most two.** A
+  complaint is a person and cannot be counted from a log. One pause a night is the thermal
+  gate working; three is the pass fighting the phone.
+- **The diagnostics file is built from an explicit list of permitted fields**, not by
+  serialising existing rows. It is the only file this app produces that is meant to leave
+  the device, and building it field by field is what makes the redaction survive somebody
+  adding a column later. Excluded: filenames, paths and SAF URIs; locations; every timestamp
+  but the export's own date; content hashes, exact and perceptual; everything the index
+  produced; and row ids, since a UUIDv7 embeds the millisecond it was minted and a list of
+  them is a timeline. An error is a flag, never its message, because messages quote paths.
+- **The redaction is tested by sentinel**, not by inspection: the report is built from an
+  item whose every string is a distinctive token and the test asserts none appear in the
+  output. That is what catches the next field added carelessly.
+- **The export lives in its own cache subdirectory.** The cache root also holds the
+  encoder's temp files, which are copies of the user's originals mid-optimisation; a
+  `FileProvider` pointed at the root would make a granted URI for one of those reachable.
+- **`ThresholdFit` refuses rather than extrapolates.** A target past the ends of a sweep, or
+  a sweep that is not monotone, returns a reason instead of a number. Real sweeps rise —
+  both metrics measure the same thing badly and well — so one that does not is a broken
+  measurement, and fitting through it bakes noise into a threshold governing the whole
+  library.
+- **The shipped threshold rounds up.** A tenth of a decibel too high costs a sliver of space
+  per file; a tenth too low costs quality on an app whose claim is that the difference is
+  invisible. The rounding goes where being wrong is cheap.
+- **The fitting reproduces milestone 2's published number.** Given that table it returns
+  39.8 for VMAF 95, which is what `shared/native/calibration/README.md` reports — so the
+  code that will produce the next threshold is checked against the one that exists.
+
 ## Open questions added
 - **The Compose layer has never been compiled.** Every Compose Multiplatform version
   resolves `androidx.annotation`, `androidx.collection` and `androidx.lifecycle` from
@@ -896,3 +952,17 @@ all of it is unit tested against fakes.
   conservative end of what codec comparisons report for hardware encoders. It only sets
   where the first probe lands, so being wrong costs a probe rather than quality — but it is
   the kind of constant milestone 13 should replace with something this app measured.
+
+- **The field test itself has not been run, and no number in this repository is a
+  field-test result.** It needs three device classes, a fortnight and a real library.
+  FIELD_TEST.md is the procedure — devices, library, nights, what to export and how to read
+  the gate — written so that the run produces a comparable answer rather than an anecdote.
+  Every number the run is meant to settle is listed there and marked as open here.
+- **The XPSNR threshold is still milestone 2's provisional one**, from software x265 on one
+  640×360 clip, and AV1 has no calibration at all. The fitting and the per-bucket harness
+  now exist; what is missing is the sweep on device, per (resolution, codec) bucket, against
+  the milestone 1 encoder.
+- **`Diagnostics` has no producer wired into the UI.** The report builder, the redaction and
+  the Android file-and-share are written; the Settings → Privacy row that calls them is
+  Compose, which cannot be built here. The decision that matters — what may be in the file —
+  is the half that is written and tested.

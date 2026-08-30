@@ -19,13 +19,14 @@ and nothing ever leaves your phone.
 | [MONETIZATION.md](MONETIZATION.md) | Freemium tiers and the rules the paywall may never break. |
 | [LAUNCH.md](LAUNCH.md) | Release phases, store listing, staged rollout. |
 | [CHANGELOG.md](CHANGELOG.md) | What has actually been built so far, and what is still missing. |
+| [FIELD_TEST.md](FIELD_TEST.md) | The milestone 13 procedure: devices, library, nights, and how the alpha gate is read. |
 
 Claude Code skills live in [`.claude/skills/`](.claude/skills). Three are specific to
 this project and encode its hard rules: `codec-priority`, `safe-replace`, `ndk-build`.
 
 ## Status
 
-Milestones 1 through 12 of [BUILD.md section 13](BUILD.md) are built: the Media3 Transformer
+Milestones 1 through 13 of [BUILD.md section 13](BUILD.md) are built: the Media3 Transformer
 encode, XPSNR and libvmaf over the NDK, the probe/search/predictor loop, the
 verify-and-safe-replace path with undo and offload, the night scheduler with its guards,
 the triage rules and skip list, the photo pipeline (jpegli, SSIMULACRA 2, JPEG XL, oxipng),
@@ -36,7 +37,12 @@ video trim, with the save policy that decides when an edit needs no encoder at a
 AV1 path: per-encoder capabilities, the codec choice, and a search bracket that knows AV1
 reaches the same quality at two thirds of HEVC's bitrate.
 
-All six native functions are verified against their upstream binaries. 710 shared JVM tests
+Milestone 13's instrumentation is written — the field metrics, the LAUNCH.md alpha gate, the
+redacted diagnostics export and the threshold fitting — but **the field test itself has not
+been run**: it needs three device classes and a fortnight. FIELD_TEST.md is the procedure,
+and no number in this repository is presented as a field-test result.
+
+All six native functions are verified against their upstream binaries. 763 shared JVM tests
 and 47 build-guard tests pass. Nothing Android or Compose has been
 compiled — Google Maven is unreachable from the build environment, which is why every
 decision the app makes lives in platform-free Kotlin that can be tested without it. See
