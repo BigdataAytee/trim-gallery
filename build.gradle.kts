@@ -28,10 +28,8 @@ subprojects {
     // CI got far enough to run code generation before linting.
     extensions.configure<org.jlleitschuh.gradle.ktlint.KtlintExtension> {
         filter {
-            exclude { element ->
-                val sep = File.separator
-                element.file.path.contains("${sep}build${sep}")
-            }
+            val generated = "${File.separator}build${File.separator}"
+            exclude { element -> element.file.path.contains(generated) }
         }
     }
 

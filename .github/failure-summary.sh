@@ -11,7 +11,10 @@
 # hundred of them — they filled the summary and pushed the actual failure past `head`.
 set -u
 
-pattern='^e: |FAILURE: |What went wrong|Caused by: |> Task .* FAILED|Analysis failed|VIOLATION|misconfigured|no manifests to scan|no sources to scan'
+# The last alternative is ktlint's own format — `/path/File.kt:12:5 Message` — which none
+# of the Gradle-shaped patterns match, so a style violation used to reach the annotations
+# as nothing but the name of the task that failed.
+pattern='^e: |FAILURE: |What went wrong|Caused by: |> Task .* FAILED|Analysis failed|VIOLATION|misconfigured|no manifests to scan|no sources to scan|^/.*\.kts?:[0-9]+:[0-9]+ '
 
 for log in "$@"; do
   [ -f "$log" ] || continue
