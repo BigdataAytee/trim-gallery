@@ -24,9 +24,12 @@ kotlin {
         commonMain {
             dependencies {
                 implementation(libs.kotlinx.coroutines.core)
-                implementation(projects.shared.core.model)
-                implementation(projects.shared.core.domain)
-                implementation(projects.shared.engineApi)
+                // Milestone 5: the "stop by" setting is a wall-clock local time, so resolving
+                // it to an instant needs a time zone and a calendar, not just arithmetic.
+                api(libs.kotlinx.datetime)
+                api(projects.shared.core.model)
+                api(projects.shared.core.domain)
+                api(projects.shared.engineApi)
             }
         }
         commonTest {

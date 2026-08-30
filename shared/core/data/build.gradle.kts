@@ -26,9 +26,15 @@ kotlin {
             dependencies {
                 implementation(libs.kotlinx.coroutines.core)
                 implementation(libs.kotlinx.datetime)
-                implementation(libs.sqldelight.runtime)
+                api(libs.sqldelight.runtime)
                 implementation(libs.sqldelight.coroutines)
-                implementation(projects.shared.core.model)
+                api(projects.shared.core.model)
+                // Milestone 4/5: this module implements the pipeline's ports — UndoJournal,
+                // OriginalLocator, NightFacts and the night queue — so the shared
+                // orchestration never has to know a database exists.
+                api(projects.shared.core.domain)
+                api(projects.shared.core.pipeline)
+                api(projects.shared.engineApi)
             }
         }
         commonTest {
@@ -39,7 +45,7 @@ kotlin {
             }
         }
         androidMain.dependencies {
-            implementation(libs.sqldelight.driver.android)
+            api(libs.sqldelight.driver.android)
             implementation(libs.androidx.datastore.preferences)
         }
         jvmMain.dependencies {

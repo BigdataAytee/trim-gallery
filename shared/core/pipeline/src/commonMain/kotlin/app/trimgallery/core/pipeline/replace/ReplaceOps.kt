@@ -81,3 +81,18 @@ interface UndoJournal {
     /** Moves a row through `ACTIVE → RESTORED | EXPIRED | OFFLOADED`. */
     suspend fun setState(entry: UndoEntry, state: UndoState)
 }
+
+/**
+ * Finds the library identity a parked original belongs to.
+ *
+ * Restoring means putting the file back under the name and directory it came from, and
+ * after a successful replace that identity is exactly `media_item.platform_ref`: the
+ * replacement took the original's place, so the reference still names the slot. Reading it
+ * from the database rather than remembering it in memory is what lets a restore work after
+ * the process has been killed, which on a night pass is the normal case rather than the
+ * exception.
+ */
+fun interface OriginalLocator {
+    /** Where [mediaId] lives in the user's library, or null if the row is gone. */
+    suspend fun refFor(mediaId: String): MediaRef?
+}

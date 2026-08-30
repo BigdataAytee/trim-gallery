@@ -144,7 +144,19 @@ interface MetadataCopier {
 /** The stop conditions, evaluated in the order fixed by ARCHITECTURE.md § 9. */
 interface Guards {
     suspend fun check(): GuardResult
+
+    /** The live reading, for the Space screen. Higher is hotter; NaN where unsupported. */
     val thermalHeadroom: StateFlow<Float>
+
+    /**
+     * How many times this run has stood down for heat.
+     *
+     * Not in the § 5 sketch (recorded in PROJECT.md): SCHEMA.md gives `run_session` a
+     * `thermal_pauses` column, and USER_JOURNEY.md § 14 shows it as *"Paused for heat 3×
+     * last night"*. Reading it from whatever did the pausing is the only way the number
+     * cannot drift from the behaviour it describes.
+     */
+    val thermalPauses: Int
 }
 
 /** WorkManager on Android, BGProcessingTask on iOS. */

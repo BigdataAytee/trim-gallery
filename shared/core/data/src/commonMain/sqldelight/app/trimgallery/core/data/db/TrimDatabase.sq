@@ -240,6 +240,21 @@ LIMIT :limit;
 selectByStatus:
 SELECT * FROM media_item WHERE status = ?;
 
+selectMediaById:
+SELECT * FROM media_item WHERE id = ?;
+
+-- How much room the night needs: BUILD.md § 6 wants twice this free, because the original
+-- and its replacement both exist between the encode and the commit.
+largestPendingBytes:
+SELECT COALESCE(MAX(size), 0) AS bytes FROM media_item WHERE status = 'CANDIDATE';
+
+-- What the next file is expected to give back, for the free tier's allowance.
+nextCandidateSaving:
+SELECT COALESCE(est_saving, 0) AS bytes FROM media_item
+WHERE status = 'CANDIDATE'
+ORDER BY est_saving DESC
+LIMIT 1;
+
 -- The grid. Hidden items never appear anywhere but the locked folder.
 selectGallery:
 SELECT * FROM media_item WHERE (flags & 128) = 0 ORDER BY taken_at DESC;
@@ -280,11 +295,8 @@ VALUES (?, ?, ?, ?, ?, ?, ?, 'ACTIVE', ?);
 selectUndoForMedia:
 SELECT * FROM undo_entry WHERE media_id = ? AND state = 'ACTIVE';
 
-markUndoRestored:
-UPDATE undo_entry SET state = 'RESTORED' WHERE id = ?;
-
-markUndoExpired:
-UPDATE undo_entry SET state = 'EXPIRED' WHERE id = ?;
+setUndoState:
+UPDATE undo_entry SET state = :state WHERE id = :id;
 
 deleteUndoEntry:
 DELETE FROM undo_entry WHERE id = ?;
@@ -312,6 +324,15 @@ WHERE platform = ? AND device = ? AND camera_model = ? AND codec = ?
 
 lastRunSession:
 SELECT * FROM run_session ORDER BY started_at DESC LIMIT 1;
+
+-- Written after every file (ARCHITECTURE.md § 7). A replace rather than an update so the
+-- first checkpoint of a night creates the row and the rest overwrite it: a night that is
+-- killed between the two would otherwise have nothing to show for itself.
+upsertRunSession:
+INSERT OR REPLACE INTO run_session(
+    id, started_at, finished_at, stop_reason, files_done, files_skipped, files_failed,
+    bytes_freed, minutes_worked, energy_wh, thermal_pauses, seen
+) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);
 
 -- MONETIZATION.md § Phase 1: the free tier caps GB freed per calendar month, so the cap
 -- is measured from the sessions themselves rather than a counter that could drift.

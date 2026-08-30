@@ -11,6 +11,7 @@ import app.trimgallery.core.model.UndoEntry
 import app.trimgallery.core.model.UndoLocation
 import app.trimgallery.core.model.UndoState
 import app.trimgallery.core.pipeline.replace.OffloadMove
+import app.trimgallery.core.pipeline.replace.OriginalLocator
 import app.trimgallery.core.pipeline.replace.UndoJournal
 import app.trimgallery.engine.UndoStore
 import java.io.File
@@ -40,19 +41,6 @@ class UndoBinAndroid(
     private val retentionDays: () -> Int = { TrashPolicy.DEFAULT_RETENTION_DAYS },
     private val clock: Clock = Clock.System,
 ) : UndoStore {
-
-    /**
-     * Finds the library identity a parked original belongs to.
-     *
-     * Restoring means putting the file back under the name and directory it came from,
-     * and after a successful replace that identity is exactly `media_item.platform_ref` —
-     * the replacement took the original's place, so the URI still names the slot. Reading
-     * it from the database rather than caching it in memory is what lets a restore work
-     * after the process has been killed, which on a night pass is the normal case.
-     */
-    fun interface OriginalLocator {
-        suspend fun refFor(mediaId: String): MediaRef?
-    }
 
     private val resolver: ContentResolver get() = context.contentResolver
 

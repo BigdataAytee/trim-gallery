@@ -1,5 +1,97 @@
 # Changelog
 
+## Milestone 5 — scheduling, thermal polling, caps, alarm-aware stop
+
+BUILD.md rule 6 in code: *"Pause when thermal headroom > 0.7; cap work per night; stop 30
+min before the user's alarm."*
+
+### The guards (shared, `core/pipeline/night/`)
+
+`GuardChain` evaluates the ARCHITECTURE.md § 9 order — Foreground → Charging →
+BatteryFull? → Thermal → StopBy/Alarm → Storage → Cap — and a failing test found the rule
+that order alone does not express:
+
+- **A stop is never masked by an earlier pause.** The § 9 order decides which reason the
+  user is *told* among conditions of equal severity; severity decides *behaviour*. The
+  first version returned `Pause(FOREGROUND)` for a phone that was in use **and unplugged**,
+  which would have left the pass sitting "paused because you're using it" while running on
+  battery — the exact thing rule 6 exists to prevent. Pauses are now collected and the
+  chain runs to the end; a stop returns immediately.
+
+- **`ThermalGate` has two thresholds, and the gap is the point.** Pause above 0.7, resume
+  below 0.5, hold the previous answer in between. A single threshold on a value hovering
+  around it starts and stops the encoder several times a second, which heats the phone
+  *more* than running steadily would and produces a History screen reading "paused for heat
+  400×". Pauses are counted per stand-down, not per reading. A device that reports NaN —
+  no thermal sensing, or polled faster than every 10 s — is treated as *no information*,
+  which never resumes a phone that was already hot.
+
+- **`NightBudget` caps work, not elapsed time.** A pass plugged in for five hours but stood
+  down for four of them has used one hour of its sixty. Counting wall clock would let a hot
+  night quietly consume a cool one's allowance.
+
+- **`AlarmWindow` goes through the calendar, not the arithmetic.** "Stop by 06:00" at 23:00
+  means six *tomorrow*; at exactly 06:00 it means tomorrow too, or a run started on the
+  boundary would end before a single file. A stale alarm in the past is ignored rather than
+  treated as overdue — honouring one would stop every night from then on, a bug that looks
+  exactly like "the app just stopped working". Tested across a daylight-saving change,
+  where a day is 23 hours long and adding milliseconds lands an hour out.
+
+- **`RetryPolicy`** is 5/15/60 s (ARCHITECTURE.md § 13), fixed rather than exponential
+  because the thing being waited for is a person: the codec was reclaimed by a camera or a
+  video call.
+
+### The loop (`NightRun`)
+
+ARCHITECTURE.md § 7's pass, platform-free and driven with virtual time in tests.
+
+- **Guards are checked *during* a file, not only between them.** A full encode is minutes
+  long; checking only at the boundaries means a phone that is picked up keeps working for
+  the rest of the file. The watchdog cancels the step within one 5-second poll. A
+  cancellation that did **not** come from the poll — the OS revoking the window — is
+  rethrown, so a lost window is never recorded as a thermal pause.
+- **An interrupted file goes back on the queue**, not into the skipped or failed list.
+  Nothing was wrong with it.
+- **A pause hands the window back after 30 minutes** rather than holding a wakelock until
+  morning.
+- Checkpoints after every file and while paused, so a night that is killed still explains
+  itself.
+
+### Android
+
+`AndroidGuards` (reads only: `getThermalHeadroom(30)`, `BatteryManager`, `StatFs` on the
+scratch volume, `AlarmManager.getNextAlarmClock`), `WorkManagerScheduler`,
+`ForegroundWatcher`, and `NightWorker`.
+
+Two platform facts drove design decisions worth recording:
+
+- **The night pass must be a foreground service.** WorkManager stops an ordinary worker
+  after ten minutes and BUILD.md budgets sixty. USER_JOURNEY.md § 3 says the night has no
+  UI, so the required notification goes on a `IMPORTANCE_MIN` channel — silent, no badge,
+  no heads-up. `mediaProcessing` service type where the platform has it (API 35+), because
+  Android 15's six-hour daily budget for `dataSync` would eventually cut nights short.
+- **"Full" is 98%, not 100.** Many phones sit at 99 for a long time on a topped-up battery,
+  and a pass waiting for a number it may never see would simply never run.
+
+### Milestone 4's gap, closed
+
+`TrimRepository` implements `UndoJournal`, `OriginalLocator`, `NightFacts` and the night
+queue against SQLDelight, so `SafeReplacerAndroid` and `NightWorker` are now constructible.
+One class for several ports because they read and write the same tables in the same
+transactions; splitting them would let two of them disagree about what the queue is. Every
+query is spelled with an explicit column mapper rather than the generated row type, so a
+schema change fails to compile instead of silently mapping the wrong value.
+
+`MediaFlagsBits` — the SCHEMA.md bitmask — is split out as pure Kotlin and tested
+exhaustively over all 256 combinations, because a pair of transposed constants would pass
+any sampled test and bit 128 is what hides the user's photos.
+
+### Verified
+
+- **322 shared JVM tests**, all passing (up from 258).
+- **43 build-guard tests**, all passing; guards run clean across all 99 source files.
+
+
 ## Milestone 4 — verify, safe replace, undo and offload
 
 The gate in front of the user's only copy of their photos, and the swap behind it.

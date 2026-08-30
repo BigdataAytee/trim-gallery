@@ -126,6 +126,8 @@ dependencies {
     implementation(libs.media3.ui)
 
     implementation(libs.kotlinx.coroutines.android)
+    // Milestone 5: the monthly cap resets on the user's own calendar month, not UTC's.
+    implementation(libs.kotlinx.datetime)
 
     // DI: Koin, not Hilt — Hilt is JVM/Android only and cannot reach Kotlin/Native.
     // ARCHITECTURE.md § 3 allows the swap; recorded in PROJECT.md.

@@ -156,7 +156,17 @@ sealed interface GuardResult {
     data class Stop(val reason: PauseReason) : GuardResult
 }
 
-enum class PauseReason { FOREGROUND, NOT_CHARGING, BATTERY_NOT_FULL, THERMAL, STOP_BY_TIME, STORAGE_LOW, CAP_REACHED }
+/**
+ * Why the pass stood down, in the order ARCHITECTURE.md § 9 evaluates them.
+ *
+ * Every one of these is shown to the user eventually — in History, or as "Paused for heat"
+ * — so the distinctions here are the distinctions the user is told about. In particular
+ * [CAP_REACHED] and [FREE_TIER_CAP] are deliberately separate: one means tonight's minutes
+ * are spent and work resumes tomorrow, the other means the month's 3 GB are spent and Pro
+ * removes the limit (MONETIZATION.md § Conversion moments). Collapsing them would either
+ * nag a user who is not capped or fail to offer Pro to one who is.
+ */
+enum class PauseReason { FOREGROUND, NOT_CHARGING, BATTERY_NOT_FULL, THERMAL, STOP_BY_TIME, STORAGE_LOW, CAP_REACHED, FREE_TIER_CAP }
 
 /** What the OS scheduler should wait for before waking the night pass. */
 data class NightConstraints(

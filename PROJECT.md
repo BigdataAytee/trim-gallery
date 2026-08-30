@@ -427,6 +427,65 @@ all of it is unit tested against fakes.
   rather than an error. Existing undo rows keep the expiry they were created with:
   shortening it retroactively would delete originals the user was promised.
 
+## Milestone 5 — scheduling
+
+- **A stop is never masked by a pause.** ARCHITECTURE.md § 9's order decides which reason
+  the user is told among conditions of equal severity; severity decides behaviour. The
+  chain therefore collects pauses and runs to the end, returning a stop the moment one is
+  found. Found by a failing test: the first version reported "paused because you're using
+  the phone" for a device that was in use *and unplugged*.
+- **`PauseReason.FREE_TIER_CAP` was added to the § 5 enum.** MONETIZATION.md needs "your
+  month's 3 GB are spent, Pro removes the limit" to be distinguishable from "tonight's 60
+  minutes are up, it resumes tomorrow". Collapsing them would either nag a user who is not
+  capped or fail to offer Pro to one who is.
+- **`Guards` gained `thermalPauses`.** SCHEMA.md gives `run_session` the column and
+  USER_JOURNEY.md § 14 shows it as "Paused for heat 3× last night"; reading it from
+  whatever did the pausing is the only way it cannot drift from the behaviour.
+- **`AndroidGuards` merges what ARCHITECTURE.md § 3 lists as four classes**
+  (`ThermalGuardAndroid`, `ForegroundGuard`, `ChargingGuard`, `AlarmGuardAndroid`). They
+  read from one snapshot on purpose: polling the battery between the charging check and the
+  battery-full check is how you get "stopped because unplugged" on a phone that is plugged
+  in. The *decisions* they used to own are in `GuardChain`, which is platform-free and
+  tested.
+- **Storage is a pause that escalates to a stop.** ARCHITECTURE.md § 13 says pause, and it
+  is right — a completed replace, an offload or the undo sweep genuinely frees space
+  mid-run. But a phone that is simply full never clears it, so after six consecutive checks
+  the night is called off rather than polling until morning.
+- **A stood-down pass hands its window back after 30 minutes.** Holding a WorkManager
+  window while paused stops the OS scheduling anything else and burns the battery this app
+  exists to protect.
+- **The night pass runs as a foreground service.** Not a choice: WorkManager stops an
+  ordinary worker after ten minutes and BUILD.md § 6 budgets sixty. USER_JOURNEY.md § 3
+  wants no UI at night, so the required notification is `IMPORTANCE_MIN` — silent, no
+  badge, no heads-up — and exists to answer "what is using my phone at 3am".
+  `FOREGROUND_SERVICE_TYPE_MEDIA_PROCESSING` on API 35+, `DATA_SYNC` below, because Android
+  15 applies a six-hour daily budget to `dataSync` that would cut long nights short.
+- **"Battery full" is 98%.** Many phones report 99 for a long time on a topped-up battery,
+  and a pass waiting for 100 would never run.
+- **`WorkManager` uses `ExistingPeriodicWorkPolicy.KEEP`.** Replacing the request resets the
+  period, so a settings change at 23:59 would push tonight's window past the morning.
+- **Free space is measured on the scratch volume, not the granted folder's.** The temp file
+  is what needs the room — the encode writes there before anything is committed — so on a
+  phone with an SD card, measuring the library's volume answers the wrong question.
+- **`TrimRepository` implements several ports in one class.** `UndoJournal`,
+  `OriginalLocator`, `NightFacts`, and the night queue all read and write the same tables
+  inside the same transactions; separate classes would either share a connection through a
+  fourth object or disagree about what the queue currently is.
+- **Every SQLDelight query is read through an explicit column mapper**, not the generated
+  row type, so a schema change that drops or reorders a column fails to compile in the
+  repository instead of silently mapping the wrong value.
+- **`NightRun.Queue.next()` claims its row.** The candidate is moved to `PROCESSING` in the
+  same transaction it is selected in, so a second window opening while the first is still
+  running cannot pick up the same file.
+- **The monthly cap resets on the user's calendar month**, resolved through their own time
+  zone: a UTC boundary would reset someone in Auckland thirteen hours early.
+- **`shared/core/data` depends on `shared/core/pipeline`, not the reverse.** The repository
+  implements the pipeline's ports so the orchestration never has to know a database exists.
+- **`shared/core/pipeline` now exposes its dependencies with `api`.** `GuardChain`,
+  `NightFacts` and `NightRun` name `Settings`, `Tier`, `MediaItem` and the engine
+  interfaces in their public signatures; with `implementation` no consumer could compile
+  against them — the same defect already fixed once in `shared/feature/*`.
+
 ## Open questions added
 - **The Compose layer has never been compiled.** Every Compose Multiplatform version
   resolves `androidx.annotation`, `androidx.collection` and `androidx.lifecycle` from
@@ -436,12 +495,24 @@ all of it is unit tested against fakes.
 - Whether a Compose Multiplatform host on iOS is the right call for the viewer, or
   whether the shared-element motion in BUILD.md § 9 wants SwiftUI there. Revisit at
   milestone 8.
-- **The `UndoJournal` and `OriginalLocator` bindings are not wired.** The SQLDelight schema
-  they read is in place (SCHEMA.md `undo_entry`), but the repository layer that implements
-  them lands with milestone 5; until then `SafeReplacerAndroid` cannot be constructed by
-  Koin. The shared ordering it delegates to is fully tested.
-- **Nothing Android in milestone 4 has been compiled or run**, for the same Google Maven
-  reason as the Compose layer. The SAF mechanics, the mp4parser rewrite-and-rename and the
-  `MediaExtractor` probe are all written to documented behaviour and reviewed, not
-  executed. The decision logic they sit under — verify, ladder, replace ordering, rollback,
-  offload — is verified on the JVM, which is why it was pushed there.
+- **`NightRun.Step` is not bound.** It is `VideoOptimiseStep`, which chains triage →
+  search → encode → verify → replace; triage is milestone 6, and until it can decide what
+  belongs in the queue at all there is nothing honest to bind. Everything around it — the
+  scheduler, the guards, the loop, the queue, the checkpoint — is in place.
+- **Settings come from the documented defaults, not DataStore.** The Settings screen is
+  milestone 10; `TrimRepository` takes the reader as a parameter so wiring it later changes
+  one line.
+- **`androidApp` does not use the package layout in ARCHITECTURE.md § 3.** It puts storage
+  and scheduler classes in their own `storage/` and `scheduler/` packages; everything is
+  currently under `engine/`, because the obvious names (`app.trimgallery.storage`) would
+  read oddly beside the shared `app.trimgallery.engine`, and a rename of files that have
+  never been compiled is churn with no way to check it. To be done at the first real build,
+  when the compiler can confirm the imports.
+- **Nothing Android in milestones 4 and 5 has been compiled or run**, for the same Google Maven
+  reason as the Compose layer. The SAF mechanics, the mp4parser rewrite-and-rename, the
+  `MediaExtractor` probe, the WorkManager constraints and the SQLDelight repository are all
+  written to documented behaviour and reviewed, not executed — the repository in particular
+  names generated symbols this environment cannot produce. The decision logic they sit
+  under — verify, ladder, replace ordering, rollback, offload, guard order, thermal
+  hysteresis, budgets, the alarm window and the run loop — is verified on the JVM, which is
+  why it was pushed there.

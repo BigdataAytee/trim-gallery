@@ -1,5 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
-<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools">
 
     <!--
       There is deliberately no network permission here, and there never will be.
@@ -14,6 +15,18 @@
       persistable URI permission.
     -->
 
+    <!--
+      Milestone 5. The night pass is a long-running worker, which on Android means a
+      foreground service: WorkManager stops an ordinary worker after ten minutes and
+      BUILD.md section 6 budgets sixty. The notification it requires is posted on a
+      minimum-importance channel (see NightWorker).
+    -->
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MEDIA_PROCESSING" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_DATA_SYNC" />
+    <!-- The morning card notification (USER_JOURNEY.md section 3). -->
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+
     <uses-feature android:name="android.hardware.camera" android:required="false" />
 
     <application
@@ -23,6 +36,15 @@
         android:label="@string/app_name"
         android:supportsRtl="true"
         android:theme="@style/Theme.TrimGallery">
+
+        <!--
+          WorkManager's own service, declared with the types the night pass uses so the
+          platform accepts setForeground() from NightWorker.
+        -->
+        <service
+            android:name="androidx.work.impl.foreground.SystemForegroundService"
+            android:foregroundServiceType="mediaProcessing|dataSync"
+            tools:node="merge" />
 
         <activity
             android:name=".ui.MainActivity"
