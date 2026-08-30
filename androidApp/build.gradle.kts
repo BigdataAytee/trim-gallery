@@ -173,7 +173,17 @@ androidComponents {
         }
 
         // Fail before anything shippable is produced, not only on `check`.
-        tasks.named("assemble$capitalised") { dependsOn(verify) }
+        //
+        // `matching {}.configureEach` rather than `named()`: onVariants runs while AGP is
+        // still building the variant model, before it has registered the per-variant
+        // lifecycle tasks, so `named("assembleDebug")` throws "Task with name
+        // 'assembleDebug' not found in project ':androidApp'" — at configuration time,
+        // which took down every job in the build, including the three that never look at
+        // Android. This form binds the dependency when the task is realised, which is
+        // before its own dependency graph is walked, and never realises anything that
+        // would not have run anyway.
+        tasks.matching { it.name == "assemble$capitalised" }.configureEach { dependsOn(verify) }
+        // ALL_TASK is registered by the guards plugin at apply time, so it exists here.
         tasks.named(TrimGuardsPlugin.ALL_TASK) { dependsOn(verify) }
     }
 }

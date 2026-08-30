@@ -1011,6 +1011,21 @@ Recorded by class, as each one is fixed:
   reasoning finds: this environment cannot resolve the Android plugin at all, so the build
   had never been configured anywhere.
 
+- **An eager task lookup inside `androidComponents.onVariants`.** The merged-manifest guard
+  wired itself onto the variant's assemble task with `tasks.named("assemble$capitalised")`.
+  `onVariants` runs while AGP is still *building the variant model*, before it has
+  registered the lifecycle tasks that model produces, so the lookup threw "Task with name
+  'assembleDebug' not found in project ':androidApp'". Configuration-time again, and
+  therefore all four jobs again — Gradle configures every project on every invocation, so
+  the iOS job on a Mac died inside `androidApp`. Fixed with
+  `tasks.matching { it.name == … }.configureEach`, which binds when the task is realised —
+  before its own dependency graph is walked, and without realising anything that would not
+  have run anyway.
+
+  Two configuration-time faults in a row is the shape of the problem: nothing in this
+  repository had ever been *configured*, so the errors found first are not the code's, they
+  are the build's, and each one hides every error behind it.
+
 ### The guards guard themselves
 
 - **A rule declares the languages it polices, and must have a planted violation in each.**

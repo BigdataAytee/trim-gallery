@@ -146,6 +146,7 @@ jobs:
       - uses: gradle/actions/setup-gradle@v4
 
       - name: Static analysis
+        id: lint
         run: |
           set -o pipefail
           ./gradlew detekt ktlintCheck --console=plain 2>&1 | tee /tmp/lint.log
@@ -154,7 +155,7 @@ jobs:
       # and the "What went wrong" block, and a reader — human or otherwise — should not have
       # to scroll a thousand frames of org.gradle.internal to reach them.
       - name: Failure summary
-        if: failure()
+        if: failure() && steps.lint.conclusion == 'failure'
         run: |
           echo "--- compiler errors and causes ---"
           grep -E "^e: |^w: .*[Ee]rror|FAILURE: |What went wrong|^> |Caused by: " /tmp/lint.log | head -60 || true
@@ -162,6 +163,7 @@ jobs:
       # assembleDebug depends on the merged-manifest guard, so a network permission
       # arriving through a dependency fails here even if no source changed.
       - name: Assemble
+        id: assemble
         run: |
           set -o pipefail
           ./gradlew :androidApp:assembleDebug --console=plain 2>&1 | tee /tmp/assemble.log
@@ -170,7 +172,7 @@ jobs:
       # and the "What went wrong" block, and a reader — human or otherwise — should not have
       # to scroll a thousand frames of org.gradle.internal to reach them.
       - name: Failure summary
-        if: failure()
+        if: failure() && steps.assemble.conclusion == 'failure'
         run: |
           echo "--- compiler errors and causes ---"
           grep -E "^e: |^w: .*[Ee]rror|FAILURE: |What went wrong|^> |Caused by: " /tmp/assemble.log | head -60 || true
