@@ -29,10 +29,21 @@ jobs:
       # fires. A guard that has never been shown to fire is not a guard, so it is proved
       # here before the step below trusts it.
       - name: Guard self-tests
-        run: ./gradlew -p build-logic test --stacktrace
+        run: ./gradlew -p build-logic test --console=plain
 
       - name: Run guards over every module
-        run: ./gradlew guards --stacktrace
+        run: |
+          set -o pipefail
+          ./gradlew guards --console=plain 2>&1 | tee /tmp/guards.log
+
+      # Gradle failures are mostly stack trace. The interesting lines are compiler errors
+      # and the "What went wrong" block, and a reader — human or otherwise — should not have
+      # to scroll a thousand frames of org.gradle.internal to reach them.
+      - name: Failure summary
+        if: failure()
+        run: |
+          echo "--- compiler errors and causes ---"
+          grep -E "^e: |^w: .*[Ee]rror|FAILURE: |What went wrong|^> |Caused by: " /tmp/guards.log | head -60 || true
 
       - uses: actions/upload-artifact@v4
         if: always()
@@ -57,7 +68,18 @@ jobs:
       # The JVM half of ARCHITECTURE.md § 14. iOS targets are only declared on macOS, so
       # this configures and runs on Linux without a Kotlin/Native toolchain.
       - name: Shared unit tests
-        run: ./gradlew sharedTest --stacktrace
+        run: |
+          set -o pipefail
+          ./gradlew sharedTest --console=plain 2>&1 | tee /tmp/shared.log
+
+      # Gradle failures are mostly stack trace. The interesting lines are compiler errors
+      # and the "What went wrong" block, and a reader — human or otherwise — should not have
+      # to scroll a thousand frames of org.gradle.internal to reach them.
+      - name: Failure summary
+        if: failure()
+        run: |
+          echo "--- compiler errors and causes ---"
+          grep -E "^e: |^w: .*[Ee]rror|FAILURE: |What went wrong|^> |Caused by: " /tmp/shared.log | head -60 || true
 
       - uses: actions/upload-artifact@v4
         if: always()
@@ -88,7 +110,18 @@ jobs:
       # Native artifact, or an API that is in the JVM standard library and not in
       # kotlin-stdlib-common. This can.
       - name: Compile every shared module for both iOS targets
-        run: ./gradlew iosCompile --stacktrace
+        run: |
+          set -o pipefail
+          ./gradlew iosCompile --console=plain 2>&1 | tee /tmp/ios.log
+
+      # Gradle failures are mostly stack trace. The interesting lines are compiler errors
+      # and the "What went wrong" block, and a reader — human or otherwise — should not have
+      # to scroll a thousand frames of org.gradle.internal to reach them.
+      - name: Failure summary
+        if: failure()
+        run: |
+          echo "--- compiler errors and causes ---"
+          grep -E "^e: |^w: .*[Ee]rror|FAILURE: |What went wrong|^> |Caused by: " /tmp/ios.log | head -60 || true
 
       - uses: actions/upload-artifact@v4
         if: always()
@@ -110,12 +143,34 @@ jobs:
       - uses: gradle/actions/setup-gradle@v4
 
       - name: Static analysis
-        run: ./gradlew detekt ktlintCheck --stacktrace
+        run: |
+          set -o pipefail
+          ./gradlew detekt ktlintCheck --console=plain 2>&1 | tee /tmp/lint.log
+
+      # Gradle failures are mostly stack trace. The interesting lines are compiler errors
+      # and the "What went wrong" block, and a reader — human or otherwise — should not have
+      # to scroll a thousand frames of org.gradle.internal to reach them.
+      - name: Failure summary
+        if: failure()
+        run: |
+          echo "--- compiler errors and causes ---"
+          grep -E "^e: |^w: .*[Ee]rror|FAILURE: |What went wrong|^> |Caused by: " /tmp/lint.log | head -60 || true
 
       # assembleDebug depends on the merged-manifest guard, so a network permission
       # arriving through a dependency fails here even if no source changed.
       - name: Assemble
-        run: ./gradlew :androidApp:assembleDebug --stacktrace
+        run: |
+          set -o pipefail
+          ./gradlew :androidApp:assembleDebug --console=plain 2>&1 | tee /tmp/assemble.log
+
+      # Gradle failures are mostly stack trace. The interesting lines are compiler errors
+      # and the "What went wrong" block, and a reader — human or otherwise — should not have
+      # to scroll a thousand frames of org.gradle.internal to reach them.
+      - name: Failure summary
+        if: failure()
+        run: |
+          echo "--- compiler errors and causes ---"
+          grep -E "^e: |^w: .*[Ee]rror|FAILURE: |What went wrong|^> |Caused by: " /tmp/assemble.log | head -60 || true
 
       - uses: actions/upload-artifact@v4
         if: always()
