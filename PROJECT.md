@@ -1097,6 +1097,27 @@ Recorded by class, as each one is fixed:
   build-logic's classpath) and the merged manifest of every variant. Both halves have a
   test, and the report says SKIPPED rather than OK when it scanned nothing.
 
+- **The gallery keyed on a `Long` id the model has never had.** `GalleryScreen` took
+  `processingIds: Set<Long>` and kept tile rectangles in a `Map<Long, Rect>`, while
+  `MediaItem.id` is a `String` (SCHEMA.md). Three type errors in one file, in a module that
+  had never been compiled because Compose Multiplatform cannot resolve here — `androidx.
+  annotation`, `androidx.collection` and `androidx.lifecycle` are on Google Maven and
+  `org.jetbrains.compose` alone is on Maven Central, so there is no partial route either.
+  This is the class of error that only the Android and iOS jobs can find, and it is why they
+  exist.
+
+- **ktlint linted SQLDelight's generated code.** The plugin adds its generated interface to
+  the module's `commonMain` Kotlin source set, so `ktlintCommonMainSourceSetCheck` failed on
+  files nobody wrote and nobody can fix — the first time CI ran code generation before
+  linting. Excluded everything under a `build` directory.
+
+- **The source-boundary guard failed every module with no sources.** The same shape as the
+  manifest guard above: seven of the eight `shared/feature` modules are still empty shells,
+  and `include(":shared:core:model")` creates a container project for every path segment.
+  `requireSources` is now set from whether the project has a `src` directory at all, which
+  is the honest form of the rule — sources on disk and none found means the wiring broke;
+  no sources at all means there is nothing here to guard.
+
 ### The guards guard themselves
 
 - **A rule declares the languages it polices, and must have a planted violation in each.**

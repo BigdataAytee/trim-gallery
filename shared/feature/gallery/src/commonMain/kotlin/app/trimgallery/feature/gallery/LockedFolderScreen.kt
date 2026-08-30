@@ -36,7 +36,7 @@ import kotlin.time.Instant
 fun LockedFolderScreen(
     state: LockedFolderGate.State,
     items: List<MediaItem>,
-    processingIds: Set<Long>,
+    processingIds: Set<String>,
     now: Instant,
     today: LocalDate,
     timeZone: TimeZone,

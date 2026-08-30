@@ -164,6 +164,10 @@ class TrimGuardsPluginTest {
         )
     }
 
+    /**
+     * `writeProject` creates `src/main` for the manifest, so this fixture *has* a source
+     * directory and no Kotlin in it — which is the misconfiguration the rule is for.
+     */
     @Test
     fun `a guard that finds nothing to scan fails rather than passing quietly`() {
         writeProject("""    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />""")
@@ -174,6 +178,36 @@ class TrimGuardsPluginTest {
             .withArguments(TrimGuardsPlugin.BOUNDARIES_TASK)
             .buildAndFail()
         assertTrue(result.output.contains("found no sources to scan"))
+    }
+
+    /**
+     * The other side of it: a module with no `src` at all is an empty shell, not a broken
+     * one. Seven of the eight `shared/feature` modules are still shells, and
+     * `include(":shared:core:model")` creates a container project for every path segment —
+     * so this fired on most of the build the first time CI ran the guards.
+     */
+    @Test
+    fun `a module with no sources at all is skipped, and the report says so`() {
+        projectDir.newFile("settings.gradle.kts").writeText("""rootProject.name = "fixture"""")
+        projectDir.newFile("build.gradle.kts").writeText(
+            """
+            plugins {
+                base
+                id("trimgallery.guards")
+            }
+            """.trimIndent(),
+        )
+        val result = GradleRunner.create()
+            .withProjectDir(projectDir.root)
+            .withPluginClasspath()
+            .withArguments(TrimGuardsPlugin.BOUNDARIES_TASK)
+            .build()
+        assertEquals(
+            TaskOutcome.SUCCESS,
+            result.task(":${TrimGuardsPlugin.BOUNDARIES_TASK}")?.outcome,
+        )
+        val report = File(projectDir.root, "build/reports/guards/boundaries.txt").readText()
+        assertTrue("report claimed to have scanned something: $report", report.contains("SKIPPED"))
     }
 
     /**

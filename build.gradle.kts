@@ -22,6 +22,19 @@ subprojects {
     // subprojects and are therefore never scanned.
     apply(plugin = "trimgallery.guards")
 
+    // Generated code is not ours to format. SQLDelight adds its generated interface to the
+    // module's `commonMain` Kotlin source set, so `ktlintCommonMainSourceSetCheck` lints
+    // files nobody wrote and nobody can fix — and it failed the build on them the first time
+    // CI got far enough to run code generation before linting.
+    extensions.configure<org.jlleitschuh.gradle.ktlint.KtlintExtension> {
+        filter {
+            exclude { element ->
+                val sep = File.separator
+                element.file.path.contains("${sep}build${sep}")
+            }
+        }
+    }
+
     extensions.configure<io.gitlab.arturbosch.detekt.extensions.DetektExtension> {
         config.setFrom(rootProject.file("config/detekt/detekt.yml"))
         buildUponDefaultConfig = true

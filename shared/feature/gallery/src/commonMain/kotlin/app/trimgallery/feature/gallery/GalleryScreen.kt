@@ -54,7 +54,7 @@ import kotlinx.datetime.TimeZone
 @Composable
 fun GalleryScreen(
     items: List<MediaItem>,
-    processingIds: Set<Long>,
+    processingIds: Set<String>,
     today: LocalDate,
     timeZone: TimeZone,
     modifier: Modifier = Modifier,
@@ -73,7 +73,7 @@ fun GalleryScreen(
 
     // Live tile rectangles, so closing the viewer returns the image to where the tile is
     // *now* rather than where it was when it opened.
-    val bounds = remember { mutableStateMapOf<Long, HeroGeometry.Rect>() }
+    val bounds = remember { mutableStateMapOf<String, HeroGeometry.Rect>() }
 
     val sections = remember(items, zoom, timeZone, today) {
         DateSections.sections(items, zoom, timeZone, today) { it.takenAt }

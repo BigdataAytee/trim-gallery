@@ -52,10 +52,16 @@ class TrimGuardsPlugin : Plugin<Project> {
             noInternet.configure { requireManifests.set(true) }
         }
 
+        // A project with a `src` directory has sources; one without is an empty shell or a
+        // container project that `include(":a:b:c")` created for a path segment. Scanning
+        // nothing is only a misconfiguration in the first case.
+        val hasSourceDir = project.file("src").isDirectory
+
         val boundaries = project.tasks.register<VerifySourceBoundariesTask>(BOUNDARIES_TASK) {
             this.sources.from(sources)
             this.plists.from(plists)
             report.set(project.layout.buildDirectory.file("reports/guards/boundaries.txt"))
+            requireSources.set(hasSourceDir)
         }
 
         // One task to run them all, for CI and for humans.
