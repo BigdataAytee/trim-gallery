@@ -1,5 +1,93 @@
 # Changelog
 
+## Milestone 7 — photos: jpegli, SSIMULACRA 2, JPEG XL and PNG repack
+
+The still-image half of the pipeline, and the first milestone where the native code is not
+just built but **checked against its own upstream binaries** — which caught two bugs that
+produced perfectly valid output files that were merely wrong.
+
+### Native (`shared/native`), all four verified against upstream
+
+| function | verified how | result |
+|---|---|---|
+| `ssim2_score` | against upstream's `ssimulacra2` binary | **68.24788284 both** — identical to the last digit |
+| `jpegli_encode` | against `cjpegli -q 85` on the same pixels | **93.58177281 both**, in 7391 bytes against upstream's 7456 |
+| `jxl_recompress` | `djxl` back to a JPEG, `cmp` against the original | **byte for byte identical** |
+| `png_optimise` | decode both PNGs and compare pixels | **identical**, 202234 → 108258 bytes |
+
+`shared/native/test/verify_photo.sh` runs all six checks and is what those numbers come
+from.
+
+**The bug the cross-check existed to catch.** `jpegli_encode` emitted **4:2:0 baseline**
+where upstream emits **4:4:4 progressive**. The output was a valid JPEG of the right size
+and the right dimensions; only the numbers gave it away. The blue channel came back with
+five times the error of red or green, SSIMULACRA 2 fell from 93.6 to **67.0**, and the file
+got *larger* — the chroma artefacts cost more bits than the subsampling saved. A test that
+merely checked "it links and produces a JPEG" would have shipped it.
+
+**The second one** was subtler and did not survive investigation: I first blamed the
+`JpegliDataType` default, wrote a fix, and then found jpegli already defaults to 8-bit. The
+explicit calls stayed — `JPEGLI_TYPE_FLOAT` is the enum's zero value, so anything that
+zeroes the struct gets float samples read into a byte buffer — but the comment claiming
+they cost 26 points was corrected rather than left standing.
+
+**jpegli is no longer part of libjxl.** Upstream split it out; at libjxl's head
+`lib/jpegli` does not exist. STACK.md's table already pointed at `google/jpegli`, but its
+build-layout diagram and the `ndk-build` skill both said one submodule gave both — the same
+class of error as the XPSNR one in milestone 2. Both corrected, and the skill now carries
+the chroma trap, the `setjmp` requirement and the SSIMULACRA-2-is-a-tool-source note.
+
+`oxipng` is a crates.io dependency of a thin C-FFI wrapper crate, built with
+`default-features = false`: rayon would start a thread pool competing with the encoder on a
+phone trying to stay cool, and zopfli spends minutes per image for a few per cent against a
+cap measured in minutes. The FFI call is wrapped in `catch_unwind`, because oxipng panics on
+some malformed input and a panic across an FFI boundary is undefined behaviour.
+
+### Shared (`core/pipeline/photo/`)
+
+`PhotoOptimiseStep` is the only way to obtain a `ReplacePlan` for a still, exactly as
+`VerifyPass` is for video — BUILD.md rule 3 applies to photographs too, and photographs are
+the files people are least willing to lose.
+
+- **`PhotoQualitySearch`** bisects the quality range rather than spending a four-probe
+  budget: a photo probe is milliseconds, not minutes. Targets are SSIMULACRA 2 **90** for
+  Standard and **85** for Compact — upstream's own scale calls 90 "visually lossless" and
+  85 "excellent quality", which is what makes BUILD.md's "≥ 85–90" and § 9's two settings
+  one behaviour.
+- **A transparent image never takes the lossy path.** JPEG has no alpha, so transparency
+  would be flattened against whatever happened to be behind it — a visible change the gate
+  *cannot* see, because it would compare a flattened result against a flattened reference
+  and report a perfect match.
+- **`PhotoRouting`** decides between jpegli, HEIC, lossless JXL and an oxipng repack.
+  Reversible mode wins over the format setting; a PNG denser than 1 B/px is treated as a
+  photograph and takes the gated lossy path, because there is no point making a smaller PNG
+  of a photograph. Erring high merely repacks a photo losslessly; erring low would run a
+  lossy encoder over text, where ringing is what people notice.
+
+### Android
+
+`PhotoCodecAndroid`. Three of the four paths are native and identical on both platforms, so
+the numbers do not depend on the phone. Only HEIC is the platform's: a HEIC still is an HEVC
+frame, and `HeifWriter` puts it on the hardware encoder, which is the only way to stay
+inside BUILD.md rule 2 — hand-assembling a `MediaCodec` would have failed the codec guard,
+correctly.
+
+### The build guard, made robust
+
+Adding the submodules made `verifySourceBoundaries` throw `StackOverflowError`: it stripped
+comments with one regex over the whole file, and Java's engine recurses while backtracking,
+so it died on a 2,000-line generated Kotlin file inside brotli. A guard that crashes on a
+large file fails the build for a reason unrelated to the boundary it checks. It is now a
+character scan, with tests for a 20,000-line file, for line-number preservation, and for an
+escaped quote inside a string.
+
+### Verified
+
+- **393 shared JVM tests**, all passing (up from 363).
+- **47 build-guard tests**; guards clean across all 113 source files.
+- **6 upstream photo checks** and **16 metric checks** from milestone 2.
+
+
 ## Milestone 6 — triage rules and the skip list
 
 The cheap step that decides what the expensive steps ever see, and the screen that explains

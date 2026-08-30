@@ -154,21 +154,68 @@ object SourceBoundaryScanner {
 
     val DEFAULT_RULES = listOf(CODEC_FACTORY_ONLY, REPLACER_ONLY, NO_NETWORK_API, NO_WRITE_MODE_OPEN)
 
-    private val BLOCK_COMMENT = Regex("""/\*.*?\*/""", RegexOption.DOT_MATCHES_ALL)
 
     /**
      * Blanks out comments and string literals so a rule name mentioned in a doc comment
      * or an error message is not itself a violation. Replaces with spaces rather than
      * deleting, to keep line numbers and columns intact.
+     *
+     * Written as a character scan rather than a regex. The regex version — a lazy
+     * block-comment pattern with DOT_MATCHES_ALL, applied to the whole file at once —
+     * worked for two milestones and then threw `StackOverflowError` on a 2,000-line
+     * generated Kotlin file. Java's regex engine recurses while backtracking, so that
+     * failure scales with file size rather than with anything about the content, and a
+     * build guard that crashes on a large file is worse than one that is slow: it fails
+     * the build for a reason that has nothing to do with the boundary it is checking.
      */
     internal fun strip(source: String): String {
-        val noBlocks = BLOCK_COMMENT.replace(source) { m -> m.value.map { if (it == '\n') '\n' else ' ' }.joinToString("") }
-        return noBlocks.lineSequence().joinToString("\n") { line ->
-            val lineComment = line.indexOf("//")
-            val code = if (lineComment >= 0) line.substring(0, lineComment) else line
-            // Blank string literals: "..." and """...""" fragments on this line.
-            code.replace(Regex(""""([^"\\]|\\.)*""""), { m -> " ".repeat(m.value.length) })
+        val out = StringBuilder(source.length)
+        var i = 0
+        var inBlockComment = false
+        var inLineComment = false
+        var inString = false
+        var inRawString = false
+
+        while (i < source.length) {
+            val c = source[i]
+            val two = if (i + 1 < source.length) source.substring(i, i + 2) else ""
+            val three = if (i + 2 < source.length) source.substring(i, i + 3) else ""
+
+            when {
+                c == '\n' -> {
+                    inLineComment = false
+                    // A string literal cannot span a line; a raw one can.
+                    inString = false
+                    out.append(c)
+                    i++
+                }
+
+                inBlockComment -> {
+                    if (two == "*/") { inBlockComment = false; out.append("  "); i += 2 } else { out.append(' '); i++ }
+                }
+
+                inLineComment -> { out.append(' '); i++ }
+
+                inRawString -> {
+                    if (three == "\"\"\"") { inRawString = false; out.append("   "); i += 3 } else { out.append(' '); i++ }
+                }
+
+                inString -> {
+                    // Skip an escaped character whole, so a \" does not end the literal.
+                    if (c == '\\' && i + 1 < source.length) { out.append("  "); i += 2 } else if (c == '"') {
+                        inString = false; out.append(' '); i++
+                    } else { out.append(' '); i++ }
+                }
+
+                three == "\"\"\"" -> { inRawString = true; out.append("   "); i += 3 }
+                two == "/*" -> { inBlockComment = true; out.append("  "); i += 2 }
+                two == "//" -> { inLineComment = true; out.append("  "); i += 2 }
+                c == '"' -> { inString = true; out.append(' '); i++ }
+
+                else -> { out.append(c); i++ }
+            }
         }
+        return out.toString()
     }
 
     /** Scans one file against every rule that applies to it. */

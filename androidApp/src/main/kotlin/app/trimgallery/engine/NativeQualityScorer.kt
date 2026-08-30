@@ -61,8 +61,35 @@ internal class NativeQualityScorer : QualityScorer {
             }
         }
 
-    override suspend fun ssim2(a: Image, b: Image): Double =
-        throw UnsupportedOperationException("SSIMULACRA2 arrives with the photo path in milestone 7")
+    /**
+     * SSIMULACRA 2, the photo gate (BUILD.md § 5).
+     *
+     * Not on the reusable scratch buffers the video path uses: a still is scored a handful
+     * of times during one bisection and then never again, while a video window is scored
+     * once per probe against the same reference. Holding a megapixel pair alive between
+     * photos would cost more than the copy saves.
+     */
+    override suspend fun ssim2(a: Image, b: Image): Double = withContext(Dispatchers.Default) {
+        require(a.width == b.width && a.height == b.height) {
+            "SSIMULACRA2 needs two images of the same size"
+        }
+        withCancelFlag { cancel ->
+            val out = DoubleArray(1)
+            val code = TrimNative.nativeSsim2(
+                copyOf(a.rgba), a.width * RGBA_BYTES,
+                copyOf(b.rgba), b.width * RGBA_BYTES,
+                a.width, a.height,
+                cancel, out,
+            )
+            resultOf(code, out)
+        }
+    }
+
+    private fun copyOf(bytes: ByteArray): ByteBuffer =
+        ByteBuffer.allocateDirect(bytes.size).apply {
+            put(bytes)
+            rewind()
+        }
 
     /**
      * Runs [block] with a flag the native loop polls between frames, raised when this
@@ -116,6 +143,9 @@ internal class NativeQualityScorer : QualityScorer {
     private val YuvWindow.chromaWidth: Int get() = (width + 1) / 2
 
     private companion object {
+        /** Packed RGBA, as `trim_image` carries it. */
+        const val RGBA_BYTES = 4
+
         const val PLANES_PER_WINDOW = 3
 
         /** Phone capture is 30 or 60 fps; XPSNR switches its temporal term above 32. */

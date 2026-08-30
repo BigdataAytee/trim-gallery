@@ -69,6 +69,7 @@ class VerifyPassTest {
         override suspend fun stat(ref: MediaRef): Stat = stat
         override suspend fun openRead(ref: MediaRef): Source = error("not needed")
         override suspend fun tempFile(): TempFile = TempFile("/tmp/${counter++}")
+        override suspend fun writeTemp(bytes: ByteArray): TempFile = TempFile("/tmp/${counter++}")
         override suspend fun discard(file: TempFile) { discarded += file }
     }
 

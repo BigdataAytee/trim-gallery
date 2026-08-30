@@ -43,7 +43,8 @@ shared/native/
   patches/              upstream patches applied at configure time
   xpsnr/                submodule fraunhoferhhi/xpsnr
   vmaf/                 submodule Netflix/vmaf      (libvmaf via meson -> static lib)
-  libjxl/               submodule libjxl/libjxl     (jpegli + ssimulacra2 only)
+  libjxl/               submodule libjxl/libjxl     (ssimulacra2 + JPEG XL encoder)
+  jpegli/               submodule google/jpegli     (its own repo since the split)
   libheif/              submodule strukturag/libheif
   oxipng/               cargo wrapper crate, C FFI
   jni/                  one thin bridge per library (Android only)
@@ -90,20 +91,49 @@ command running meson against a generated cross file (compiler, ar, strip,
 nothing has to ship as an asset. No CUDA, no AVX. Verification config is fixed by
 BUILD.md: `vmaf_v0.6.1`, 1080p, `n_subsample=10`.
 
-**libjxl** (`libjxl/libjxl`) — one submodule gives both `jpegli` and
-`tools/ssimulacra2`. Turn everything else off: `JPEGXL_ENABLE_BENCHMARK`,
-`_EXAMPLES`, `_MANPAGES`, `_SJPEG`, `_OPENEXR` `=OFF`, `JPEGXL_ENABLE_SKCMS=ON`. Needs
-`highway` and `brotli` initialised recursively.
+**libjxl** (`libjxl/libjxl`) — SSIMULACRA 2 and the JPEG XL encoder. **It no longer
+contains jpegli**: upstream split that out and at libjxl's head `lib/jpegli` does not
+exist, so it is a second submodule (below). Turn everything else off:
+`JPEGXL_ENABLE_BENCHMARK`, `_EXAMPLES`, `_MANPAGES`, `_SJPEG`, `_OPENEXR` `=OFF`,
+`JPEGXL_ENABLE_SKCMS=ON`. Needs `highway`, `brotli` and `skcms` initialised recursively,
+plus `libpng`/`zlib` if you want the reference tools for verification.
+
+SSIMULACRA 2 is `tools/ssimulacra2.cc`, a **tool source, not part of any library** — the
+`ssimulacra2` binary is gated behind `JPEGXL_ENABLE_DEVTOOLS`, and the function is not in
+`libjxl.a`. Compile that one file directly into `libtrim_native`. Feed it images through
+`jxl::SetFromBytes` on an in-memory PPM rather than building an `ImageBundle` by hand: it
+is the path the upstream tool takes, so the number matches to the last digit, and hand-built
+colour setup against internal APIs breaks on every release.
+
+**jpegli** (`google/jpegli`) — libjpeg-shaped API, so JPEG → JPEG is a decompress into RGB
+and a compress at the target quality. Two things that a link-and-run check will not catch:
+
+- **Set the chroma sampling factors explicitly.** Left alone this path produced 4:2:0
+  baseline where upstream's `cjpegli` produces 4:4:4 progressive; the blue channel came back
+  with five times the error of red or green, SSIMULACRA 2 fell from 93.6 to 67.0, and the
+  file got *larger*, because the chroma artefacts cost more bits than the subsampling saved.
+  Set `comp_info[0].h_samp_factor = v_samp_factor = 1` after `jpegli_set_defaults`, and
+  `jpegli_set_progressive_level(cinfo, 2)`.
+- **Replace the error manager.** libjpeg's default calls `exit()`. A malformed JPEG in a
+  user's library must mark one item `FAILED` and let the night continue
+  (ARCHITECTURE.md § 13), so use a `setjmp` handler.
 
 **libheif** (`strukturag/libheif`) — fallback only, where `HeifWriter` (Android) or
 `CGImageDestination` (iOS) is unavailable or broken. Prefer the platform writer. Build
 with the x265 encoder **off**: software video encoding is banned, and HEIC stills go
 through the platform encoder where possible.
 
-**oxipng** (`oxipng/oxipng`) — Rust. `cargo-ndk` for Android (`cargo ndk -t arm64-v8a
-build --release`), plain cargo with the `aarch64-apple-ios` target for iOS, both into a
-staticlib behind a thin C-FFI crate. Pin the toolchain in `rust-toolchain.toml` so CI
-and dev machines agree.
+**oxipng** (`oxipng/oxipng`) — Rust, and a crates.io dependency of the thin C-FFI wrapper
+crate in `oxipng/` rather than a submodule: upstream ships a library crate and there is no
+C to build. `cargo-ndk` for Android (`cargo ndk -t arm64-v8a build --release`), plain cargo
+with the `aarch64-apple-ios` target for iOS, both into a staticlib. Pin the toolchain in
+`rust-toolchain.toml` and the versions in `Cargo.lock` so CI and dev machines agree.
+
+Build it with `default-features = false`: `parallel` starts a rayon pool that competes with
+the encoder for cores on a phone trying to stay cool, and `zopfli` spends minutes per image
+for a few per cent, against a nightly cap measured in minutes. **Wrap the call in
+`catch_unwind`** — oxipng panics on some malformed input, and a panic across an FFI boundary
+is undefined behaviour.
 
 ## Binding
 

@@ -185,4 +185,49 @@ class SourceBoundaryScannerTest {
         val found = SourceBoundaryScanner.scan(file)
         assertTrue(found.toString(), found.any { it.rule.id == "replacer" })
     }
+
+    @Test
+    fun `a large file does not blow the stack`() {
+        // A regex over the whole file threw StackOverflowError on a 2,000-line generated
+        // Kotlin file inside a native submodule. A guard that crashes on a big file fails
+        // the build for a reason that has nothing to do with the boundary it checks.
+        val body = buildString {
+            appendLine("package app.trimgallery")
+            repeat(20_000) { i -> appendLine("/* comment $i */ val v$i = \"string $i\"") }
+        }
+        val file = kt("Generated.kt", body)
+        assertTrue(SourceBoundaryScanner.scan(file).isEmpty())
+    }
+
+    @Test
+    fun `block comments, line comments and strings are all blanked`() {
+        val stripped = SourceBoundaryScanner.strip(
+            """
+            /* MediaCodec.createEncoderByType */
+            // MediaCodec.createEncoderByType
+            val s = "MediaCodec.createEncoderByType"
+            val raw = ${"\"\"\""}MediaCodec.createEncoderByType${"\"\"\""}
+            val real = MediaCodec.createEncoderByType(mime)
+            """.trimIndent(),
+        )
+        assertEquals(1, stripped.lines().count { it.contains("createEncoderByType") })
+        assertTrue(stripped.lines().last().contains("val real"))
+    }
+
+    @Test
+    fun `stripping preserves line numbers exactly`() {
+        // Violations are reported by line, so a strip that dropped characters would point
+        // at the wrong one.
+        val source = "/*\n a\n b\n*/\nval x = 1\n"
+        assertEquals(source.lines().size, SourceBoundaryScanner.strip(source).lines().size)
+        assertEquals(source.length, SourceBoundaryScanner.strip(source).length)
+    }
+
+    @Test
+    fun `an escaped quote does not end a string early`() {
+        // Otherwise the rest of the line reads as code and a rule name inside a message
+        // becomes a violation.
+        val stripped = SourceBoundaryScanner.strip("""val m = "he said \"MediaCodec.createEncoderByType\"" """)
+        assertTrue(stripped, !stripped.contains("createEncoderByType"))
+    }
 }

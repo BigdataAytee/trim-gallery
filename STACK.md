@@ -31,7 +31,7 @@ Use these. Do not substitute alternatives without noting why in PROJECT.md.
 |---|---|---|---|
 | XPSNR | search metric | NDK — **no standalone C exists**; the repo holds only an FFmpeg filter, so the algorithm is extracted into `shared/native/src/xpsnr_score.c`. Licence permits commercial use but grants no patent rights. | https://github.com/fraunhoferhhi/xpsnr |
 | libvmaf | verification, vmaf_v0.6.1, n_subsample=10 | NDK (meson/ninja, arm64, NEON) | https://github.com/Netflix/vmaf |
-| SSIMULACRA2 | photo quality gate | NDK (part of libjxl, `tools/ssimulacra2`) | https://github.com/libjxl/libjxl |
+| SSIMULACRA2 | photo quality gate | NDK — `tools/ssimulacra2.cc`, compiled into `libtrim_native`; it is a tool source upstream, not part of the library | https://github.com/libjxl/libjxl |
 
 ## Photos
 | Project | Use | How | Source |
@@ -94,9 +94,10 @@ native/
   CMakeLists.txt          # top-level, arm64-v8a only, -march=armv8-a+simd
   xpsnr/                  # submodule fraunhoferhhi/xpsnr
   vmaf/                   # submodule Netflix/vmaf   (libvmaf via meson → static lib)
-  libjxl/                 # submodule libjxl/libjxl  (jpegli + ssimulacra2)
+  libjxl/                 # submodule libjxl/libjxl  (ssimulacra2 + JPEG XL encoder)
+  jpegli/                 # submodule google/jpegli   (its own repository since the split)
   libheif/                # submodule strukturag/libheif
-  oxipng/                 # cargo-ndk crate wrapper
+  oxipng/                 # cargo wrapper crate; oxipng itself is a crates.io dependency
   jni/                    # one thin JNI bridge per library
 ```
 

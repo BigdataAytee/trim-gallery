@@ -62,6 +62,7 @@ class TriageStepTest {
         override suspend fun stat(ref: MediaRef): Stat = Stat(0, 0, false)
         override suspend fun openRead(ref: MediaRef): Source = error("triage never opens a file")
         override suspend fun tempFile(): TempFile = error("triage never writes")
+        override suspend fun writeTemp(bytes: ByteArray): TempFile = error("triage never writes")
         override suspend fun discard(file: TempFile) = Unit
     }
 

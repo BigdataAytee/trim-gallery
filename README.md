@@ -25,12 +25,14 @@ this project and encode its hard rules: `codec-priority`, `safe-replace`, `ndk-b
 
 ## Status
 
-Milestones 1 through 6 and 8 of [BUILD.md section 13](BUILD.md) are built: the Media3
-Transformer encode, XPSNR and libvmaf over the NDK (both verified against upstream), the
-probe/search/predictor loop, the verify-and-safe-replace path with undo and offload, the
-night scheduler with its guards, the triage rules and skip list, and the gallery shell.
+Milestones 1 through 8 of [BUILD.md section 13](BUILD.md) are built: the Media3 Transformer
+encode, XPSNR and libvmaf over the NDK, the probe/search/predictor loop, the
+verify-and-safe-replace path with undo and offload, the night scheduler with its guards,
+the triage rules and skip list, the photo pipeline (jpegli, SSIMULACRA 2, JPEG XL, oxipng),
+and the gallery shell.
 
-363 shared JVM tests and 43 build-guard tests pass. Nothing Android or Compose has been
+All six native functions are verified against their upstream binaries. 393 shared JVM tests
+and 47 build-guard tests pass. Nothing Android or Compose has been
 compiled — Google Maven is unreachable from the build environment, which is why every
 decision the app makes lives in platform-free Kotlin that can be tested without it. See
 CHANGELOG.md for what is done and what was verified, and PROJECT.md for what is knowingly

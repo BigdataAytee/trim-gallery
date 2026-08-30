@@ -99,10 +99,32 @@ interface QualityScorer {
     suspend fun ssim2(a: Image, b: Image): Double
 }
 
+/**
+ * The still-image codecs (BUILD.md § 5, milestone 7).
+ *
+ * Bytes in, bytes out. Nothing here opens a file: the photo path reads the original
+ * through `LibraryStorage.openRead` and writes its result to app-private scratch, and the
+ * only thing that ever touches the user's copy is `Replacer` (see the safe-replace skill).
+ */
 interface PhotoCodec {
+    /** Decodes to pixels, for the SSIMULACRA2 gate. null when the file cannot be read. */
+    suspend fun decode(src: ByteArray): Image?
+
+    /** JPEG → JPEG at [q] (1–100). The default path, and the one BUILD.md § 5 names first. */
     suspend fun jpegli(src: ByteArray, q: Int): ByteArray
+
+    /** JPEG → HEIC at [q], through the platform writer (`HeifWriter` / `CGImageDestination`). */
     suspend fun heic(src: Image, q: Int): ByteArray
+
+    /**
+     * JPEG → JPEG XL, losslessly.
+     *
+     * The "reversible mode" setting: the original JPEG can be reconstructed bit for bit,
+     * which is the one path in this app where "lossless" is literally true.
+     */
     suspend fun jxlRecompress(src: ByteArray): ByteArray
+
+    /** oxipng. Lossless by construction, so BUILD.md § 5 gives it no quality gate. */
     suspend fun pngOptimise(src: ByteArray): ByteArray
 }
 
@@ -123,6 +145,9 @@ interface LibraryStorage {
     suspend fun stat(ref: MediaRef): Stat
     suspend fun openRead(ref: MediaRef): Source
     suspend fun tempFile(): TempFile
+
+    /** Writes [bytes] to a new app-private scratch file. The photo path produces bytes. */
+    suspend fun writeTemp(bytes: ByteArray): TempFile
 
     /**
      * Throws away a temp file the app made and no longer wants.

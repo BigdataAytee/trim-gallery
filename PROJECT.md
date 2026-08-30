@@ -520,6 +520,52 @@ all of it is unit tested against fakes.
   property of the file or the phone and would give the same answer forever;
   `COULD_NOT_REACH_QUALITY` is permanent by BUILD.md § 5 and the search is deterministic.
 
+## Milestone 7 — photos
+
+- **jpegli has its own repository.** `google/jpegli`, not `lib/jpegli` inside libjxl —
+  upstream split it and the directory no longer exists at libjxl's head. STACK.md's table
+  was already right; its layout diagram and the `ndk-build` skill were not, and both were
+  corrected along with `.gitmodules`.
+- **SSIMULACRA 2 is a tool source, not library code.** `tools/ssimulacra2.cc` is compiled
+  directly into `libtrim_native`; the `ssimulacra2` binary is gated behind
+  `JPEGXL_ENABLE_DEVTOOLS` and the function is in no `.a`.
+- **`ssim2_score` feeds images through an in-memory PPM and `jxl::SetFromBytes`.** Building
+  a `jxl::ImageBundle` by hand would avoid a copy but means colour setup against internal
+  APIs that move between releases — and the number has to equal the upstream binary's or
+  the calibration table is measuring two different things. A PPM header plus a memcpy is a
+  rounding error beside the metric.
+- **4:4:4 progressive, set explicitly.** Left to itself the encoder produced 4:2:0
+  baseline: SSIMULACRA 2 fell 93.6 → 67.0 *and the file grew*. The gate sits at 85–90,
+  which is where full chroma is what it is asking for.
+- **`jpegli_set_input_format` / `_output_format` are called although the defaults are
+  already 8-bit.** `JPEGLI_TYPE_FLOAT` is the enum's zero value, so anything that zeroes
+  the struct silently reads float samples out of a byte buffer.
+- **oxipng is a crates.io dependency, not a submodule**, because upstream ships a library
+  crate and there is no C to build. Built with `default-features = false`: rayon would
+  compete with the encoder for cores, and zopfli costs minutes for a few per cent. The FFI
+  entry point is wrapped in `catch_unwind` — oxipng panics on some malformed input and a
+  panic across an FFI boundary is undefined behaviour.
+- **oxipng runs at preset 2 and strips nothing.** Higher presets spend their time on
+  Zopfli-class searching for the last couple of per cent, which is a poor trade against the
+  videos waiting behind them; and metadata is BUILD.md § 2.4's promise, not oxipng's to
+  discard.
+- **SSIMULACRA 2 targets: 90 Standard, 85 Compact.** Upstream's own scale calls 90
+  "visually lossless" and 85 "excellent quality", which is what turns BUILD.md § 5's range
+  and § 9's two settings into one behaviour.
+- **A transparent image is skipped rather than flattened.** The gate cannot catch this
+  failure: it would compare a flattened output against a flattened reference and report a
+  perfect match. Checked in the step, on the decoded alpha channel, rather than by adding a
+  column to the model.
+- **A PNG denser than 1 byte per pixel is treated as a photograph.** Screenshots land at
+  0.2–0.6 B/px and photographs at 2–3; erring high merely repacks losslessly, erring low
+  runs a lossy encoder over text.
+- **HEIC is the one platform-specific path.** A HEIC still is an HEVC frame, so `HeifWriter`
+  keeps it on the hardware encoder; assembling a `MediaCodec` by hand would have put codec
+  creation outside `MediaCodecFactory` and failed the build guard, correctly.
+- **The build guard now strips comments with a character scan.** One regex over the whole
+  file threw `StackOverflowError` on a 2,000-line generated Kotlin file in a submodule;
+  Java's regex engine recurses while backtracking, so the failure scaled with file size.
+
 ## Open questions added
 - **The Compose layer has never been compiled.** Every Compose Multiplatform version
   resolves `androidx.annotation`, `androidx.collection` and `androidx.lifecycle` from
@@ -542,7 +588,13 @@ all of it is unit tested against fakes.
   read oddly beside the shared `app.trimgallery.engine`, and a rename of files that have
   never been compiled is churn with no way to check it. To be done at the first real build,
   when the compiler can confirm the imports.
-- **Nothing Android in milestones 4 and 5 has been compiled or run**, for the same Google Maven
+- **The native photo libraries have not been cross-compiled for arm64.** There is no NDK in
+  this environment, so libjxl, jpegli and oxipng were built for the host to verify the ABI
+  against upstream — exactly as the metrics were in milestone 2. The CMake for
+  android-arm64 and ios-arm64 is written and unexercised; expect toolchain work at the
+  first real build, and note that libjxl and jpegli each pull `highway`, `brotli` and
+  `skcms` recursively.
+- **Nothing Android in milestones 4, 5 and 7 has been compiled or run**, for the same Google Maven
   reason as the Compose layer. The SAF mechanics, the mp4parser rewrite-and-rename, the
   `MediaExtractor` probe, the WorkManager constraints and the SQLDelight repository are all
   written to documented behaviour and reviewed, not executed — the repository in particular

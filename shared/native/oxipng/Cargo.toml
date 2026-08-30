@@ -1,0 +1,32 @@
+# The PNG repack path (BUILD.md § 5: "Screenshots / PNG. Lossless repack with oxipng").
+#
+# A thin C-FFI wrapper rather than a submodule of oxipng itself: upstream ships a library
+# crate, and the ndk-build skill's layout calls for exactly this shape. The version is
+# pinned here and the exact build is pinned in Cargo.lock, so an upgrade is deliberate.
+[package]
+name = "trim_oxipng"
+version = "0.1.0"
+edition = "2021"
+publish = false
+
+[lib]
+# staticlib so it links into libtrim_native.a on Android and the XCFramework on iOS;
+# rlib as well so `cargo test` can see it.
+crate-type = ["staticlib", "rlib"]
+
+[dependencies]
+# Default features off on purpose:
+#   parallel  - rayon would start its own thread pool. ARCHITECTURE.md § 8 gives the night
+#               pass a fixed set of pools with deliberate priorities, and a library that
+#               spawns threads behind that would compete with the encoder for cores on a
+#               phone that is trying to stay cool.
+#   zopfli    - minutes per image for a few per cent. The nightly cap (BUILD.md § 6) is in
+#               minutes, and those minutes buy far more on video.
+#   filetime  - we never write through oxipng; the Replacer owns every write.
+oxipng = { version = "9", default-features = false }
+
+[profile.release]
+opt-level = 3
+lto = true
+panic = "abort"
+codegen-units = 1

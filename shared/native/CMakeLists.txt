@@ -91,6 +91,81 @@ add_library(vmaf STATIC IMPORTED)
 set_target_properties(vmaf PROPERTIES IMPORTED_LOCATION ${VMAF_LIBRARY})
 add_dependencies(vmaf vmaf_build)
 
+# --- libjxl: SSIMULACRA 2 and the JPEG XL encoder ----------------------------
+#
+# One submodule, two things we need. Everything else is off: benchmarks, examples, man
+# pages, the extra codecs. `JPEGXL_ENABLE_TOOLS` stays on only because SSIMULACRA 2 is
+# shipped as `tools/ssimulacra2.cc` rather than as part of the library, and we compile
+# that file directly into trim_native below.
+set(JPEGXL_ENABLE_BENCHMARK OFF CACHE BOOL "" FORCE)
+set(JPEGXL_ENABLE_EXAMPLES OFF CACHE BOOL "" FORCE)
+set(JPEGXL_ENABLE_MANPAGES OFF CACHE BOOL "" FORCE)
+set(JPEGXL_ENABLE_SJPEG OFF CACHE BOOL "" FORCE)
+set(JPEGXL_ENABLE_OPENEXR OFF CACHE BOOL "" FORCE)
+set(JPEGXL_ENABLE_DOXYGEN OFF CACHE BOOL "" FORCE)
+set(JPEGXL_ENABLE_JNI OFF CACHE BOOL "" FORCE)
+set(JPEGXL_ENABLE_PLUGINS OFF CACHE BOOL "" FORCE)
+set(JPEGXL_ENABLE_VIEWERS OFF CACHE BOOL "" FORCE)
+set(JPEGXL_ENABLE_DEVTOOLS OFF CACHE BOOL "" FORCE)
+set(JPEGXL_ENABLE_TOOLS OFF CACHE BOOL "" FORCE)
+set(JPEGXL_ENABLE_SKCMS ON CACHE BOOL "" FORCE)
+set(BUILD_TESTING OFF CACHE BOOL "" FORCE)
+add_subdirectory(libjxl EXCLUDE_FROM_ALL)
+
+# --- jpegli ------------------------------------------------------------------
+#
+# Its own repository, not part of libjxl. Upstream split it out, and at libjxl's current
+# head `lib/jpegli` no longer exists. STACK.md already pointed at google/jpegli; its build
+# layout diagram and the ndk-build skill did not, and both have been corrected.
+set(JPEGLI_ENABLE_BENCHMARK OFF CACHE BOOL "" FORCE)
+set(JPEGLI_ENABLE_DOXYGEN OFF CACHE BOOL "" FORCE)
+set(JPEGLI_ENABLE_MANPAGES OFF CACHE BOOL "" FORCE)
+set(JPEGLI_ENABLE_SJPEG OFF CACHE BOOL "" FORCE)
+set(JPEGLI_ENABLE_OPENEXR OFF CACHE BOOL "" FORCE)
+set(JPEGLI_ENABLE_JNI OFF CACHE BOOL "" FORCE)
+set(JPEGLI_ENABLE_FUZZERS OFF CACHE BOOL "" FORCE)
+set(JPEGLI_ENABLE_TOOLS OFF CACHE BOOL "" FORCE)
+set(JPEGLI_ENABLE_SKCMS ON CACHE BOOL "" FORCE)
+add_subdirectory(jpegli EXCLUDE_FROM_ALL)
+
+# --- oxipng ------------------------------------------------------------------
+#
+# Rust, behind a thin C-FFI crate. cargo-ndk for Android, plain cargo with the iOS target
+# for Apple; the toolchain is pinned in oxipng/rust-toolchain.toml so CI and dev machines
+# produce the same binary.
+find_program(CARGO_EXECUTABLE cargo REQUIRED)
+
+if(ANDROID)
+    set(TRIM_RUST_TARGET aarch64-linux-android)
+    set(TRIM_CARGO_COMMAND ${CARGO_EXECUTABLE} ndk -t arm64-v8a -o ${CMAKE_CURRENT_BINARY_DIR}/rust build --release)
+elseif(APPLE)
+    set(TRIM_RUST_TARGET aarch64-apple-ios)
+    set(TRIM_CARGO_COMMAND ${CARGO_EXECUTABLE} build --release --target ${TRIM_RUST_TARGET})
+else()
+    set(TRIM_RUST_TARGET "")
+    set(TRIM_CARGO_COMMAND ${CARGO_EXECUTABLE} build --release)
+endif()
+
+set(OXIPNG_DIR ${CMAKE_CURRENT_SOURCE_DIR}/oxipng)
+if(TRIM_RUST_TARGET STREQUAL "")
+    set(OXIPNG_LIBRARY ${OXIPNG_DIR}/target/release/libtrim_oxipng.a)
+else()
+    set(OXIPNG_LIBRARY ${OXIPNG_DIR}/target/${TRIM_RUST_TARGET}/release/libtrim_oxipng.a)
+endif()
+
+add_custom_command(
+    OUTPUT ${OXIPNG_LIBRARY}
+    COMMAND ${CMAKE_COMMAND} -E chdir ${OXIPNG_DIR} ${TRIM_CARGO_COMMAND}
+    DEPENDS ${OXIPNG_DIR}/src/lib.rs ${OXIPNG_DIR}/Cargo.toml ${OXIPNG_DIR}/Cargo.lock
+    COMMENT "Building oxipng (cargo)"
+    VERBATIM
+)
+add_custom_target(oxipng_build DEPENDS ${OXIPNG_LIBRARY})
+
+add_library(trim_oxipng STATIC IMPORTED)
+set_target_properties(trim_oxipng PROPERTIES IMPORTED_LOCATION ${OXIPNG_LIBRARY})
+add_dependencies(trim_oxipng oxipng_build)
+
 # --- trim_native -------------------------------------------------------------
 #
 # XPSNR is compiled from src/xpsnr_score.c, a standalone extraction of the algorithm in
@@ -99,24 +174,52 @@ add_dependencies(vmaf vmaf_build)
 set(TRIM_SOURCES
     src/xpsnr_score.c
     src/vmaf_score.c
-    src/photo_stubs.c
+    # The photo half (milestone 7). C++ because SSIMULACRA 2 and jpegli are; the ABI they
+    # sit behind is still plain C.
+    src/ssim2_score.cc
+    src/jpegli_codec.cc
+    src/jxl_recompress.cc
+    # SSIMULACRA 2 itself. Upstream ships it as a tool source rather than in the library,
+    # so it is compiled here from the submodule rather than copied into src/.
+    libjxl/tools/ssimulacra2.cc
+)
+
+set(TRIM_NATIVE_LIBS
+    vmaf
+    # jxl_gauss_blur is what tools/ssimulacra2.cc needs; jxl-internal and jxl carry the
+    # decoder used to load pixels and the encoder used for lossless JPEG recompression.
+    jxl_gauss_blur
+    jxl_extras-internal
+    jxl-internal
+    jxl
+    jpegli-static
+    trim_oxipng
+    m
 )
 
 if(ANDROID)
     list(APPEND TRIM_SOURCES jni/trim_native_jni.c)
     add_library(${TRIM_TARGET_NAME} SHARED ${TRIM_SOURCES})
     set_target_properties(${TRIM_TARGET_NAME} PROPERTIES LINKER_LANGUAGE CXX)
-    target_link_libraries(${TRIM_TARGET_NAME} PRIVATE vmaf log m)
+    target_link_libraries(${TRIM_TARGET_NAME} PRIVATE ${TRIM_NATIVE_LIBS} log)
 else()
     add_library(${TRIM_TARGET_NAME} STATIC ${TRIM_SOURCES})
-    target_link_libraries(${TRIM_TARGET_NAME} PRIVATE vmaf m)
+    set_target_properties(${TRIM_TARGET_NAME} PROPERTIES LINKER_LANGUAGE CXX)
+    target_link_libraries(${TRIM_TARGET_NAME} PRIVATE ${TRIM_NATIVE_LIBS})
 endif()
 
 target_include_directories(${TRIM_TARGET_NAME}
     PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}
-    PRIVATE ${VMAF_SOURCE_DIR}/include
+    PRIVATE
+        ${VMAF_SOURCE_DIR}/include
+        ${CMAKE_CURRENT_SOURCE_DIR}/libjxl
+        ${CMAKE_CURRENT_SOURCE_DIR}/libjxl/lib/include
+        ${CMAKE_CURRENT_BINARY_DIR}/libjxl/lib/include
+        ${CMAKE_CURRENT_SOURCE_DIR}/jpegli/lib
+        ${CMAKE_CURRENT_SOURCE_DIR}/jpegli/lib/include
+        ${CMAKE_CURRENT_BINARY_DIR}/jpegli/lib/include/jpegli
 )
-add_dependencies(${TRIM_TARGET_NAME} vmaf_build)
+add_dependencies(${TRIM_TARGET_NAME} vmaf_build oxipng_build)
 
 # --- verification ------------------------------------------------------------
 #

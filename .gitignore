@@ -20,3 +20,6 @@ target/
 .idea/
 *.iml
 .DS_Store
+
+# Milestone 7: cargo's build tree for the oxipng wrapper. The lock file is committed.
+shared/native/oxipng/target/

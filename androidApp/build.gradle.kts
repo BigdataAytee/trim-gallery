@@ -138,6 +138,7 @@ dependencies {
     implementation(libs.androidx.work.runtime.ktx)
     implementation(libs.androidx.documentfile)
     implementation(libs.androidx.exifinterface)
+    implementation(libs.androidx.heifwriter)
     // m4: MP4 creation time, GPS and rotation atoms (STACK.md § Metadata).
     implementation(libs.mp4parser.isoparser)
     implementation(libs.coil.compose)

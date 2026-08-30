@@ -1,9 +1,17 @@
 # ARCHITECTURE.md § 10 / STACK.md "Native build layout".
 #
-# xpsnr and vmaf are live from milestone 2. The photo libraries below are commented out
-# until milestone 7 needs them: an uncommented section with no gitlink makes
-# `git submodule update --init` fail for everyone. Uncomment and `git submodule add` then.
-# Links verified against STACK.md.
+# xpsnr and vmaf are live from milestone 2; libjxl and jpegli from milestone 7.
+#
+# jpegli is its own repository. STACK.md said one libjxl submodule gave both it and
+# SSIMULACRA 2; that stopped being true when upstream split jpegli out, and at libjxl's
+# current head `lib/jpegli` does not exist. Corrected in STACK.md and PROJECT.md.
+#
+# oxipng is a cargo dependency of the wrapper crate in `oxipng/`, pinned in its Cargo.lock,
+# rather than a submodule: upstream ships it as a library crate and there is no C to build.
+#
+# libheif stays commented out until something needs it — it is a fallback for devices where
+# HeifWriter is unavailable, and an uncommented section with no gitlink makes
+# `git submodule update --init` fail for everyone. Links verified against STACK.md.
 
 [submodule "shared/native/xpsnr"]
 	path = shared/native/xpsnr
@@ -15,17 +23,16 @@
 	url = https://github.com/Netflix/vmaf.git
 	shallow = true
 
-#[submodule "shared/native/libjxl"]
-#	path = shared/native/libjxl
-#	url = https://github.com/libjxl/libjxl.git
-#	shallow = true
-
 #[submodule "shared/native/libheif"]
 #	path = shared/native/libheif
 #	url = https://github.com/strukturag/libheif.git
 #	shallow = true
 
-#[submodule "shared/native/oxipng"]
-#	path = shared/native/oxipng
-#	url = https://github.com/oxipng/oxipng.git
-#	shallow = true
+[submodule "shared/native/libjxl"]
+	path = shared/native/libjxl
+	url = https://github.com/libjxl/libjxl.git
+	shallow = true
+[submodule "shared/native/jpegli"]
+	path = shared/native/jpegli
+	url = https://github.com/google/jpegli.git
+	shallow = true

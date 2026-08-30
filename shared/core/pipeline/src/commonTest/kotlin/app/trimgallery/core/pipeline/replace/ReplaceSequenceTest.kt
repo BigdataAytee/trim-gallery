@@ -63,6 +63,7 @@ class ReplaceSequenceTest {
         override suspend fun stat(ref: MediaRef): Stat = stat
         override suspend fun openRead(ref: MediaRef): Source = error("originals are read-only, not opened here")
         override suspend fun tempFile(): TempFile = TempFile("/data/app/tmp/x")
+        override suspend fun writeTemp(bytes: ByteArray): TempFile = TempFile("/data/app/tmp/x")
         override suspend fun discard(file: TempFile) { world.tempDiscarded = true }
     }
 

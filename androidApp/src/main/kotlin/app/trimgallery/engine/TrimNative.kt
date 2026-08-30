@@ -46,4 +46,26 @@ internal object TrimNative {
         width: Int, height: Int, frames: Int, subsample: Int,
         cancel: ByteBuffer, out: DoubleArray,
     ): Int
+
+    /** SSIMULACRA 2, the photo gate. Packed RGBA on both sides, alpha ignored. */
+    @Suppress("LongParameterList")
+    external fun nativeSsim2(
+        refRgba: ByteBuffer, refStride: Int,
+        distRgba: ByteBuffer, distStride: Int,
+        width: Int, height: Int,
+        cancel: ByteBuffer, out: DoubleArray,
+    ): Int
+
+    /*
+     * The three byte-in/byte-out codecs share a convention: call with `out = null` and the
+     * first element of `outLen` set to zero to learn the size, then call again with a
+     * buffer of that size. `outLen` carries the answer back either way — including on a
+     * short buffer, which is told how much it needed rather than left guessing.
+     */
+
+    external fun nativeJpegli(src: ByteBuffer, srcLen: Int, quality: Int, out: ByteBuffer?, outLen: IntArray): Int
+
+    external fun nativeJxlRecompress(src: ByteBuffer, srcLen: Int, out: ByteBuffer?, outLen: IntArray): Int
+
+    external fun nativePngOptimise(src: ByteBuffer, srcLen: Int, out: ByteBuffer?, outLen: IntArray): Int
 }

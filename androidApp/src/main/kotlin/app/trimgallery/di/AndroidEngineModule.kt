@@ -9,6 +9,7 @@ import app.trimgallery.core.model.Uuid7
 import app.trimgallery.core.pipeline.TriageStep
 import app.trimgallery.core.pipeline.night.NightFacts
 import app.trimgallery.core.pipeline.night.NightRun
+import app.trimgallery.core.pipeline.photo.PhotoOptimiseStep
 import app.trimgallery.core.pipeline.replace.OriginalLocator
 import app.trimgallery.core.pipeline.replace.UndoJournal
 import app.trimgallery.engine.CodecFactory
@@ -17,6 +18,7 @@ import app.trimgallery.engine.LibraryStorage
 import app.trimgallery.engine.MetadataCopier
 import app.trimgallery.engine.NightScheduler
 import app.trimgallery.engine.OutputProbe
+import app.trimgallery.engine.PhotoCodec
 import app.trimgallery.engine.QualityScorer
 import app.trimgallery.engine.Replacer
 import app.trimgallery.engine.UndoStore
@@ -26,6 +28,7 @@ import app.trimgallery.engine.android.MetadataCopierAndroid
 import app.trimgallery.engine.android.NativeQualityScorer
 import app.trimgallery.engine.android.NightWorker
 import app.trimgallery.engine.android.OutputProbeAndroid
+import app.trimgallery.engine.android.PhotoCodecAndroid
 import app.trimgallery.engine.android.SafStorage
 import app.trimgallery.engine.android.SafeReplacerAndroid
 import app.trimgallery.engine.android.UndoBinAndroid
@@ -127,6 +130,21 @@ val androidEngineModule = module {
 
     // --- Milestone 6: triage ---------------------------------------------------
     single<ContainerReader> { ContainerReaderAndroid(androidContext()) }
+
+    // --- Milestone 7: photos ---------------------------------------------------
+    //
+    // Three of the four paths are native and identical on both platforms; only HEIC is the
+    // platform's, because a HEIC still is an HEVC frame and BUILD.md rule 2 wants that on
+    // the hardware encoder.
+    single<PhotoCodec> { PhotoCodecAndroid(androidContext().cacheDir) }
+
+    single {
+        PhotoOptimiseStep(
+            storage = get(),
+            codec = get(),
+            scorer = get(),
+        )
+    }
 
     single {
         TriageStep(
