@@ -24,6 +24,10 @@ kotlin {
         commonMain {
             dependencies {
                 implementation(libs.kotlinx.coroutines.core)
+                // Memories work in the user's own calendar: "a year ago today" is a local
+                // date question, and UTC arithmetic gets it wrong for everyone east of
+                // Greenwich after teatime (STACK.md, kotlinx-datetime).
+                implementation(libs.kotlinx.datetime)
                 implementation(projects.shared.core.model)
                 implementation(projects.shared.engineApi)
             }

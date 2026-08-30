@@ -1,5 +1,101 @@
 # Changelog
 
+## Milestone 14 — Memories and the map (v1.1)
+
+BUILD.md § 9 v1.1: *"Memories / On this day with music; Map view with offline tiles."*
+
+### The constraint that shapes the whole milestone
+
+PRD.md R8 is that this app never gets the `INTERNET` permission — it is displayed as a
+feature and two build guards enforce it. So there is **no geocoder and no tile server**.
+Everything a map or a memory could say about a place has to come from the coordinates in
+the user's own photographs, and the basemap has to already be on the device.
+
+That rules out place names entirely. A trip memory says *"5 days away · 1200 km away"*, not
+"Barcelona", because "Barcelona" would be a guess dressed as a fact. Where a name is wanted,
+the only honest source is the user typing one.
+
+### The basemap
+
+Put to the user as a decision rather than assumed, because it needed either a library that
+is not in STACK.md or a deliberate choice not to have one. The answer: **the user supplies
+an MBTiles pack**. An `.mbtiles` file is an ordinary SQLite database, so it needs no map
+library and nothing new in the approved stack — the platform's own SQLite opens it read-only.
+
+The cost is stated rather than hidden: the map is empty until a pack is added, which is a
+worse first run than a map that just works and is the price of an app that cannot reach the
+network. `MapTiles.available` exists so the screen can say so instead of showing a grey grid
+that reads as broken, and a pack that cannot be used is refused *with a reason* — a vector
+pack is a valid MBTiles file this app cannot draw, and saying so beats a map that silently
+stays empty after the user went and found a file.
+
+The one thing about the format everybody gets wrong is in shared code with a test: **MBTiles
+counts tile rows from the bottom of the world and slippy tiles count from the top.** Get it
+wrong and the map is not blank, it renders upside down by hemisphere — the sort of bug that
+survives a demo.
+
+### Geometry
+
+Distance is haversine; the centroid of a set of points is averaged as unit vectors, because
+averaging longitudes puts the centre of two photographs either side of the date line in the
+middle of Africa. Latitudes are clamped to the Mercator limit, since photographs *are* taken
+past 85° and a projection that runs to infinity there is a crash reachable from a user's own
+library.
+
+A test caught a real modelling slip: tile scale was using the mean Earth radius. Web Mercator
+is defined on the WGS84 equatorial radius, and the two are not interchangeable — ground
+distance wants the mean, tile scale wants the equatorial, and mixing them puts a scale bar a
+tenth of a percent out and in disagreement with the tiles it is drawn over.
+
+Clustering is greedy and seeded by recency, so the same library at the same zoom always
+produces the same pins and panning away and back does not rearrange the map under the user's
+finger. Cluster centres are not recomputed as members arrive: moving them lets a chain of
+photographs a hundred metres apart drag one cluster across a whole city, which on a map looks
+like a single pin swallowing a country.
+
+### Home, and trips
+
+"A weekend in Lisbon" cannot be found without knowing where home is — the same photographs,
+taken by someone who lives there, are not a trip. Home is derived from nothing but the
+coordinates already on the device, is never in the diagnostics export, and cannot become an
+address because there is no geocoder.
+
+Two rules came out of testing it:
+
+- **A share test alone is not enough.** Five places holding a fifth of the library each all
+  clear any threshold low enough to be useful, and the largest wins by rounding. Home now has
+  to be twice the runner-up as well. Someone who genuinely splits their life between two
+  cities has no home by this rule and is offered no trips — which is right, because measuring
+  "away" against one of two homes would call half their ordinary life a holiday.
+- **The gap that ends a trip is three days, not two.** Chosen by which mistake the user sees:
+  a fortnight in Italy split into three memories looks broken, where two trips three days
+  apart merging reads as one longer trip.
+
+### Memories, and what is never in one
+
+This is the one feature in the product where being *wrong* is worse than being absent. Every
+gallery that has shipped Memories has hurt someone with it — the ex-partner on an
+anniversary, the relative who died, the hospital corridor. So the exclusions are not a filter
+bolted to the end of the selection: they are a value the caller passes in, they are applied
+before anything is grouped or ranked, and there is no path through the code that skips them.
+A person, a date, a place with a radius, and a dismissal that actually sticks.
+
+The locked folder is excluded structurally rather than by mute, because hidden items are out
+of every other view and a memory is a view. Face clustering being off means there are no
+person memories at all — not computed and filtered, which is the same privacy mistake
+`IndexStep` already refuses to make. A person the user has not named gets no memory, because
+there is no source for a name but them and "Person 3" as a title is worse than nothing.
+
+Selection drops near-duplicates using the hashes the index already computed — eleven frames
+of the same plate of food is what makes a memory feel automatic — but never a favourite, on
+the grounds that a user who marked two similar frames meant both. Over the length limit it
+samples across the span rather than truncating: a memory of one morning of a week-long trip
+is a memory of the wrong thing.
+
+### Numbers
+
+859 shared JVM tests and 47 build-guard tests pass; the guards scan 182 source files clean.
+
 ## Milestone 13 — the field test
 
 BUILD.md § 13.13: *"Field test on 3+ devices; measure GB/hour and Wh/GB."*

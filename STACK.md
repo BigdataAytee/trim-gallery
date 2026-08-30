@@ -70,6 +70,7 @@ Use these. Do not substitute alternatives without noting why in PROJECT.md.
 | SQLDelight | shared database — **replaces Room**, which has no Kotlin/Native iOS target | Gradle `app.cash.sqldelight` + plugin | https://github.com/sqldelight/sqldelight |
 | Koin | DI — **replaces Hilt**, which is JVM/Android only and cannot generate for Kotlin/Native | Gradle `io.insert-koin:koin-core`, `koin-android` | https://github.com/InsertKoinIO/koin |
 | kotlinx-datetime | shared timestamps | Gradle `org.jetbrains.kotlinx:kotlinx-datetime` | https://github.com/Kotlin/kotlinx-datetime |
+| MBTiles (format, not a library) | offline basemap the user supplies | the platform's own SQLite; an `.mbtiles` file is a SQLite database. **No map library is used** — PRD.md R8 forbids the network, so tiles are never fetched, and rendering raster tiles needs no engine. | https://github.com/mapbox/mbtiles-spec |
 | AndroidX Lifecycle / Navigation (multiplatform) | shared ViewModel + nav graph | Gradle `org.jetbrains.androidx.lifecycle`, `org.jetbrains.androidx.navigation` | https://github.com/JetBrains/compose-multiplatform-core |
 
 Room and Hilt in the tables above are superseded by SQLDelight and Koin respectively and

@@ -878,6 +878,70 @@ all of it is unit tested against fakes.
   39.8 for VMAF 95, which is what `shared/native/calibration/README.md` reports — so the
   code that will produce the next threshold is checked against the one that exists.
 
+## Milestone 14 — Memories and the map (v1.1)
+
+- **There are no place names anywhere in this feature.** PRD.md R8 forbids the `INTERNET`
+  permission for the life of the product, so there is no geocoder and no gazetteer. A trip
+  memory says "5 days away · 1200 km away", never "Barcelona", because that would be a guess
+  dressed as a fact. Where a name is wanted the only honest source is the user typing one.
+- **The basemap is an MBTiles pack the user supplies** (decided with the user rather than
+  assumed, because the alternative was a library not in STACK.md). An `.mbtiles` file is an
+  ordinary SQLite database, so it needs no map library and nothing new in the approved stack.
+  The cost — the map is empty until a pack is added — is stated in the UI rather than hidden,
+  which is what `MapTiles.available` is for.
+- **A pack that cannot be used is refused with a reason.** A vector pack is a valid MBTiles
+  file this app cannot draw; saying so beats a map that stays silently empty after the user
+  went and found a file.
+- **MBTiles rows are TMS, slippy tiles are XYZ, and the flip lives in shared code with a
+  test.** Getting it wrong does not blank the map — it renders upside down by hemisphere,
+  which is the sort of bug that survives a demo.
+- **Ground distance and tile scale use different Earth radii on purpose.** Haversine wants
+  the mean radius; Web Mercator is *defined* on the WGS84 equatorial one. Using the mean for
+  tile scale puts the scale bar a tenth of a percent out and in disagreement with the tiles
+  it is drawn over. Caught by a test against the standard 156543.03 m/px figure.
+- **The centroid is averaged as unit vectors, not as numbers.** Averaging longitudes puts
+  the centre of two photographs either side of the date line in the middle of Africa.
+- **Latitudes are clamped to the Mercator limit.** Photographs are taken past 85° — research
+  stations, flights over the pole — and a projection running to infinity there is a crash
+  reachable from a user's own library.
+- **Clustering is greedy and seeded by recency, and cluster centres never move.** Stability
+  matters more than tidiness: the same library at the same zoom must give the same pins, or
+  panning away and back rearranges the map under the user's finger. Fixed centres also avoid
+  the single-linkage failure where a chain of photographs a hundred metres apart drags one
+  cluster across a city.
+- **Pins merge by screen pixels, not by metres.** A degree of longitude is a different
+  distance in Iceland and in Kenya, and distance-based merging leaves one map looking half as
+  busy as the other.
+- **Home needs a dominant place, not merely the largest one.** A share test alone is cleared
+  by five places holding a fifth each, and the largest wins by rounding. Home must also be
+  twice the runner-up. Someone who splits their life between two cities has no home by this
+  rule and is offered no trips — right, because measuring "away" against one of two homes
+  calls half their ordinary life a holiday.
+- **A trip ends after three days without photographs, not two.** Chosen by which mistake the
+  user sees: one holiday split into three memories looks broken; two trips three days apart
+  merging reads as one longer trip.
+- **Home is the most sensitive thing the app derives, and it never leaves.** Derived from the
+  coordinates already on the device, excluded from the diagnostics export along with every
+  other location, and unable to become an address because there is no geocoder.
+- **A memory's exclusions are a value passed in, applied before anything is grouped or
+  ranked.** This is the one feature where being wrong is worse than being absent — every
+  gallery that has shipped Memories has hurt someone with it. Mutes for a person, a date, a
+  place with a radius, and a dismissal that sticks. There is no path through the selection
+  that can route around them.
+- **The locked folder is excluded structurally, not by mute.** Hidden items are out of every
+  other view and a memory is a view.
+- **Face clustering off means no person memories at all**, not computed and filtered — the
+  same rule `IndexStep` already follows: the way to be sure something never leaves is not to
+  make it.
+- **A person the user has not named gets no memory.** There is no source for a name but them,
+  and "Person 3" as a memory title is worse than no memory.
+- **Near-duplicates are dropped from a memory but favourites never are.** Eleven frames of
+  the same plate of food is what makes a memory feel automatic; a user who marked two similar
+  frames meant both. The threshold is tighter than the duplicate finder's, because a memory
+  dropping a merely-similar picture costs nothing where a delete suggestion does.
+- **Over the length limit a memory samples across its span rather than truncating.** A
+  memory of one morning of a week-long trip is a memory of the wrong thing.
+
 ## Open questions added
 - **The Compose layer has never been compiled.** Every Compose Multiplatform version
   resolves `androidx.annotation`, `androidx.collection` and `androidx.lifecycle` from
@@ -966,3 +1030,19 @@ all of it is unit tested against fakes.
   the Android file-and-share are written; the Settings → Privacy row that calls them is
   Compose, which cannot be built here. The decision that matters — what may be in the file —
   is the half that is written and tested.
+
+- **Memories has no music, and that is deliberate for now.** BUILD.md § 9 says "Memories /
+  On this day with music" and MONETIZATION.md puts "Memories with music" in Phase 2's Pro+
+  tier, so the v1.1 feature is the memory and the music is a later, paid addition. It also
+  has a problem this milestone did not need to solve: an app with no network cannot stream a
+  track, so music means bundling audio, and bundled audio means licensing. Worth settling
+  before it is promised in a store listing.
+- **Nothing draws the map.** The tile source, the clustering, the trips and the memories are
+  written and tested; the Compose canvas that renders pins over tiles is not, for the same
+  Google Maven reason as every other composable here. `MbTilesFile` is written to documented
+  SQLite behaviour and has not been run.
+- **A pack has to be copied into app storage before SQLite can open it.** The document
+  picker returns a `content://` URI and SQLite needs a real path. A pack is tens to hundreds
+  of megabytes, so the copy is a real cost and the UI must show its size and ask before
+  spending it. Whether a better route exists — a custom VFS over a `ParcelFileDescriptor` —
+  is worth checking on device before settling for the copy.
