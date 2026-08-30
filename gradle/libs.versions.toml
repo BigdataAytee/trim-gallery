@@ -17,10 +17,17 @@
 
 [versions]
 # --- Build tooling ---
-composeMultiplatform = "1.12.0"   # [central] latest stable. JetBrains: "the latest Compose
+composeMultiplatform = "1.11.1"   # [central] see below. JetBrains: "the latest Compose
                                   # Multiplatform is always compatible with the latest version of
                                   # Kotlin", and the Compose compiler plugin ships with Kotlin, so
                                   # these two versions are deliberately not pinned to each other.
+                                  #
+                                  # Held one line back from 1.12.0 on purpose. Compose 1.12 requires
+                                  # AGP 9.1, AGP 9 requires Gradle 9, and detekt has no Gradle 9
+                                  # release at all — its latest is 1.23.8. Taking the newest Compose
+                                  # would mean dropping a check the build is supposed to keep, which
+                                  # is the wrong trade. Revisit when detekt ships for Gradle 9;
+                                  # it is two version numbers and a wrapper bump.
 agp = "8.13.0"                    # [google] com.android.tools.build:gradle
 kotlin = "2.4.10"                 # [central] latest stable; Compose Multiplatform tracks latest Kotlin
 detekt = "1.23.8"                 # [central]
@@ -32,7 +39,6 @@ minSdk = "29"
 targetSdk = "36"                  # [google]
 
 # --- AndroidX / Compose ---
-composeBom = "2026.01.00"         # [google] androidx.compose:compose-bom
 activityCompose = "1.11.0"        # [google]
 lifecycle = "2.9.4"               # [google]
 media3 = "1.9.0"                  # [google] androidx.media3:*
@@ -49,7 +55,8 @@ sqldelight = "2.3.2"              # [central] replaces Room: Room KMP has no Kot
 koin = "4.2.2"                    # [central] replaces Hilt: Hilt is JVM/Android only, no Kotlin/Native
 kotlinx-datetime = "0.8.0"        # [central]
 kotlinx-serialization = "1.11.0"  # [central]
-lifecycleMp = "2.11.0"            # [central] org.jetbrains.androidx.lifecycle
+lifecycleMp = "2.10.0"            # [central] org.jetbrains.androidx.lifecycle; pairs with
+                                  # Compose Multiplatform 1.11, per the note above.
 navigationMp = "2.9.2"            # [central] org.jetbrains.androidx.navigation
 
 # --- Third party (STACK.md) ---
@@ -96,12 +103,11 @@ mlkit-face-detection = { group = "com.google.mlkit", name = "face-detection", ve
 mlkit-text-recognition = { group = "com.google.mlkit", name = "text-recognition", version.ref = "mlkit-textRecognition" }
 
 # Compose (STACK.md "Front end")
-compose-bom = { group = "androidx.compose", name = "compose-bom", version.ref = "composeBom" }
-compose-ui = { group = "androidx.compose.ui", name = "ui" }
-compose-ui-graphics = { group = "androidx.compose.ui", name = "ui-graphics" }
-compose-ui-tooling = { group = "androidx.compose.ui", name = "ui-tooling" }
-compose-ui-tooling-preview = { group = "androidx.compose.ui", name = "ui-tooling-preview" }
-compose-animation = { group = "androidx.compose.animation", name = "animation" }
+#
+# The androidx Compose artifacts themselves are not listed here: they come from the Compose
+# Multiplatform plugin's `compose.*` accessors, in every module including androidApp, so that
+# one version governs the whole build. The entries below are the androidx libraries that are
+# not part of Compose and carry their own versions.
 androidx-activity-compose = { group = "androidx.activity", name = "activity-compose", version.ref = "activityCompose" }
 androidx-lifecycle-runtime-compose = { group = "androidx.lifecycle", name = "lifecycle-runtime-compose", version.ref = "lifecycle" }
 androidx-lifecycle-viewmodel-compose = { group = "androidx.lifecycle", name = "lifecycle-viewmodel-compose", version.ref = "lifecycle" }

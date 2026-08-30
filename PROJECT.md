@@ -1139,6 +1139,19 @@ Recorded by class, as each one is fixed:
   would have put the index of the user's photo library under Documents — visible in the Files
   app to anyone who enables file sharing. Both fixed together.
 
+- **Compose 1.12 needs AGP 9.1, AGP 9 needs Gradle 9, and detekt has no Gradle 9 release.**
+  `checkDebugAarMetadata` refused 29 artifacts. The rest of the version catalogue says
+  "latest stable" everywhere, so AGP 8.13 looked like the stale entry — but the chain runs
+  out at detekt, whose latest is 1.23.8 and which has no Gradle 9 line at all. Taking the
+  newest Compose would mean dropping static analysis to get a build, which is the wrong way
+  round in a pass whose whole point is that the checks are real.
+
+  So: Compose Multiplatform held at 1.11.1, its JetBrains lifecycle companion at 2.10.0, and
+  the androidx `compose-bom` removed from `androidApp` — it was the only module mixing the
+  BOM with the Compose Multiplatform plugin, which put two Compose versions in one build and
+  is what dragged 1.12 in. Every module now takes `compose.*` from the plugin. Revisit when
+  detekt ships for Gradle 9: two version numbers and a wrapper bump.
+
 ### The guards guard themselves
 
 - **A rule declares the languages it polices, and must have a planted violation in each.**

@@ -110,8 +110,13 @@ dependencies {
     implementation(projects.shared.feature.compress)
     implementation(projects.shared.feature.settings)
 
-    implementation(platform(libs.compose.bom))
-    implementation(libs.compose.ui)
+    // Compose comes from the Compose Multiplatform plugin, not from the androidx BOM.
+    //
+    // Mixing the two put two different Compose versions in one build, and the androidx BOM
+    // is what dragged in 1.12.0 — which `checkDebugAarMetadata` rejected against AGP 8.13
+    // with 29 issues. Every other module in this project already takes `compose.*` from the
+    // plugin; this one is now the same, and there is one Compose version in the build.
+    implementation(compose.ui)
     implementation(libs.androidx.activity.compose)
     implementation(libs.androidx.lifecycle.runtime.compose)
 
@@ -148,7 +153,7 @@ dependencies {
     implementation(libs.coil.compose)
     implementation(libs.coil.video)
 
-    debugImplementation(libs.compose.ui.tooling)
+    debugImplementation(compose.uiTooling)
 
     testImplementation(libs.junit)
     testImplementation(libs.kotlinx.coroutines.test)
