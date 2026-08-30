@@ -29,12 +29,15 @@ style:
       # BUILD.md rule 2: no software video encoding, ever. Creating a codec by name
       # is how a software encoder gets in by the back door; go through the
       # hardware-only selector instead.
-      - reason: 'Select encoders through HardwareOnlyEncoderSelector (BUILD.md rule 2).'
+      # Belt and braces alongside the verifySourceBoundaries build guard, which is the
+      # real enforcement (ARCHITECTURE.md section 14).
+      - reason: 'Codecs are created only in CodecFactory (BUILD.md rule 2).'
         value: 'android.media.MediaCodec.createEncoderByType'
-      - reason: 'Select encoders through HardwareOnlyEncoderSelector (BUILD.md rule 2).'
+      - reason: 'Codecs are created only in CodecFactory (BUILD.md rule 2).'
         value: 'android.media.MediaCodec.createByCodecName'
+      - reason: 'Codecs are created only in CodecFactory (BUILD.md rule 2).'
+        value: 'android.media.MediaCodec.createDecoderByType'
 
 exceptions:
   TooGenericExceptionCaught:
     active: true
-    excludes: ['**/Milestone1ViewModel.kt']

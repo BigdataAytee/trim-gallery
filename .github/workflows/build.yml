@@ -1,0 +1,92 @@
+# ARCHITECTURE.md § 16, "Definition of done": compiles for all enabled targets, build
+# guards pass, shared tests pass.
+name: Build
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  guards:
+    name: Build guards
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+      - uses: gradle/actions/setup-gradle@v4
+
+      # Runs first and on its own: the guards need no Android SDK and no Google Maven,
+      # so a violation is reported in seconds rather than after a full dependency
+      # resolution.
+      - name: Guard unit tests
+        run: ./gradlew -p build-logic test --stacktrace
+
+      - name: Run guards over every module
+        run: ./gradlew guards --stacktrace
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: guard-reports
+          path: |
+            build-logic/build/reports/tests/test
+            **/build/reports/guards
+          if-no-files-found: ignore
+
+  shared-tests:
+    name: Shared JVM tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+      - uses: gradle/actions/setup-gradle@v4
+
+      # The JVM half of ARCHITECTURE.md § 14. iOS targets are only declared on macOS, so
+      # this configures and runs on Linux without a Kotlin/Native toolchain.
+      - name: Shared unit tests
+        run: ./gradlew sharedTest --stacktrace
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: shared-test-reports
+          path: '**/build/reports/tests'
+          if-no-files-found: ignore
+
+  android:
+    name: Android build + lint
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+      - uses: android-actions/setup-android@v3
+      - uses: gradle/actions/setup-gradle@v4
+
+      - name: Static analysis
+        run: ./gradlew detekt ktlintCheck --stacktrace
+
+      # assembleDebug depends on the merged-manifest guard, so a network permission
+      # arriving through a dependency fails here even if no source changed.
+      - name: Assemble
+        run: ./gradlew :androidApp:assembleDebug --stacktrace
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: apk
+          path: androidApp/build/outputs/apk/debug/*.apk
+          if-no-files-found: ignore

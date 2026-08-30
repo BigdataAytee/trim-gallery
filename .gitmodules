@@ -1,0 +1,30 @@
+# ARCHITECTURE.md § 10 / STACK.md "Native build layout".
+#
+# Declared but deliberately NOT initialised: milestone 2 is where the native layer is
+# built. `git submodule update --init --recursive shared/native` when you get there.
+# Links verified against STACK.md.
+
+[submodule "shared/native/xpsnr"]
+	path = shared/native/xpsnr
+	url = https://github.com/fraunhoferhhi/xpsnr.git
+	shallow = true
+
+[submodule "shared/native/vmaf"]
+	path = shared/native/vmaf
+	url = https://github.com/Netflix/vmaf.git
+	shallow = true
+
+[submodule "shared/native/libjxl"]
+	path = shared/native/libjxl
+	url = https://github.com/libjxl/libjxl.git
+	shallow = true
+
+[submodule "shared/native/libheif"]
+	path = shared/native/libheif
+	url = https://github.com/strukturag/libheif.git
+	shallow = true
+
+[submodule "shared/native/oxipng"]
+	path = shared/native/oxipng
+	url = https://github.com/oxipng/oxipng.git
+	shallow = true

@@ -1,0 +1,163 @@
+-- ARCHITECTURE.md § 4. One schema on every platform; only MediaItem.platformRef differs
+-- (Android: SAF document URI, iOS: PHAsset localIdentifier).
+
+CREATE TABLE MediaItem (
+    id           INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT,
+    platformRef  TEXT    NOT NULL UNIQUE,
+    name         TEXT    NOT NULL,
+    kind         TEXT    NOT NULL,
+    codec        TEXT,
+    width        INTEGER NOT NULL DEFAULT 0,
+    height       INTEGER NOT NULL DEFAULT 0,
+    fps          REAL,
+    bitrate      INTEGER,
+    size         INTEGER NOT NULL,
+    duration     INTEGER,
+    takenAt      INTEGER,
+    lat          REAL,
+    lon          REAL,
+    cameraModel  TEXT,
+    hdr          INTEGER NOT NULL DEFAULT 0,
+    motionPhoto  INTEGER NOT NULL DEFAULT 0,
+    ultraHdr     INTEGER NOT NULL DEFAULT 0,
+    livePhoto    INTEGER NOT NULL DEFAULT 0,
+    raw          INTEGER NOT NULL DEFAULT 0,
+    inCloudOnly  INTEGER NOT NULL DEFAULT 0,
+    phash        INTEGER,
+    sha256       TEXT,
+    status       TEXT    NOT NULL DEFAULT 'NEW',
+    skipReason   TEXT,
+    mtime        INTEGER NOT NULL
+);
+
+-- The night pass walks candidates largest-saving-first (BUILD.md § 5).
+CREATE INDEX mediaItem_status ON MediaItem(status);
+CREATE INDEX mediaItem_size ON MediaItem(size DESC);
+CREATE INDEX mediaItem_takenAt ON MediaItem(takenAt DESC);
+-- Duplicate detection groups on these two (BUILD.md § 8).
+CREATE INDEX mediaItem_phash ON MediaItem(phash);
+CREATE INDEX mediaItem_sha256 ON MediaItem(sha256);
+
+CREATE TABLE Job (
+    id            INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT,
+    mediaId       INTEGER NOT NULL REFERENCES MediaItem(id) ON DELETE CASCADE,
+    state         TEXT    NOT NULL DEFAULT 'QUEUED',
+    startedAt     INTEGER,
+    finishedAt    INTEGER,
+    engine        TEXT,
+    setting       TEXT,
+    probes        INTEGER NOT NULL DEFAULT 0,
+    xpsnr         REAL,
+    vmaf          REAL,
+    originalSize  INTEGER,
+    newSize       INTEGER,
+    energyEstimate REAL,
+    thermalStart  REAL,
+    thermalEnd    REAL,
+    error         TEXT
+);
+CREATE INDEX job_mediaId ON Job(mediaId);
+
+CREATE TABLE UndoEntry (
+    id        INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT,
+    mediaId   INTEGER NOT NULL REFERENCES MediaItem(id) ON DELETE CASCADE,
+    location  TEXT    NOT NULL,
+    ref       TEXT    NOT NULL,
+    expiresAt INTEGER,
+    state     TEXT    NOT NULL DEFAULT 'ACTIVE'
+);
+CREATE INDEX undo_expiresAt ON UndoEntry(expiresAt);
+
+CREATE TABLE Label (
+    mediaId    INTEGER NOT NULL REFERENCES MediaItem(id) ON DELETE CASCADE,
+    text       TEXT    NOT NULL,
+    confidence REAL    NOT NULL
+);
+CREATE INDEX label_text ON Label(text);
+
+CREATE TABLE Face (
+    id      INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT,
+    mediaId INTEGER NOT NULL REFERENCES MediaItem(id) ON DELETE CASCADE,
+    personId INTEGER REFERENCES Person(id) ON DELETE SET NULL,
+    -- The embedding never leaves the device (BUILD.md § 7).
+    vector  BLOB    NOT NULL,
+    left    REAL    NOT NULL,
+    top     REAL    NOT NULL,
+    right   REAL    NOT NULL,
+    bottom  REAL    NOT NULL
+);
+CREATE INDEX face_personId ON Face(personId);
+
+CREATE TABLE Person (
+    id          INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT,
+    displayName TEXT,
+    coverMediaId INTEGER REFERENCES MediaItem(id) ON DELETE SET NULL
+);
+
+CREATE TABLE TextBlock (
+    mediaId INTEGER NOT NULL REFERENCES MediaItem(id) ON DELETE CASCADE,
+    text    TEXT    NOT NULL,
+    left    REAL    NOT NULL,
+    top     REAL    NOT NULL,
+    right   REAL    NOT NULL,
+    bottom  REAL    NOT NULL
+);
+CREATE INDEX textBlock_text ON TextBlock(text);
+
+-- After ~20 matching files the search collapses to one probe (PROJECT.md § Speed).
+CREATE TABLE Predictor (
+    platform      TEXT    NOT NULL,
+    device        TEXT    NOT NULL,
+    cameraModel   TEXT    NOT NULL,
+    codec         TEXT    NOT NULL,
+    w             INTEGER NOT NULL,
+    h             INTEGER NOT NULL,
+    fps           INTEGER NOT NULL,
+    bitrateBucket INTEGER NOT NULL,
+    setting       TEXT    NOT NULL,
+    samples       INTEGER NOT NULL DEFAULT 0,
+    PRIMARY KEY (platform, device, cameraModel, codec, w, h, fps, bitrateBucket)
+);
+
+CREATE TABLE FolderGrant (
+    platformRef TEXT NOT NULL PRIMARY KEY,
+    mode        TEXT NOT NULL
+);
+
+CREATE TABLE RunSession (
+    id            INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT,
+    startedAt     INTEGER NOT NULL,
+    finishedAt    INTEGER,
+    filesDone     INTEGER NOT NULL DEFAULT 0,
+    bytesFreed    INTEGER NOT NULL DEFAULT 0,
+    minutesWorked INTEGER NOT NULL DEFAULT 0,
+    wh            REAL    NOT NULL DEFAULT 0.0,
+    seen          INTEGER NOT NULL DEFAULT 0
+);
+
+-- Queries -------------------------------------------------------------------
+
+selectCandidatesBySaving:
+SELECT * FROM MediaItem
+WHERE status = 'CANDIDATE'
+ORDER BY size DESC
+LIMIT :limit;
+
+selectByStatus:
+SELECT * FROM MediaItem WHERE status = ?;
+
+selectExpiredUndo:
+SELECT * FROM UndoEntry WHERE state = 'ACTIVE' AND expiresAt IS NOT NULL AND expiresAt <= ?;
+
+upsertPredictor:
+INSERT INTO Predictor(platform, device, cameraModel, codec, w, h, fps, bitrateBucket, setting, samples)
+VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 1)
+ON CONFLICT DO UPDATE SET setting = excluded.setting, samples = Predictor.samples + 1;
+
+selectPredictor:
+SELECT * FROM Predictor
+WHERE platform = ? AND device = ? AND cameraModel = ? AND codec = ?
+  AND w = ? AND h = ? AND fps = ? AND bitrateBucket = ?;
+
+lastRunSession:
+SELECT * FROM RunSession ORDER BY startedAt DESC LIMIT 1;

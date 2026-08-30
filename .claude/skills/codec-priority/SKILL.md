@@ -1,73 +1,125 @@
 ---
 name: codec-priority
-description: Rules for every MediaCodec / Media3 Transformer encode in trim-gallery — KEY_PRIORITY=1 background priority, hardware-only encoder selection, codec reclaim handling, performance points, and the absolute ban on software video encoding. Use whenever touching encoder configuration, codec selection, Transformer setup, or handling a codec error.
+description: Rules for every video encode in Trim Gallery on both platforms — hardware codecs only and never a software encoder, all codec creation funnelled through CodecFactory, background priority (Android KEY_PRIORITY=1 / iOS VideoToolbox), capability pre-checks, and reclaim/interruption handling. Use whenever touching CodecFactory, HwEncoder, ProbeEncoder, Transformer or AVAssetWriter setup, codec selection, or a codec error path.
 ---
 
 # Codec priority
 
-BUILD.md § 2 rule 2 is not a preference: **hardware codecs only. No software video encoding on the phone, ever. Skip the file instead.**
+BUILD.md § 2 rule 2 is not a preference: **hardware codecs only. No software video
+encoding on the phone, ever. Skip the file instead.**
 
-A software encoder on a phone is slower than real time, burns battery the app promised to save, and heats a device that is supposed to be sitting still on a charger. There is no configuration under which it is the right answer. If no hardware encoder can do the job, the file is skipped with a reason and shown in the Skipped list.
+A software encoder is slower than real time, burns the battery the app exists to
+protect, and heats a device that is meant to be sitting still on a charger. There is
+no configuration under which it is the right answer. When no hardware encoder can do
+the job the file is `SKIPPED` with a reason and shown in the Skipped list.
+
+## One door in: `CodecFactory`
+
+```kotlin
+interface CodecFactory { fun capabilities(): CodecCaps; fun encoder(spec: EncodeSpec, background: Boolean): HwEncoder }
+```
+
+**Every** codec in the app is created inside a `CodecFactory` implementation
+(`androidApp/engine/MediaCodecFactory`, `iosApp/engine/VideoToolboxFactory`). This is
+enforced by a build guard (ARCHITECTURE.md § 14): `MediaCodec.createEncoderByType`,
+`createByCodecName`, `createDecoderByType` and `VTCompressionSessionCreate` outside
+those files fail the build.
+
+The guard exists because the hardware-only rule is only as strong as its weakest call
+site. One `createEncoderByType("video/hevc")` in a helper somewhere is a software
+encoder on any device that lacks the hardware one, and nothing above it would notice.
+
+Pipeline code in `shared/core/pipeline` never sees a codec. It sees `HwEncoder`,
+`ProbeEncoder` and `YuvSource`, and it is tested against fakes.
 
 ## Selecting an encoder
 
-Walk `MediaCodecList(REGULAR_CODECS)` and keep only encoders where:
+**Android.** Walk `MediaCodecList(REGULAR_CODECS)` and keep only encoders where
+`isHardwareAccelerated()` is true, `isSoftwareOnly()` is false, and the name does not
+start with `OMX.google.` or `c2.android.` — the flags have lied on some devices, so the
+name check stays as a second line of defence.
 
-- `MediaCodecInfo.isHardwareAccelerated()` is `true`, **and**
-- `isSoftwareOnly()` is `false`, **and**
-- the name does not start with `OMX.google.` / `c2.android.` (the platform software codecs — belt and braces, because the flags have lied on some devices).
+**iOS.** `VTIsHardwareEncodeSupported(kCMVideoCodecType_HEVC)`; AV1 only on A17 Pro /
+M-series where the query says so. `AVAssetExportSession` is **not** used: it gives no
+bitrate control, which the search in milestone 3 depends on.
 
-Then, before configuring:
+Then, on both, pre-check before configuring (ARCHITECTURE.md § 13, "Requested mode
+unsupported" — *pre-check caps; fall back to VBR/lower level; never software*):
 
-- **Performance points.** `CodecCapabilities.getVideoCapabilities().getSupportedPerformancePoints()` — if the target resolution/fps is not covered, do not request it. Never ask for more than the device advertises; the failure mode is a stall, not an error.
-- **Bitrate mode.** `EncoderCapabilities.isBitrateModeSupported(BITRATE_MODE_CQ)` before using CQ. It is not universally supported (PROJECT.md § Codec facts), so the search runs on **bitrate with VBR** and CQ is an opportunistic path only.
-- **Profile.** Main profile, 8-bit only in v1. HDR needs Main10 and 10-bit surfaces and is patchy — HDR video is skipped, not attempted.
-- **AV1** only where `MediaCodecList` reports a *hardware* AV1 encoder, and only when the "allow AV1" setting is on.
+- **Performance points** (Android): `getSupportedPerformancePoints()`. If the target
+  resolution/fps is not covered, do not request it — the failure mode is a stall, not
+  an error.
+- **Bitrate mode**: `EncoderCapabilities.isBitrateModeSupported(BITRATE_MODE_CQ)`
+  before using CQ. It is not universally supported (PROJECT.md § Codec facts), so the
+  search runs on **bitrate with VBR** and CQ is opportunistic only.
+- **Profile**: Main, 8-bit, v1. HDR needs Main10/10-bit surfaces and is patchy — HDR
+  video is skipped, not attempted. Same on iOS for Dolby Vision / HLG.
 
 ## Configuring
 
-Every codec this app configures, encoder and decoder alike:
+| | Android | iOS |
+|---|---|---|
+| Encode path | Media3 Transformer, surface-to-surface | `AVAssetWriter` + VideoToolbox (`hvc1`) |
+| Background priority | `MediaFormat.KEY_PRIORITY = 1` on **every** codec | serial queue at utility QoS; no realtime hint |
+| Bitrate | VBR, CQ where supported | `AVVideoAverageBitRateKey` (+ `AVVideoQualityKey` for HEVC where honoured) |
+| Audio | Transformer transmuxes the track | `AVAssetWriterInput` with `nil` output settings |
+| Container | standard MP4, 2 s GOP, moov at front | same |
 
-```kotlin
-format.setInteger(MediaFormat.KEY_PRIORITY, 1)   // 1 = background, best effort
-format.setInteger(MediaFormat.KEY_I_FRAME_INTERVAL, 2)  // 2-second GOP
-```
+`KEY_PRIORITY = 1` is what makes a foreground camera or video call win the hardware
+from the night job. Set it on **all** codecs in the pipeline, not just the encoder — a
+realtime-priority decoder feeding a background encoder still holds a slot the
+foreground wants. `background = false` is passed only by play-to-compress.
 
-`KEY_PRIORITY = 1` is what makes the foreground camera or a video call win the hardware over our night job. It must be set on **all** codecs in the pipeline, not just the encoder — a realtime-priority decoder feeding a background encoder still holds a slot the foreground wants.
+**Audio is always passed through, never re-encoded.** It is a rounding error against
+the video track and re-encoding it only loses quality.
 
-Output is **standard MP4, moov at front**. `MediaMuxer` cannot write fragmented MP4 (PROJECT.md § Codec facts).
+`MediaMuxer` cannot write fragmented MP4 — standard MP4 only (PROJECT.md § Codec
+facts).
 
-Media3 Transformer is the pipeline, not hand-written MediaCodec plumbing: surface-to-surface decoder → encoder, **audio passthrough** (the audio track is copied, never re-encoded — it is a rounding error in size and re-encoding it only loses quality).
+## Reclaim and interruption
 
-## Codec reclaim
+Reclaim is **expected**, not exceptional: it is the mechanism by which the app keeps
+its promise that the foreground wins. ARCHITECTURE.md § 13 fixes the handling —
+`Job.PAUSED`, retry at **5 / 15 / 60 s**:
 
-`MediaCodec.CodecException.isRecoverable()` / `isTransient()` and reclaim (`onError` with a reclaim reason) are **expected**, not exceptional: they are the mechanism by which the app keeps its promise that the foreground wins.
+- **Android** `CodecException`: `isRecoverable()` → `reset()` and retry once;
+  reclaimed or `isTransient()` → release, back off, re-acquire, resume from the last
+  checkpoint. Never a permanent failure.
+- **iOS** `AVAssetWriter.status == .failed` with an interruption → same ladder.
+- Anything else → `Job.FAILED`, record the reason, move on. **Never** fall back to
+  software.
 
-- **Reclaimed / transient** → release the codec, wait with backoff, re-acquire, resume the job from the last clean point. Do not count it as a failure and do not mark the file as skipped.
-- **Recoverable** → `reset()` the codec and retry once.
-- **Anything else** → fail the job, record the reason, move on. Never fall back to software.
-
-The app is foreground-aware anyway: background work pauses whenever the app is in the foreground (BUILD.md § 2 rule 7), so reclaim should mostly come from *other* apps.
+The app is foreground-aware anyway (BUILD.md § 2 rule 7): background work pauses when
+the app is foregrounded, so reclaim should mostly come from *other* apps.
 
 ## Stopping
 
-An encode in flight must stop promptly on any of: unplugged, app foregrounded, thermal headroom > 0.7, nightly cap reached, storage below 2× largest pending file, 30 minutes before the user's alarm. Structure encodes as cancellable coroutines and check between windows/segments — a cancelled job discards its temp file and requeues, it never leaves a half-written output where the original was.
+An encode in flight stops promptly on any guard: unplugged, app foregrounded, thermal
+headroom > 0.7 (Android) or `thermalState` ≥ serious (iOS), nightly cap, storage below
+2× the largest pending file, or the stop-by/alarm time. Guards run in the order fixed
+by ARCHITECTURE.md § 9: `Foreground → Charging → BatteryFull? → Thermal → StopBy/Alarm
+→ Storage → Cap`.
 
-Source safety during an encode belongs to `safe-replace`: record size and mtime before starting, and if either changed when the encode finishes, discard and requeue.
+Encodes are cancellable coroutines that check between windows. A cancelled job
+discards its temp file and returns to `QUEUED`; it never leaves a half-written output
+where the original was. On iOS the OS can end a `BGProcessingTask` at any moment, so
+every file is checkpointed to the DB as it completes.
 
 ## The one on-battery exception
 
-Play-to-compress: in the built-in player, when the user explicitly taps "Compress now" and presses play, decoder output is teed into the encoder. That is the **only** path allowed to encode on battery, and only on that explicit action (BUILD.md § 9, PROJECT.md § Files in use).
+Play-to-compress: in the built-in player, when the user explicitly taps "Compress now"
+and presses play, decoder output is teed into the encoder. That is the **only** path
+allowed to encode on battery, and only on that explicit action (BUILD.md § 9,
+PROJECT.md § Files in use). It passes `background = false`.
 
 ## Review checklist
 
-Before merging anything that configures a codec:
-
-- [ ] Encoder chosen through the hardware-only filter, with no software fallback anywhere in the error path
-- [ ] `KEY_PRIORITY = 1` on every codec in the pipeline
-- [ ] Performance points checked against the requested resolution/fps
-- [ ] `isBitrateModeSupported` checked before any non-VBR mode
-- [ ] 8-bit Main profile; HDR input skipped, not attempted
-- [ ] Audio passthrough, standard MP4, 2-second GOP, moov at front
-- [ ] Reclaim path waits and resumes; no path marks a reclaim as a permanent failure
-- [ ] Cancellation checked between windows; temp file cleaned up on cancel
+- [ ] No codec created outside a `CodecFactory` implementation
+- [ ] Hardware-only filter applied, with no software fallback in any error path
+- [ ] `KEY_PRIORITY = 1` on every Android codec when `background = true`
+- [ ] Caps pre-checked: performance points, bitrate mode, profile/bit depth
+- [ ] 8-bit Main; HDR input skipped, not attempted
+- [ ] Audio passthrough; standard MP4; 2-second GOP; moov at front
+- [ ] Reclaim retries 5/15/60 s and resumes; never marked permanently failed
+- [ ] Cancellation checked between windows; temp file deleted on cancel
+- [ ] Pipeline code depends on `HwEncoder`/`ProbeEncoder`, not on a codec type

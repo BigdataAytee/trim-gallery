@@ -1,0 +1,37 @@
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+
+    <!--
+      There is deliberately no network permission here, and there never will be.
+      BUILD.md rule 8: the app states "no network access" in the UI as a feature, so the
+      manifest has to make that literally true. Two build guards keep it that way
+      (ARCHITECTURE.md section 14): verifyNoInternetPermission scans this file and the
+      merged manifest of every variant, and verifySourceBoundaries fails on any use of a
+      networking API in source.
+
+      Media access is by Storage Access Framework grant (BUILD.md section 4), which
+      needs no storage permission at all: the user picks folders and the app takes
+      persistable URI permission.
+    -->
+
+    <uses-feature android:name="android.hardware.camera" android:required="false" />
+
+    <application
+        android:name=".TrimGalleryApplication"
+        android:allowBackup="false"
+        android:icon="@mipmap/ic_launcher"
+        android:label="@string/app_name"
+        android:supportsRtl="true"
+        android:theme="@style/Theme.TrimGallery">
+
+        <activity
+            android:name=".ui.MainActivity"
+            android:exported="true"
+            android:theme="@style/Theme.TrimGallery">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+        </activity>
+    </application>
+</manifest>

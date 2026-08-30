@@ -62,6 +62,19 @@ Use these. Do not substitute alternatives without noting why in PROJECT.md.
 | mp4parser | MP4 creation time / GPS / rotation atoms | Gradle `org.mp4parser:isoparser` | https://github.com/sannies/mp4parser |
 | PowerManager thermal headroom, BatteryManager | thermal pause, energy calibration | platform API | — |
 
+## Cross-platform (KMP) — added for ARCHITECTURE.md, reasons in PROJECT.md
+| Project | Use | How | Source |
+|---|---|---|---|
+| Kotlin Multiplatform | one core for Android + iOS (ARCHITECTURE.md § 1) | Gradle plugin `org.jetbrains.kotlin.multiplatform` | https://github.com/JetBrains/kotlin |
+| Compose Multiplatform | every screen (ARCHITECTURE.md § 11) | Gradle plugin `org.jetbrains.compose` | https://github.com/JetBrains/compose-multiplatform |
+| SQLDelight | shared database — **replaces Room**, which has no Kotlin/Native iOS target | Gradle `app.cash.sqldelight` + plugin | https://github.com/sqldelight/sqldelight |
+| Koin | DI — **replaces Hilt**, which is JVM/Android only and cannot generate for Kotlin/Native | Gradle `io.insert-koin:koin-core`, `koin-android` | https://github.com/InsertKoinIO/koin |
+| kotlinx-datetime | shared timestamps | Gradle `org.jetbrains.kotlinx:kotlinx-datetime` | https://github.com/Kotlin/kotlinx-datetime |
+| AndroidX Lifecycle / Navigation (multiplatform) | shared ViewModel + nav graph | Gradle `org.jetbrains.androidx.lifecycle`, `org.jetbrains.androidx.navigation` | https://github.com/JetBrains/compose-multiplatform-core |
+
+Room and Hilt in the tables above are superseded by SQLDelight and Koin respectively and
+have been removed from the version catalog so they cannot be applied by accident.
+
 ## Engineering quality
 | Project | Use | How | Source |
 |---|---|---|---|

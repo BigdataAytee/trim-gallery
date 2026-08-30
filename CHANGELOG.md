@@ -4,76 +4,110 @@ All notable changes to Trim Gallery. Newest first.
 
 ## [Unreleased]
 
-### Added — project setup and milestone 1
+### Changed — restructured to Kotlin Multiplatform for ARCHITECTURE.md
 
-**Claude Code skills** (STACK.md, "Anthropic open-source")
-- Ran the STACK.md setup step verbatim: cloned `anthropics/skills` and copied
-  `frontend-design`, `skill-creator` and `webapp-testing` into `.claude/skills/`,
-  plus `template/SKILL.md` as `.claude/skills/TEMPLATE.md`.
-- Wrote the three project skills STACK.md calls for:
-  - `ndk-build` — arm64-only CMake layout, NEON flags, meson-inside-CMake for
-    libvmaf, cargo-ndk for oxipng, and the JNI bridge rules (direct buffers,
-    `AutoCloseable` handles, cancellable native calls, `RegisterNatives`).
-  - `codec-priority` — hardware-only encoder selection, `KEY_PRIORITY = 1` on every
-    codec, performance points, `isBitrateModeSupported` before CQ, codec reclaim as
-    an expected event, and the ban on software video encoding.
-  - `safe-replace` — the ordered replace procedure, size+mtime change detection,
-    verify-before-replace, folder modes, SAF specifics, and the list of calls that
-    must never appear near an original.
-- Added `.github/workflows/claude-code-review.yml` so every PR is reviewed against
-  BUILD.md, PROJECT.md, STACK.md and the three skills.
+ARCHITECTURE.md arrived after the first Android-only skeleton and supersedes it. The
+single `app/` module has been replaced by the § 3 layout: `shared/` (KMP) + `androidApp`
++ an `iosApp` target that is present but not implemented.
 
-**Android skeleton**
-- Kotlin + Jetpack Compose (Material 3), `minSdk 29`, `targetSdk`/`compileSdk` 36.
-- **arm64-v8a only**, enforced in two places: `ndk.abiFilters` and an ABI split with
-  `isUniversalApk = false`.
-- **No `INTERNET` permission, enforced by the build.** `verifyNoInternetPermission`
-  fails the build if a forbidden network permission reaches the manifest. It runs per
-  variant against the **AGP-merged** manifest as well as our own sources, so a
-  permission contributed by a dependency is caught too. Wired into both `assemble*`
-  and `check`. Covers `INTERNET`, `ACCESS_NETWORK_STATE`, `ACCESS_WIFI_STATE` and
-  `CHANGE_NETWORK_STATE`.
-- The scanning logic lives in the `build-logic` included build with no dependency on
-  AGP, and has 13 passing tests — including a Gradle TestKit test that asserts a
-  build with `INTERNET` in the manifest actually fails.
-- Gradle version catalog (`gradle/libs.versions.toml`) restricted to STACK.md
-  entries; Detekt and ktlint applied to all modules. Detekt additionally forbids
-  `MediaCodec.createEncoderByType` / `createByCodecName`, the back door through which
-  a software encoder could be created.
-- Gradle wrapper 8.14.3.
+**Skills** — the three project skills were rewritten against BUILD.md § 2 and
+ARCHITECTURE.md § 7, and are now cross-platform:
+- `codec-priority` — the `CodecFactory` single door, Android `KEY_PRIORITY = 1` and iOS
+  VideoToolbox side by side, capability pre-checks, and the 5/15/60 s reclaim ladder
+  from § 13.
+- `safe-replace` — the § 7 `Replacer` contract in order, reverse rollback, and the
+  platform mechanics table (SAF rename vs. PhotoKit add-then-delete, including album
+  membership).
+- `ndk-build` — one CMake build for android-arm64 and ios-arm64 behind `trim_native.h`,
+  JNI on one side and cinterop on the other.
 
-**Milestone 1 — Media3 Transformer encode (BUILD.md section 13, step 1)**
-- `TransformerEncoder`: decode → encode → mux one video to HEVC via Media3
-  Transformer, with **audio transmuxed** (`Composition.setTransmuxAudio(true)`), a
-  2-second GOP, and progress exposed as a `StateFlow`. Cancelling the calling
-  coroutine cancels the export and deletes the partial output.
-- `HardwareOnlyEncoderSelector`: filters Media3's encoder list to hardware encoders
-  only (`isHardwareAccelerated`, `!isSoftwareOnly`, and a name check against
-  `OMX.google.` / `c2.android.` because those flags have lied on some devices).
-  Combined with `setEnableFallback(false)`, a device with no hardware HEVC encoder
-  fails the export instead of quietly encoding in software — BUILD.md rule 2.
-- `Milestone1Screen` + `Milestone1ViewModel`: pick a video via
-  `ACTION_OPEN_DOCUMENT`, encode it, show source/output sizes and the size factor,
-  then play the result back with ExoPlayer.
-- The source file is only ever read. Output goes to app-private cache, never beside
-  the original: verification and safe replace are milestone 4.
+**Module layout (ARCHITECTURE.md § 3)**
+- `shared/engine-api` — every interface from § 5, verbatim, with no platform types.
+- `shared/core/model` — the § 4 data model.
+- `shared/core/pipeline` — `Triager` implementing the BUILD.md § 5 triage rules.
+- `shared/core/{domain,data,ui}` and `shared/feature/{gallery,search,people,space,cleanup,editor,compress,settings}`.
+- `shared/native` — CMake project, `trim_native.h` C ABI, and the five STACK.md
+  submodules declared in `.gitmodules` but **not initialised**; milestone 2 turns them on.
+- `androidApp` — `MediaCodecFactory`, `TransformerEncoder`, Koin wiring, host Activity.
+- `iosApp` — directory shape, `Info.plist` and entitlements with no network keys, and a
+  README mapping each planned file to the interface it will implement.
+- `benchmark` — Macrobenchmark module (cold start now, grid scroll at milestone 8).
+
+**Three build guards (ARCHITECTURE.md § 14)** — all in the `build-logic` included build,
+with no AGP on the classpath, so they run in CI in seconds without an Android SDK:
+1. **No network permission** — scans every `AndroidManifest.xml` *and* the AGP-merged
+   manifest of every variant, so a permission arriving through a dependency is caught.
+2. **Codecs only in `CodecFactory`** — `MediaCodec.create*`, `MediaCodecList` and
+   `VTCompressionSessionCreate` outside `MediaCodecFactory` / `VideoToolboxFactory` fail
+   the build.
+3. **Library writes only in `Replacer`** — `DocumentsContract` mutations,
+   `openOutputStream`, `DocumentFile` writes, `PHAssetChangeRequest` and `deleteAssets`
+   outside the two `SafeReplacer`s and the two `UndoBin`s fail the build.
+
+   Plus the source half of the network guard (any networking API, empty allow-list) and
+   the iOS plist half (`NSAppTransportSecurity`, network entitlements). Comments and
+   string literals are stripped before matching, so a rule named in a doc comment is not
+   itself a violation. A guard that finds nothing to scan **fails**, because a guard that
+   passes on an empty file set reads as green.
+
+**Tooling** — Detekt and ktlint on every module; `.github/workflows/build.yml` with three
+jobs (guards, shared JVM tests, Android build + static analysis); `./gradlew sharedTest`
+and `./gradlew guards` as the two entry points CI gates on.
+
+**Milestone 1 (BUILD.md § 13.1)** — rebuilt against the shared interfaces:
+- `MediaCodecFactory : CodecFactory` — the only place a codec is created. Hardware-only
+  filter (`isHardwareAccelerated`, `!isSoftwareOnly`, plus a name check because those
+  flags have lied on some devices).
+- `TransformerEncoder : HwEncoder` — Media3 Transformer, HEVC, **audio transmuxed**,
+  2-second GOP, **background codec priority** via
+  `VideoEncoderSettings.setEncoderPerformanceParameters(…, priority = 1)`, and
+  `setEnableFallback(false)` so a device without a hardware HEVC encoder fails the export
+  instead of quietly encoding in software.
+- `shared/testdata/golden-h264-640x360-3s.mp4` — H.264 + **real AAC track**, 3 s, so
+  audio passthrough is tested rather than assumed.
+- `Milestone1EncodeTest` — encodes the golden clip, then asserts the output is HEVC, that
+  the audio track survived with its original MIME type, that the duration matches the
+  source, and that ExoPlayer **plays it through to `STATE_ENDED`**. On a device with no
+  hardware HEVC encoder the test skips via `assumeTrue`, because skipping the file is the
+  correct behaviour there.
+
+### Verified
+
+Everything that does not need the Android SDK or Google Maven was actually run:
+
+- **30 build-guard tests pass** (`./gradlew -p build-logic test`) — unit tests for all
+  four scanners plus Gradle TestKit tests proving a violating build genuinely fails, for
+  each of the three guards.
+- **12 `Triager` tests pass**, compiled with the real Kotlin compiler against the shared
+  model, covering every BUILD.md § 5 threshold and every § 2.5 skip flag.
+- **All three guards run clean over the real tree** — 16 source files, 2 plists, 1
+  manifest.
+- `trim_native.h` and the placeholder C compile under `-Wall -Wextra -Werror`.
 
 ### Known gaps
 
-- **Dependency versions on Google Maven are unverified.** The authoring environment's
-  egress policy blocked `dl.google.com`, so every catalog entry marked `[google]`
-  (AGP, all of androidx/Compose/Media3, ML Kit, LiteRT, Accompanist) is a
-  best-known-good guess. Entries marked `[central]` were resolved for real against
-  `repo1.maven.org`. Run `tools/verify-versions.sh` from a machine that can reach
-  Google Maven and reconcile before the first build.
-- **The project has not been compiled.** Same cause: no Android SDK and no AGP could
-  be downloaded. Everything that does not need them was run — see the 13 passing
-  `build-logic` tests. The Kotlin and Gradle sources have not been through a
-  compiler.
-- **`KEY_PRIORITY = 1` is not yet set on the milestone-1 codecs.** Media3's
-  `VideoEncoderSettings` exposes no way to add arbitrary `MediaFormat` keys, so
-  background priority needs a custom `Codec.EncoderFactory`. Milestone 1 is an
-  explicit, user-initiated foreground encode, where realtime priority is in fact the
-  right behaviour; the custom factory lands with the night worker in milestone 5,
-  which is the first code that has any business running at background priority. The
-  rule and its rationale are recorded in the `codec-priority` skill.
+- **Nothing Android has been compiled.** Google Maven (`dl.google.com`) is blocked by
+  this environment's egress policy, so there is no Android SDK and no AGP. Every
+  `[google]` version in `gradle/libs.versions.toml` is a best-known-good guess;
+  `[central]` versions were resolved for real. Run `tools/verify-versions.sh` from a
+  machine with access before the first build.
+- **`Milestone1EncodeTest` has not been executed.** It needs a device or emulator with a
+  hardware HEVC encoder. It is written to run, not yet observed running.
+- `shared/core/{domain,data,ui}` and the eight `feature/*` modules are build files and
+  structure only — the pipeline beyond `Triager`, the repositories and the screens arrive
+  with their milestones.
+- Native submodules are declared but not initialised, per ARCHITECTURE.md § 15
+  (milestone 2).
+
+---
+
+## Earlier — first Android-only skeleton (superseded)
+
+The initial single-module Android skeleton, its `no-internet` lint check, and the
+milestone 1 encode written against it. Replaced by the KMP layout above; the guard
+survived and grew into the three-guard set.
+
+`design/buyer-gallery/` holds a parked React + Vite prototype of a "Photos and clips from
+buyers" screen, built from `buyer-gallery-spec/`. It does not ship — ARCHITECTURE.md § 11
+requires Compose Multiplatform for every screen — and serves as an executable motion spec
+for the gallery shell at milestone 8. See `design/buyer-gallery/README.md`.

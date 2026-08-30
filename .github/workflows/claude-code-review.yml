@@ -25,7 +25,8 @@ jobs:
           prompt: |
             Review this pull request against the project's own specifications, which
             are in the repository: BUILD.md (the spec), PROJECT.md (decisions already
-            made and why) and STACK.md (the only approved library list).
+            made and why), STACK.md (the only approved library list) and
+            ARCHITECTURE.md (the module layout and the platform adapter matrix).
 
             Read the project skills in .claude/skills/ and hold the diff to them:
               - codec-priority: hardware encoders only, KEY_PRIORITY=1, reclaim
@@ -40,3 +41,8 @@ jobs:
               - any software video encoding path, or a fallback that could reach one
               - any write to an original file other than the final rename
               - a second ABI creeping into the build
+              - a codec created outside CodecFactory, or a library write outside Replacer
+              - shared/core/pipeline reaching for a platform type instead of an
+                engine-api interface
+              - a platform implementation shipped without a fake for the JVM tests
+                (ARCHITECTURE.md section 2.7)

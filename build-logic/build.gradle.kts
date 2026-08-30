@@ -10,9 +10,9 @@ plugins {
 // where AGP is already applied.
 gradlePlugin {
     plugins {
-        create("noInternetPermission") {
-            id = "app.trimgallery.no-internet"
-            implementationClass = "app.trimgallery.gradle.NoInternetPermissionPlugin"
+        create("trimGuards") {
+            id = "trimgallery.guards"
+            implementationClass = "app.trimgallery.gradle.TrimGuardsPlugin"
         }
     }
 }
