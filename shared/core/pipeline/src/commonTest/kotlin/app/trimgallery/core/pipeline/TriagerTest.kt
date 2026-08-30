@@ -5,6 +5,7 @@ import app.trimgallery.core.model.MediaItem
 import app.trimgallery.core.model.MediaKind
 import app.trimgallery.core.model.MediaRef
 import app.trimgallery.core.model.SkipReason
+import app.trimgallery.engine.CodecCaps
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertIs
@@ -169,8 +170,110 @@ class TriagerTest {
     }
 
     @Test
-    fun `a png is always a candidate because the repack is lossless`() {
+    fun `a png needs no quality gate, only a size one`() {
+        // The repack is lossless, so there is no quality question — but a repack that
+        // saves nothing still costs a write to the user's storage.
         val png = photo("png", size = 3_000_000).copy(kind = MediaKind.PNG)
         assertIs<Triager.Verdict.Candidate>(Triager.triage(png))
+        val tiny = photo("png", size = 20_000).copy(kind = MediaKind.PNG)
+        assertEquals(SkipReason.TOO_SMALL, assertIs<Triager.Verdict.Skip>(Triager.triage(tiny)).reason)
+    }
+
+    // -------------------------------------------------- milestone 6 additions
+
+    @Test
+    fun `a file this app already optimised is never optimised again`() {
+        // The one rule that prevents generational loss. Every re-encode targets VMAF 95
+        // against whatever it is given, so a second pass measures quality against an
+        // already-lossy copy — and two nights of that is visible.
+        val ours = video("hvc1", bitrate = 30_000_000, size = 400_000_000)
+            .copy(optimisedAt = 1_700_000_000_000)
+        assertEquals(
+            SkipReason.ALREADY_EFFICIENT,
+            assertIs<Triager.Verdict.Skip>(Triager.triage(ours)).reason,
+        )
+        // Without the marker the very same file is exactly what triage looks for, which is
+        // why the check cannot be left to the bitrate rules.
+        assertIs<Triager.Verdict.Candidate>(Triager.triage(ours.copy(optimisedAt = null)))
+    }
+
+    @Test
+    fun `a file the hardware cannot encode is skipped with a reason, not attempted`() {
+        // ARCHITECTURE.md § 13: pre-check caps. Failing at encode time would cost the whole
+        // probe and search first, and tell the user nothing.
+        val eightK = video("avc1", bitrate = 80_000_000, size = 900_000_000)
+            .copy(width = 7680, height = 4320)
+        val caps = CodecCaps(
+            hardwareHevc = true, hardwareAv1 = false, cqSupported = true,
+            maxWidth = 3840, maxHeight = 2160, maxFps = 60.0,
+        )
+        assertEquals(
+            SkipReason.NO_HARDWARE_ENCODER,
+            assertIs<Triager.Verdict.Skip>(Triager.triage(eightK, caps)).reason,
+        )
+        // The same file is a candidate on a device that can manage it.
+        assertIs<Triager.Verdict.Candidate>(
+            Triager.triage(eightK, caps.copy(maxWidth = 7680, maxHeight = 4320)),
+        )
+    }
+
+    @Test
+    fun `a frame rate beyond the encoder is a skip`() {
+        val slowMotion = video("avc1", bitrate = 80_000_000, size = 400_000_000).copy(fps = 240.0)
+        val caps = CodecCaps(
+            hardwareHevc = true, hardwareAv1 = false, cqSupported = true,
+            maxWidth = 3840, maxHeight = 2160, maxFps = 60.0,
+        )
+        assertEquals(
+            SkipReason.NO_HARDWARE_ENCODER,
+            assertIs<Triager.Verdict.Skip>(Triager.triage(slowMotion, caps)).reason,
+        )
+    }
+
+    @Test
+    fun `a device with no hardware encoder at all skips every video`() {
+        // BUILD.md rule 2: skip the file, never fall back to software.
+        val caps = CodecCaps(
+            hardwareHevc = false, hardwareAv1 = false, cqSupported = false,
+            maxWidth = 3840, maxHeight = 2160, maxFps = 60.0,
+        )
+        assertEquals(
+            SkipReason.NO_HARDWARE_ENCODER,
+            assertIs<Triager.Verdict.Skip>(
+                Triager.triage(video("avc1", bitrate = 20_000_000, size = 400_000_000), caps),
+            ).reason,
+        )
+    }
+
+    @Test
+    fun `unknown capabilities do not block triage`() {
+        // Caps are queried once per device; a library scanned before that answer arrives
+        // should still be triaged rather than reported as unsupported.
+        assertIs<Triager.Verdict.Candidate>(
+            Triager.triage(video("avc1", bitrate = 20_000_000, size = 400_000_000), caps = null),
+        )
+    }
+
+    @Test
+    fun `a saving too small to notice is not worth a night's battery`() {
+        // BUILD.md rule 5 says to skip files that will not shrink. In practice that means
+        // "will shrink by an amount nobody would notice", and a queue full of those pushes
+        // the videos that would free gigabytes past the nightly cap.
+        val tiny = video("avc1", bitrate = 20_000_000, size = 8_000_000)
+        assertEquals(
+            SkipReason.WOULD_NOT_SHRINK,
+            assertIs<Triager.Verdict.Skip>(Triager.triage(tiny)).reason,
+        )
+        assertIs<Triager.Verdict.Candidate>(
+            Triager.triage(video("avc1", bitrate = 20_000_000, size = 40_000_000)),
+        )
+    }
+
+    @Test
+    fun `photos are exempt from the saving floor, because they cost milliseconds`() {
+        // A jpegli pass is not a probe cycle and a full encode (BUILD.md § 5).
+        val small = photo("jpeg", size = 600_000)
+        val verdict = assertIs<Triager.Verdict.Candidate>(Triager.triage(small))
+        assertTrue(verdict.estimatedSaving < Triager.MIN_WORTHWHILE_SAVING_BYTES)
     }
 }

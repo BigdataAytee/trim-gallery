@@ -1,5 +1,98 @@
 # Changelog
 
+## Milestone 6 — triage rules and the skip list
+
+The cheap step that decides what the expensive steps ever see, and the screen that explains
+every file the app declines to touch.
+
+### The library diff (`LibraryDiff`)
+
+ARCHITECTURE.md § 7 opens the night with `storage.scan(grants) → DB diff`, and § 9 gives
+the rule that makes it matter: `DONE/SKIPPED/FAILED → NEW when the file changes`. Both ways
+of getting it wrong are now tested:
+
+- **Too weakly**, and a re-edited video keeps a verdict describing a file that is gone.
+- **Too eagerly**, and the app re-optimises its own output every night. Every re-encode
+  targets VMAF 95 against *whatever it is given*, so a second pass measures quality against
+  an already-lossy copy — **generational loss**, and two nights of it is visible.
+
+Three things came out of writing it:
+
+- **A folder that was not scanned never loses its rows.** The commonest real case is two
+  granted folders with the SD card out; a diff that did not know which grants were covered
+  would report every photo on the card as removed and delete its index, its labels and its
+  faces.
+- **`merge` takes the container facts from the scan, not the stale row** — a test caught the
+  first version keeping the old codec and bitrate, which would triage a re-exported clip on
+  numbers that no longer describe it.
+- **The user's own decisions survive an edit.** `favourite` and `hidden` share a bitmask
+  with the container flags (SCHEMA.md) but are not properties of the bytes: a re-edited
+  photo must not fall out of the locked folder.
+
+### Triage (`Triager`, extended)
+
+- **A file this app already optimised is never optimised again.** Checked before every
+  other rule, because no later rule would notice: our own output is, by construction,
+  exactly the kind of file the bitrate rules are looking for. `MediaItem.optimisedAt` (a
+  documented supplement to SCHEMA.md) makes the rule a property of the row rather than of a
+  timestamp comparison a provider could round away.
+- **Hardware capabilities are pre-checked** (ARCHITECTURE.md § 13). A file this phone could
+  never encode is skipped with a reason, instead of costing a probe, a search and a full
+  encode before failing.
+- **A saving too small to notice is not worth a night's battery.** BUILD.md rule 5 says to
+  skip files that will not shrink; in practice that means "will shrink by an amount nobody
+  would notice", and a queue full of those pushes the videos that would free gigabytes past
+  the nightly cap. Photos are exempt — a jpegli pass costs milliseconds, not a probe cycle.
+- **PNG gets a size gate but no quality gate**, since the repack is lossless.
+
+### Reading containers (`ContainerReader`)
+
+New in `engine-api`, because triage needs codec, resolution, fps, bitrate and the format
+flags, and BUILD.md § 5 says to read them *"from container"* without decoding.
+
+Deliberately separate from `LibraryStorage.scan`: a scan of a granted tree is one cursor
+query over thousands of rows, and opening every one of those files to read its header would
+turn a second into a minute on a large library. So the pass scans cheaply, diffs, and reads
+headers only for the handful of files that actually changed. `ContainerReaderAndroid` uses
+`MediaExtractor` and `MediaMetadataRetriever` — HDR from the track's colour transfer, not
+from the file name, because an HDR clip and an SDR clip are both `.mp4`.
+
+BUILD.md's *"read camera-written encoder metadata from `udta`"* earns its place where the
+spec puts it — immediately before "Predict": a file with no camera model but a recognisable
+encoder becomes its own predictor family instead of being lumped into "unknown" with every
+other metadata-less file, which would poison a prediction that is otherwise reliable.
+
+### The skip list (`SkipList`)
+
+BUILD.md § 9 requires it; this is where the reasons are written, which makes it product
+surface rather than plumbing.
+
+- **A reason is a sentence, not an enum name**, and never says "compress" or "shrink"
+  (DESIGN_SYSTEM.md § Copy tone). Asserted, for all thirteen reasons.
+- **"Try again" appears only where trying again could work.** Only two things can change: a
+  file can arrive from the cloud, and a failure can be transient. A button that does nothing
+  teaches the user not to believe the rest of the screen. `COULD_NOT_REACH_QUALITY` is
+  deliberately not retryable — BUILD.md § 5 skips such a file permanently, and the search is
+  deterministic.
+- **Actionable groups lead, then the largest.** A screen that buries its one actionable row
+  under four hundred already-efficient photos is a screen nobody scrolls.
+- **A failed file never borrows a stale skip reason.** The pipeline records a `SkipReason`
+  only for a deliberate decision, and "something went wrong" is not one.
+
+### Wiring
+
+`TriageStep` ties it together — scan, diff, read headers for what changed, triage, write the
+verdict and the queue's ordering key — and `TrimRepository` gained the `Sink` that persists
+it. One detail worth knowing: **an item with a live undo entry keeps its row when the file
+disappears**, because `undo_entry.media_id` cascades and that row is what points at the
+original still sitting in the bin.
+
+### Verified
+
+- **363 shared JVM tests**, all passing (up from 322).
+- **43 build-guard tests**; guards clean across all 106 source files.
+
+
 ## Milestone 5 — scheduling, thermal polling, caps, alarm-aware stop
 
 BUILD.md rule 6 in code: *"Pause when thermal headroom > 0.7; cap work per night; stop 30

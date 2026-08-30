@@ -109,6 +109,37 @@ data class ProbedOutput(
     val sizeBytes: Long,
 )
 
+/**
+ * Everything triage needs, read from a file's header (BUILD.md § 5).
+ *
+ * The format flags are here rather than inferred from the extension because that is the
+ * only place the truth is: an HDR clip and an SDR clip are both `.mp4`, and BUILD.md § 2.5
+ * requires the first to be left alone.
+ */
+data class ContainerFacts(
+    val codec: String?,
+    val width: Int,
+    val height: Int,
+    val fps: Double?,
+    val bitrate: Long?,
+    val durationMs: Ms?,
+    val hasAudio: Boolean = false,
+    val flags: app.trimgallery.core.model.MediaFlags = app.trimgallery.core.model.MediaFlags(),
+    val cameraModel: String? = null,
+    val takenAtEpochMs: Long? = null,
+    val latitude: Double? = null,
+    val longitude: Double? = null,
+    /**
+     * The encoder that wrote the file, from the MP4 `udta` box where a camera left one.
+     *
+     * BUILD.md § 5 asks for it in the triage paragraph, immediately before "Predict", and
+     * that is what it is for: a file with no camera model but a recognisable encoder is its
+     * own predictor family rather than being lumped into "unknown" with every other
+     * metadata-less file, which would poison a prediction that is otherwise reliable.
+     */
+    val writer: String? = null,
+)
+
 /** Metadata read from the container without decoding a frame (BUILD.md § 5, triage). */
 data class Stat(val size: Long, val mtime: Long, val exists: Boolean)
 

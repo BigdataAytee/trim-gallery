@@ -41,7 +41,12 @@ CREATE TABLE media_item (
     -- space it was going to.
     est_saving      INTEGER,
     created_at      INTEGER NOT NULL,
-    updated_at      INTEGER NOT NULL
+    updated_at      INTEGER NOT NULL,
+    -- When this app last replaced the file. A supplement to SCHEMA.md, recorded in
+    -- PROJECT.md: it is what stops a file being optimised twice. Every re-encode targets
+    -- VMAF 95 against whatever it is given, so a second pass measures quality against an
+    -- already-lossy copy, and two nights of that is visible.
+    optimised_at    INTEGER
 );
 
 CREATE INDEX media_item_queue ON media_item(status, est_saving DESC);
@@ -243,6 +248,21 @@ SELECT * FROM media_item WHERE status = ?;
 selectMediaById:
 SELECT * FROM media_item WHERE id = ?;
 
+-- Everything the diff compares against. Scoped to the grants that were actually scanned,
+-- because a row from a folder that was not looked at cannot be proved absent.
+selectMediaByGrants:
+SELECT * FROM media_item WHERE folder_grant_id IN ?;
+
+-- One statement for both halves of the diff: a file the scan found for the first time and
+-- a file whose bytes moved are the same write, and splitting them would mean two places
+-- that have to agree about every column.
+upsertMedia:
+INSERT OR REPLACE INTO media_item(
+    id, platform_ref, folder_grant_id, name, kind, mime, codec, width, height, fps,
+    bitrate, duration_ms, size, mtime, taken_at, lat, lon, camera_model, flags, phash,
+    sha256, status, skip_reason, est_saving, created_at, updated_at, optimised_at
+) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);
+
 -- How much room the night needs: BUILD.md § 6 wants twice this free, because the original
 -- and its replacement both exist between the encode and the commit.
 largestPendingBytes:
@@ -283,6 +303,32 @@ UPDATE media_item SET flags = flags & ~:bit, updated_at = :now WHERE id = :id;
 
 setStatus:
 UPDATE media_item SET status = :status, skip_reason = :skipReason, updated_at = :now WHERE id = :id;
+
+-- Triage writes all three at once: the verdict, its reason, and the ordering key the
+-- night queue reads (BUILD.md § 5, "largest potential saving first").
+setTriage:
+UPDATE media_item
+SET status = :status, skip_reason = :skipReason, est_saving = :estSaving, updated_at = :now
+WHERE id = :id;
+
+-- After a successful replace. Writing the new size and mtime back is what stops the next
+-- scan seeing our own work as a user edit; optimised_at is the belt to that brace.
+recordReplaced:
+UPDATE media_item
+SET size = :size, mtime = :mtime, codec = :codec, bitrate = :bitrate,
+    status = 'DONE', skip_reason = NULL, est_saving = NULL,
+    optimised_at = :optimisedAt, updated_at = :optimisedAt
+WHERE id = :id;
+
+-- ARCHITECTURE.md § 9: DONE/SKIPPED/FAILED → NEW when the file changes.
+markChanged:
+UPDATE media_item
+SET size = :size, mtime = :mtime, status = 'NEW', skip_reason = NULL, est_saving = NULL,
+    updated_at = :now
+WHERE id = :id;
+
+deleteMedia:
+DELETE FROM media_item WHERE id = ?;
 
 -- Replace bookkeeping ---------------------------------------------------------
 

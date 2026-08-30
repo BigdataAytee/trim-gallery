@@ -6,11 +6,13 @@ import app.trimgallery.core.data.TrimRepository
 import app.trimgallery.core.domain.billing.Tier
 import app.trimgallery.core.model.Settings
 import app.trimgallery.core.model.Uuid7
+import app.trimgallery.core.pipeline.TriageStep
 import app.trimgallery.core.pipeline.night.NightFacts
 import app.trimgallery.core.pipeline.night.NightRun
 import app.trimgallery.core.pipeline.replace.OriginalLocator
 import app.trimgallery.core.pipeline.replace.UndoJournal
 import app.trimgallery.engine.CodecFactory
+import app.trimgallery.engine.ContainerReader
 import app.trimgallery.engine.LibraryStorage
 import app.trimgallery.engine.MetadataCopier
 import app.trimgallery.engine.NightScheduler
@@ -18,6 +20,7 @@ import app.trimgallery.engine.OutputProbe
 import app.trimgallery.engine.QualityScorer
 import app.trimgallery.engine.Replacer
 import app.trimgallery.engine.UndoStore
+import app.trimgallery.engine.android.ContainerReaderAndroid
 import app.trimgallery.engine.android.MediaCodecFactory
 import app.trimgallery.engine.android.MetadataCopierAndroid
 import app.trimgallery.engine.android.NativeQualityScorer
@@ -120,6 +123,19 @@ val androidEngineModule = module {
     single<NightRun.Queue> { get<TrimRepository>() }
     single<NightRun.Checkpoint> { get<TrimRepository>() }
     single<NightRun.OnInterrupted> { get<TrimRepository>() }
+    single<TriageStep.Sink> { get<TrimRepository>() }
+
+    // --- Milestone 6: triage ---------------------------------------------------
+    single<ContainerReader> { ContainerReaderAndroid(androidContext()) }
+
+    single {
+        TriageStep(
+            storage = get(),
+            containers = get(),
+            sink = get(),
+            nowMs = System::currentTimeMillis,
+        )
+    }
 
     // NightRun.Step is VideoOptimiseStep, which chains triage → search → encode → verify →
     // replace. Triage is milestone 6; until it can decide what belongs in the queue at

@@ -58,6 +58,23 @@ interface YuvSource {
 }
 
 /**
+ * Reads container metadata for a file in the user's library, without decoding a frame.
+ *
+ * BUILD.md § 5: *"Triage (metadata only, no decode). Read codec, resolution, fps, bitrate,
+ * duration from container … Read camera-written encoder metadata from `udta` where
+ * present."*
+ *
+ * Separate from `LibraryStorage.scan`, and deliberately so. A scan of a granted tree is one
+ * cursor query over thousands of rows; opening every one of those files to read its header
+ * would turn a second into a minute on a large library. The pass therefore scans cheaply,
+ * diffs, and reads containers only for the handful of files that actually changed.
+ */
+interface ContainerReader {
+    /** null when the file cannot be parsed; triage then skips it as an unknown format. */
+    suspend fun read(ref: MediaRef): ContainerFacts?
+}
+
+/**
  * Reads a finished temp file back the way a player would.
  *
  * The verify gate is not "the encoder said it succeeded" — it is BUILD.md § 5's *"confirm

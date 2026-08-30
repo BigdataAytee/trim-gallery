@@ -2,8 +2,8 @@ package app.trimgallery.core.data
 
 import app.trimgallery.core.data.db.TrimDatabase
 import app.trimgallery.core.domain.billing.Tier
+import app.trimgallery.core.model.FolderGrant
 import app.trimgallery.core.model.GeoPoint
-import app.trimgallery.core.model.MediaFlags
 import app.trimgallery.core.model.MediaItem
 import app.trimgallery.core.model.MediaKind
 import app.trimgallery.core.model.MediaRef
@@ -14,6 +14,7 @@ import app.trimgallery.core.model.SkipReason
 import app.trimgallery.core.model.UndoEntry
 import app.trimgallery.core.model.UndoLocation
 import app.trimgallery.core.model.UndoState
+import app.trimgallery.core.pipeline.TriageStep
 import app.trimgallery.core.pipeline.night.NightFacts
 import app.trimgallery.core.pipeline.night.NightRun
 import app.trimgallery.core.pipeline.replace.OriginalLocator
@@ -47,7 +48,13 @@ class TrimRepository(
     private val readTier: suspend () -> Tier,
     /** The start of the current calendar month, for MONETIZATION.md's monthly cap. */
     private val monthStartMs: () -> Long,
-) : UndoJournal, OriginalLocator, NightFacts, NightRun.Queue, NightRun.Checkpoint, NightRun.OnInterrupted {
+) : UndoJournal,
+    OriginalLocator,
+    NightFacts,
+    NightRun.Queue,
+    NightRun.Checkpoint,
+    NightRun.OnInterrupted,
+    TriageStep.Sink {
 
     private val queries get() = db.trimDatabaseQueries
 
@@ -185,6 +192,81 @@ class TrimRepository(
         }
     }
 
+    // ------------------------------------------------------------- TriageStep.Sink
+
+    override suspend fun stored(grants: List<FolderGrant>): List<MediaItem> = withContext(io) {
+        if (grants.isEmpty()) return@withContext emptyList()
+        queries.selectMediaByGrants(grants.map { it.id }, ::toMediaItem).executeAsList()
+    }
+
+    override suspend fun insert(item: MediaItem) = upsert(item)
+
+    override suspend fun update(item: MediaItem) = upsert(item)
+
+    /**
+     * Deletes the row, not the file — there is nothing left to delete.
+     *
+     * `ON DELETE CASCADE` takes the labels, faces and jobs with it (SCHEMA.md), but
+     * `undo_entry.media_id` cascades too, and an undo row is what points at an original
+     * still sitting in the bin. So a file with a live undo entry keeps its row: the user
+     * deleted the optimised copy, and the original they can still restore is the whole
+     * reason the bin exists.
+     */
+    override suspend fun remove(item: MediaItem) {
+        withContext(io) {
+            val hasUndo = queries.selectUndoForMedia(item.id, ::toUndoEntry).executeAsList().isNotEmpty()
+            if (!hasUndo) queries.deleteMedia(item.id)
+        }
+    }
+
+    override suspend fun recordVerdict(
+        item: MediaItem,
+        status: MediaStatus,
+        reason: SkipReason?,
+        estSaving: Long?,
+    ) = withContext(io) {
+        queries.setTriage(
+            status = status.name,
+            skipReason = reason?.name,
+            estSaving = estSaving,
+            now = nowMs(),
+            id = item.id,
+        )
+    }
+
+    @Suppress("LongMethod")
+    private suspend fun upsert(item: MediaItem) = withContext(io) {
+        queries.upsertMedia(
+            id = item.id,
+            platform_ref = item.platformRef.value,
+            folder_grant_id = item.folderGrantId,
+            name = item.name,
+            kind = item.kind.name,
+            mime = item.mime,
+            codec = item.codec,
+            width = item.width.toLong(),
+            height = item.height.toLong(),
+            fps = item.fps,
+            bitrate = item.bitrate,
+            duration_ms = item.duration,
+            size = item.size,
+            mtime = item.mtime,
+            taken_at = item.takenAt?.toEpochMilliseconds(),
+            lat = item.location?.lat,
+            lon = item.location?.lon,
+            camera_model = item.cameraModel,
+            flags = MediaFlagsBits.encode(item.flags),
+            phash = item.phash,
+            sha256 = item.sha256?.fromHex(),
+            status = item.status.name,
+            skip_reason = item.skipReason?.name,
+            est_saving = item.estSaving,
+            created_at = if (item.createdAt > 0) item.createdAt else nowMs(),
+            updated_at = nowMs(),
+            optimised_at = item.optimisedAt,
+        )
+    }
+
     // ------------------------------------------------------------------ mapping
 
     @Suppress("LongParameterList")
@@ -238,6 +320,7 @@ class TrimRepository(
         estSaving: Long?,
         createdAt: Long,
         updatedAt: Long,
+        optimisedAt: Long?,
     ) = MediaItem(
         id = id,
         platformRef = MediaRef(platformRef),
@@ -264,7 +347,12 @@ class TrimRepository(
         estSaving = estSaving,
         createdAt = createdAt,
         updatedAt = updatedAt,
+        optimisedAt = optimisedAt,
     )
+
+    private fun String.fromHex(): ByteArray = ByteArray(length / 2) { i ->
+        ((HEX.indexOf(this[i * 2]) shl 4) or HEX.indexOf(this[i * 2 + 1])).toByte()
+    }
 
     private fun ByteArray.toHex(): String = joinToString("") { byte ->
         val v = byte.toInt() and 0xFF

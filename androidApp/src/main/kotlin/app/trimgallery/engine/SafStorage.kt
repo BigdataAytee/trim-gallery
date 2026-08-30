@@ -48,9 +48,11 @@ class SafStorage(
      * item into the database as it arrives rather than after the whole walk
      * (ARCHITECTURE.md § 7).
      *
-     * What comes out here is the container-level truth only — name, size, mtime, mime.
-     * Codec, resolution, duration and the format flags that decide whether a file may be
-     * touched at all come from triage, in milestone 6.
+     * What comes out here is only what one cursor query can tell us — name, size, mtime,
+     * mime. Codec, resolution, duration and the format flags that decide whether a file may
+     * be touched at all live in the file's header, and `ContainerReaderAndroid` reads them
+     * for the handful of files `LibraryDiff` found to be new or changed. Reading a header
+     * per file here would turn a second into a minute on a hundred-thousand-item library.
      */
     override fun scan(grants: List<FolderGrant>): Flow<MediaItem> = flow {
         grants.filter { it.enabled }.forEach { grant ->

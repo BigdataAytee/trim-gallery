@@ -100,6 +100,21 @@ data class MediaItem(
     val estSaving: Long? = null,
     val createdAt: Long = 0,
     val updatedAt: Long = 0,
+    /**
+     * When this app last replaced this file, or null if it never has.
+     *
+     * A supplement to SCHEMA.md (recorded in PROJECT.md), and the only reliable defence
+     * against **generational loss**: every re-encode targets VMAF 95 against whatever it
+     * is given, so optimising our own output measures quality against an already-lossy
+     * copy. Two nights of that is visible.
+     *
+     * The primary defence is that the pipeline writes the new size and mtime back after a
+     * replace, so `LibraryDiff` sees no change and never resets the item to `NEW`. But a
+     * provider that rounds a timestamp, or a media scan that rewrites one, would defeat
+     * that silently — and the failure is a photograph the user cannot get back. This
+     * column makes the rule a property of the row instead.
+     */
+    val optimisedAt: Long? = null,
 ) {
     /** Pixels per frame; the search cares about this more than the label "4K". */
     val pixels: Long get() = width.toLong() * height.toLong()

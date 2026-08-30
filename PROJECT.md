@@ -486,6 +486,40 @@ all of it is unit tested against fakes.
   interfaces in their public signatures; with `implementation` no consumer could compile
   against them — the same defect already fixed once in `shared/feature/*`.
 
+## Milestone 6 — triage and the skip list
+
+- **`MediaItem.optimisedAt` is a supplement to SCHEMA.md.** The primary defence against
+  optimising our own output twice is that the pipeline writes the new size and mtime back
+  after a replace, so the diff sees no change. But a provider that rounds a timestamp would
+  defeat that silently, and the failure is generational quality loss on a photograph the
+  user cannot get back. The column makes the rule a property of the row.
+- **`ContainerReader` is a new § 5 interface, separate from `LibraryStorage.scan`.** A scan
+  is one cursor query over thousands of rows; a header read per file would turn a second
+  into a minute on a hundred-thousand-item library. The pass scans cheaply, diffs, and reads
+  headers only for what changed.
+- **`LibraryDiff.merge` takes the container facts from the scan and identity from the row.**
+  The scan is the truth about the file; the database is the truth about our bookkeeping. The
+  first version kept the stored codec and bitrate and a test caught it.
+- **`favourite` and `hidden` survive a merge; every other flag comes from the scan.** They
+  share the SCHEMA.md bitmask with the container flags but are the user's decisions, not
+  properties of the bytes.
+- **Removal is scoped to the grants actually scanned.** A row whose folder was not looked at
+  cannot be proved absent, and reporting it removed would delete its index, labels and faces
+  the first time an SD card was out.
+- **A row with a live undo entry is not deleted when its file disappears.**
+  `undo_entry.media_id` cascades, and that row is what points at the original in the bin.
+- **Triage re-runs only for files that changed.** Re-triaging the whole library would give
+  the same answer for everything that did not move, at a cost that grows with the library.
+- **`MIN_WORTHWHILE_SAVING_BYTES` is 5 MB, and photos are exempt.** A probe cycle plus a
+  full encode costs real battery and heat; a jpegli pass costs milliseconds.
+- **The `udta` writer tag feeds the predictor key, not a triage rule.** BUILD.md asks for it
+  in the triage paragraph immediately before "Predict", and that is what it is for: a file
+  with no camera model but a known encoder is its own family. Building a *skip* rule on a
+  tag nothing currently writes would have been dead code.
+- **"Try again" is offered only for failures and cloud-only files.** Everything else is a
+  property of the file or the phone and would give the same answer forever;
+  `COULD_NOT_REACH_QUALITY` is permanent by BUILD.md § 5 and the search is deterministic.
+
 ## Open questions added
 - **The Compose layer has never been compiled.** Every Compose Multiplatform version
   resolves `androidx.annotation`, `androidx.collection` and `androidx.lifecycle` from
