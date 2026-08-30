@@ -25,6 +25,13 @@ android {
 
         // arm64-v8a only (ARCHITECTURE.md § 10). The native metric libraries are built
         // for one ABI; a second would ship code that cannot run them.
+        //
+        // Expressed here and *not* also as an `abi` split. AGP rejects both at once
+        // ("'arm64-v8a' in ndk abiFilters cannot be present when splits abi filters are
+        // set"), and it rejects it during configuration, so the conflict failed every job
+        // in the build — including the ones that never touch Android. Splits exist to
+        // produce one APK per ABI; with a single ABI there is nothing to split, and
+        // `abiFilters` is what every library module in this project already uses.
         ndk { abiFilters += "arm64-v8a" }
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
@@ -44,15 +51,6 @@ android {
         cmake {
             path = rootProject.file("shared/native/CMakeLists.txt")
             version = "3.22.1"
-        }
-    }
-
-    splits {
-        abi {
-            isEnable = true
-            reset()
-            include("arm64-v8a")
-            isUniversalApk = false
         }
     }
 
