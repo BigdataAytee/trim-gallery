@@ -28,6 +28,23 @@ android {
         ndk { abiFilters += "arm64-v8a" }
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
+
+        // The metric libraries (ARCHITECTURE.md § 10). arm64 only, NEON on — the metrics
+        // are the bottleneck and a scalar build is not worth shipping.
+        externalNativeBuild {
+            cmake {
+                arguments += listOf("-DANDROID_STL=c++_static")
+                cFlags += "-march=armv8-a+simd"
+                cppFlags += "-march=armv8-a+simd"
+            }
+        }
+    }
+
+    externalNativeBuild {
+        cmake {
+            path = rootProject.file("shared/native/CMakeLists.txt")
+            version = "3.22.1"
+        }
     }
 
     splits {

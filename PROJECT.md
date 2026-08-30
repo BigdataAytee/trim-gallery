@@ -57,7 +57,9 @@ Companion to BUILD.md. Records what was decided and the reasoning, so nobody re-
 
 ## Open questions
 
-- Exact XPSNR threshold that maps to VMAF 95 on hardware HEVC — calibrate in milestone 2.
+- Exact XPSNR threshold that maps to VMAF 95 on hardware HEVC — **method established in
+  milestone 2** (`shared/native/calibration/`, first point: XPSNR y ≈ 39.8 under x265);
+  still needs running on device across real content before a constant goes into the search.
 - Whether `MediaTranscodingManager` beats the in-app pipeline on any target device — benchmark in milestone 13.
 - Which small face-embedding model to use for people clustering.
 
@@ -256,6 +258,52 @@ not constrain the Kotlin choice in either direction.
   session is two minutes. A long session would defeat the feature the first time the user
   handed the phone over to show someone a photo. A cancelled prompt is not a failure and
   must not render as an error.
+
+## Milestone 2 — the metrics
+
+- **The `fraunhoferhhi/xpsnr` repository has no standalone C.** STACK.md and the
+  `ndk-build` skill both said to build it; both were wrong and are now corrected. The
+  repo holds only an FFmpeg filter (`libavfilter/vf_xpsnr.c`) and its README says the
+  maintained copy lives in FFmpeg. So `shared/native/src/xpsnr_score.c` is an
+  **extraction**: upstream's arithmetic verbatim, with the AVFilter plumbing, context and
+  allocation replaced. Pulling FFmpeg into the app to reach one function was not a trade
+  worth making.
+- **XPSNR is scored on luma only.** The search needs a monotone proxy for coding quality,
+  luma dominates that, and this is the metric run thousands of times a night — scoring
+  chroma would cost roughly half as much again for a number the search never reads. It
+  also makes the value directly comparable to FFmpeg's per-component "XPSNR y", which is
+  what it is verified against.
+- **XPSNR's licence grants no patent rights.** A Fraunhofer BSD-3 variant: commercial use
+  is permitted, but it explicitly disclaims patent non-infringement. STACK.md approved the
+  library, so this is recorded rather than re-litigated — but it is a product decision,
+  not only an engineering one, and someone should make it deliberately before release.
+- **`vmaf_score` runs libvmaf single-threaded.** ARCHITECTURE.md § 8 already gives metric
+  work its own pool sized to cores-2, so parallelism belongs to the caller across windows.
+  A second thread pool underneath would oversubscribe the exact cores the encoder is
+  competing for.
+- **libvmaf needs `xxd` at configure time** to embed the models, and fails *silently*
+  without it — the library builds, then every `vmaf_model_load` fails at runtime. Embedded
+  models are the point: shipping `vmaf_v0.6.1` as an asset would mean reading it from disk
+  on a device that should be doing nothing but encoding.
+- **libvmaf bundles libsvm, which is C++**, so the CMake project declares CXX even though
+  all of our own code is C. Without it the link fails on `__gxx_personality_v0`.
+- **A copy per plane, for now.** `YuvWindow` carries `ByteArray` because
+  `shared/engine-api` cannot name `java.nio.ByteBuffer`, so the Android scorer copies each
+  plane into a reusable direct buffer. Reuse makes that one copy rather than a copy plus a
+  multi-megabyte allocation per probe. Milestone 3's `YuvSource` should decode straight
+  into those buffers; the ABI already takes strides so nothing else has to change.
+
+### First calibration data point
+
+PROJECT.md's own open question — the XPSNR value that corresponds to VMAF 95 — now has a
+harness (`shared/native/calibration/`) and a first answer: **VMAF 95 ≈ XPSNR y 39.8** on
+the golden clip under x265.
+
+That number is not the one to ship. It comes from software x265 rather than a phone's
+hardware HEVC encoder (which PROJECT.md already records as materially less efficient), from
+one clip, at 640×360 rather than the 1080p BUILD.md verifies at. It is evidence the method
+works. The real threshold needs the milestone 1 encoder on device across resolutions and
+content, fitted per bucket — the same key the predictor table already uses.
 
 ## Open questions added
 - **The Compose layer has never been compiled.** Every Compose Multiplatform version

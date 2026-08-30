@@ -43,9 +43,16 @@ typedef struct {
     int32_t stride, width, height;
 } trim_image;
 
-/* Search metric. 10-20x cheaper than VMAF, so it drives the binary search. */
+/*
+ * Search metric. 10-20x cheaper than VMAF, so it drives the binary search.
+ *
+ * `frame_rate` selects the temporal activity term: XPSNR uses a first-order frame
+ * difference at or below 32 fps and a second-order one above it, so passing the wrong
+ * rate changes the score. Luma only -- see src/xpsnr_score.c.
+ */
 int32_t xpsnr_score(const trim_yuv_window *reference,
                     const trim_yuv_window *distorted,
+                    int32_t frame_rate,
                     volatile const int32_t *cancel,
                     double *out_score);
 

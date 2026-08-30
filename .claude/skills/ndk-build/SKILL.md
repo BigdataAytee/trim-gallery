@@ -36,7 +36,10 @@ see `codec-priority`.
 shared/native/
   CMakeLists.txt        top level; targets android-arm64-v8a and ios-arm64
   trim_native.h         the C ABI, shared by JNI and cinterop
-  cmake/                toolchain files, meson cross files
+  src/                  the ABI implementation over the upstream libraries
+  test/                 golden-value verification against upstream
+  calibration/          the XPSNR-to-VMAF harness (PROJECT.md open question)
+  cmake/                toolchain files, meson cross-file template
   patches/              upstream patches applied at configure time
   xpsnr/                submodule fraunhoferhhi/xpsnr
   vmaf/                 submodule Netflix/vmaf      (libvmaf via meson -> static lib)
@@ -62,12 +65,24 @@ shared/native/
 
 ## Per-library notes
 
-**XPSNR** (`fraunhoferhhi/xpsnr`) — upstream ships the metric as an FFmpeg filter patch
-plus standalone C. Build the standalone C only; do **not** pull FFmpeg in. This is the
-search metric, called thousands of times a night, so it gets the most attention on the
-NEON paths.
+**XPSNR** (`fraunhoferhhi/xpsnr`) — **there is no standalone C in that repository.** It
+contains only an FFmpeg filter (`libavfilter/vf_xpsnr.c`), and its README says the
+maintained copy now lives in FFmpeg itself. So the metric is *extracted*:
+`shared/native/src/xpsnr_score.c` keeps upstream's arithmetic verbatim and replaces the
+AVFilter plumbing, context and allocation. Do **not** pull FFmpeg in to reach one
+function. Luma only — the search needs a monotone quality proxy, luma dominates it, and
+this is the metric run thousands of times a night. Verify against FFmpeg's own `xpsnr`
+filter, whose per-component "XPSNR y" is the same number.
 
-**libvmaf** (`Netflix/vmaf`) — meson/ninja, not CMake. Drive it from CMake with a custom
+The licence is a Fraunhofer BSD-3 variant: commercial use is permitted, but it grants
+**no patent rights** and disclaims patent non-infringement. Worth a product decision
+before shipping, not just an engineering one.
+
+**libvmaf** (`Netflix/vmaf`) — meson/ninja, not CMake. It bundles libsvm, which is C++,
+so the final link needs the C++ runtime even though everything of ours is C; declare CXX
+in the CMake project or the link fails on `__gxx_personality_v0`. Embedding the models
+needs `xxd` on PATH at configure time — without it meson silently builds with no built-in
+models and every `vmaf_model_load` fails at runtime. Drive it from CMake with a custom
 command running meson against a generated cross file (compiler, ar, strip,
 `cpu_family = 'aarch64'`, `system = 'android'` or `'darwin'`), then
 `add_library(vmaf STATIC IMPORTED)` on the resulting `libvmaf.a`. Build with

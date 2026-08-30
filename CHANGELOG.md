@@ -119,6 +119,47 @@ environment's egress policy (a confirmed gateway denial, not a tooling fault).
 
 ---
 
+### Added — milestone 2, the quality metrics
+
+XPSNR and libvmaf now build from source behind the `trim_native.h` C ABI, bound to Kotlin
+with JNI, and **both are verified against their upstream implementations**.
+
+| Metric | Ours | Upstream | Source of truth |
+|---|---|---|---|
+| XPSNR y | 29.3297 | 29.3297 | FFmpeg's own `xpsnr` filter |
+| VMAF | 63.8494 | 63.8494 | libvmaf's `vmaf` CLI (and FFmpeg's `libvmaf` filter, 64.1769 vs 64.1770 on the full clip) |
+
+That is the whole point of the milestone: a metric that is fast and wrong silently ruins
+every replace decision, so neither number was accepted until something that did not come
+from us produced the same one.
+
+- `shared/native/vmaf` and `shared/native/xpsnr` are now real submodules, pinned.
+- `src/vmaf_score.c` — libvmaf, `vmaf_v0.6.1` embedded (no asset to read at runtime),
+  single-threaded because ARCHITECTURE.md § 8 already owns the parallelism, cancellation
+  polled between frames.
+- `src/xpsnr_score.c` — a standalone extraction of the Fraunhofer algorithm. **The
+  upstream repo has no standalone C**, contrary to what STACK.md and the `ndk-build` skill
+  claimed; both are corrected. Luma only, which is what the search needs and what makes
+  the value comparable to FFmpeg's "XPSNR y".
+- `CMakeLists.txt` — drives libvmaf's meson build from a cross file generated out of the
+  toolchain CMake resolved, so the two cannot drift onto different ABIs. Wired into
+  `androidApp` via `externalNativeBuild`.
+- `jni/trim_native_jni.c` — one bridge, `RegisterNatives` in `JNI_OnLoad`, direct buffers
+  only, return codes rather than exceptions from C.
+- `NativeQualityScorer` implements the shared `QualityScorer`, bridging coroutine
+  cancellation onto the flag the native loop polls — without it a night pass told to stop
+  would keep scoring until the current window finished.
+- `test/test_metrics.c` — **16 checks, all passing**: the two golden values, identical
+  input at the ceiling, monotonicity (the search cannot converge without it), and the full
+  error contract (cancellation, null windows, mismatched sizes, invalid subsample).
+- `calibration/` — the harness for PROJECT.md's open question, with a first data point:
+  **VMAF 95 ≈ XPSNR y 39.8** under x265 on the golden clip. Explicitly not a shippable
+  constant; the README says why in three points.
+
+Two build traps worth knowing, both now documented in the skill: libvmaf needs `xxd` at
+configure time or it builds *silently* without models and fails at runtime, and it bundles
+libsvm in C++ so the link needs the C++ runtime.
+
 ### Added — milestone 8 completed
 
 The rest of the gallery shell: sectioned grid with sticky date headers, pinch between

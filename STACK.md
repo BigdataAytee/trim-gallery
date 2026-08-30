@@ -29,7 +29,7 @@ Use these. Do not substitute alternatives without noting why in PROJECT.md.
 ## Quality metrics
 | Project | Use | How | Source |
 |---|---|---|---|
-| XPSNR | search metric | NDK (standalone C from Fraunhofer HHI) | https://github.com/fraunhoferhhi/xpsnr |
+| XPSNR | search metric | NDK — **no standalone C exists**; the repo holds only an FFmpeg filter, so the algorithm is extracted into `shared/native/src/xpsnr_score.c`. Licence permits commercial use but grants no patent rights. | https://github.com/fraunhoferhhi/xpsnr |
 | libvmaf | verification, vmaf_v0.6.1, n_subsample=10 | NDK (meson/ninja, arm64, NEON) | https://github.com/Netflix/vmaf |
 | SSIMULACRA2 | photo quality gate | NDK (part of libjxl, `tools/ssimulacra2`) | https://github.com/libjxl/libjxl |
 
