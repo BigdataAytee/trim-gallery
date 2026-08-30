@@ -1,0 +1,393 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Photos and clips from buyers</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  /* ---------- theme tokens (light is the default, matches the mockup) ---------- */
+  :root{
+    --page:#faf9f6;        /* off-white body */
+    --band:#f0efe9;        /* cream header band */
+    --card:#ffffff;
+    --sheet:#ffffff;
+    --text:#1c1b1a;
+    --muted:#8a8782;
+    --line:#d9d6cf;
+    --tab-on:#1c1b1a;
+    --chip-bg:rgba(255,255,255,.85);
+    --chip-fg:#1c1b1a;
+    --veil:rgba(250,249,246,.82);
+    --glaze:#3f9aa0;       /* breathing colour for photos/files */
+    --ember:#c9663f;       /* breathing colour for clips */
+    --glow-a:.55;          /* glow strength on this theme */
+    --radius:14px;
+    --breath:4.6s;
+  }
+  [data-theme="dark"]{
+    --page:#161412; --band:#1d1a17; --card:#221f1b; --sheet:#221f1b;
+    --text:#f1ebe2; --muted:#8f877c; --line:#3a3630; --tab-on:#f1ebe2;
+    --chip-bg:rgba(22,20,18,.7); --chip-fg:#f1ebe2; --veil:rgba(10,9,8,.86);
+    --glaze:#4fa3a8; --glow-a:.4;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  html,body{height:100%}
+  body{
+    background:var(--page);color:var(--text);
+    font-family:Inter,system-ui,-apple-system,sans-serif;
+    -webkit-font-smoothing:antialiased;overflow-x:hidden;
+    transition:background .35s,color .35s;
+  }
+  .phone{max-width:430px;margin:0 auto;min-height:100dvh;position:relative}
+
+  /* ---------- header band ---------- */
+  header{
+    position:sticky;top:0;z-index:5;background:var(--band);
+    padding:calc(env(safe-area-inset-top) + 22px) 18px 22px;
+    display:flex;align-items:center;gap:16px;
+    border-bottom:1px solid color-mix(in srgb,var(--line) 60%,transparent);
+    transition:background .35s;
+  }
+  .back{
+    flex:none;width:46px;height:46px;border-radius:50%;border:0;
+    background:var(--card);color:var(--text);display:grid;place-items:center;cursor:pointer;
+    box-shadow:0 1px 2px rgba(0,0,0,.06);
+  }
+  .back:active{transform:scale(.94)}
+  h1{font-size:23px;font-weight:700;letter-spacing:-.02em;line-height:1.15;flex:1}
+  .theme{
+    flex:none;width:46px;height:46px;border-radius:50%;border:0;
+    background:var(--card);color:var(--text);display:grid;place-items:center;cursor:pointer;
+    box-shadow:0 1px 2px rgba(0,0,0,.06);
+  }
+  .theme svg{width:20px;height:20px;transition:transform .5s cubic-bezier(.34,1.4,.64,1)}
+  [data-theme="dark"] .theme svg{transform:rotate(200deg)}
+  .theme .moon{display:none}
+  [data-theme="dark"] .theme .sun{display:none}
+  [data-theme="dark"] .theme .moon{display:block}
+
+  /* ---------- tabs: outlined pills, active gets dark border ---------- */
+  .tabs{display:flex;gap:10px;padding:26px 18px 20px}
+  .tabs button{
+    position:relative;border:2px solid var(--line);border-radius:999px;
+    background:transparent;color:var(--muted);
+    padding:14px 24px;font:600 18px/1 Inter;cursor:pointer;
+    transition:border-color .3s,color .3s,transform .18s;
+  }
+  .tabs button[aria-selected="true"]{border-color:var(--tab-on);color:var(--text)}
+  .tabs button:active{transform:scale(.97)}
+
+  /* ---------- grid: 2 columns like the mockup ---------- */
+  .grid{
+    display:grid;grid-template-columns:1fr 1fr;gap:14px;
+    padding:0 18px calc(env(safe-area-inset-bottom) + 90px);
+  }
+  .grid[data-view="clips"] .card[data-type="photo"],
+  .grid[data-view="clips"] .card[data-type="file"]{display:none}
+
+  /* ---------- card: the breathing tile ---------- */
+  .card{
+    position:relative;aspect-ratio:1;border-radius:var(--radius);
+    background:var(--card);overflow:hidden;cursor:pointer;
+    border:0;padding:0;color:inherit;font:inherit;text-align:left;
+    opacity:0;transform:translateY(18px) scale(.96);
+    transition:transform .18s ease;
+    --hue:var(--glaze);
+  }
+  .card[data-type="clip"]{--hue:var(--ember)}
+  .card.in{
+    animation:arrive .6s cubic-bezier(.2,.8,.2,1) forwards,
+              breathe var(--breath) ease-in-out infinite;
+    animation-delay:var(--d,0ms), calc(var(--d,0ms) + 600ms + var(--phase,0ms));
+  }
+  .card:active{transform:scale(.97)!important}
+  .card.hidden{visibility:hidden}
+  @keyframes arrive{to{opacity:1;transform:none}}
+  /* slow radiating halo + gentle brightening; works on cream and on dark */
+  @keyframes breathe{
+    0%,100%{box-shadow:0 0 0 0 color-mix(in srgb,var(--hue) 0%,transparent),
+                       0 4px 14px -6px rgba(0,0,0,.18);
+            filter:brightness(1)}
+    50%    {box-shadow:0 0 0 2px color-mix(in srgb,var(--hue) calc(var(--glow-a)*100%),transparent),
+                       0 0 30px 6px color-mix(in srgb,var(--hue) calc(var(--glow-a)*60%),transparent);
+            filter:brightness(1.05)}
+  }
+
+  .card .art,.card canvas{position:absolute;inset:0;width:100%;height:100%;display:block}
+  .card .art svg{width:100%;height:100%}
+  .card .meta{
+    position:absolute;left:10px;right:10px;bottom:10px;
+    display:flex;align-items:center;justify-content:space-between;gap:6px;
+    font-size:12px;font-weight:600;
+  }
+  .chip{
+    display:inline-flex;align-items:center;gap:4px;padding:5px 9px;border-radius:999px;
+    background:var(--chip-bg);color:var(--chip-fg);
+    backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px);
+  }
+  .chip.star{color:#c98a12}
+  [data-theme="dark"] .chip.star{color:#f3c96b}
+  .badge{
+    position:absolute;top:10px;left:10px;width:30px;height:30px;border-radius:50%;
+    background:var(--chip-bg);display:grid;place-items:center;color:var(--chip-fg);
+    transition:background .3s,color .3s;
+  }
+  .badge svg{width:12px;height:12px;fill:currentColor;margin-left:1px}
+  .card.playing .badge{background:var(--ember);color:#fff}
+  .card.playing .badge svg{margin:0}
+  .file .art{background:var(--band);display:grid;place-items:center;padding:16px}
+  .file .art .doc{font-size:14px;font-weight:600;line-height:1.3;text-align:center;color:var(--text)}
+  .file .art .doc b{display:block;font-size:11px;letter-spacing:.08em;color:var(--muted);font-weight:600;margin-top:8px}
+
+  /* ---------- lightbox (hero zoom target) ---------- */
+  .veil{
+    position:fixed;inset:0;z-index:20;background:transparent;
+    backdrop-filter:blur(0);-webkit-backdrop-filter:blur(0);pointer-events:none;
+    transition:background .35s,backdrop-filter .35s,-webkit-backdrop-filter .35s;
+  }
+  .veil.open{background:var(--veil);backdrop-filter:blur(14px);-webkit-backdrop-filter:blur(14px);pointer-events:auto}
+  .hero{
+    position:fixed;z-index:21;border-radius:var(--radius);overflow:hidden;
+    background:var(--card);will-change:transform;box-shadow:0 30px 80px rgba(0,0,0,.28);
+  }
+  .hero .art,.hero canvas{position:absolute;inset:0;width:100%;height:100%}
+  .hero .art svg{width:100%;height:100%}
+  .review{
+    position:fixed;left:0;right:0;bottom:0;z-index:22;max-width:430px;margin:0 auto;
+    padding:22px 24px calc(env(safe-area-inset-bottom) + 26px);
+    border-radius:26px 26px 0 0;background:var(--sheet);color:var(--text);
+    box-shadow:0 -10px 40px rgba(0,0,0,.12);
+    transform:translateY(110%);transition:transform .45s cubic-bezier(.2,.8,.2,1);
+  }
+  .review.open{transform:none}
+  .review .who{display:flex;align-items:center;gap:12px;margin-bottom:12px}
+  .avatar{width:36px;height:36px;border-radius:50%;background:linear-gradient(135deg,var(--glaze),var(--ember))}
+  .who b{font-weight:600;font-size:15px}
+  .who span{display:block;color:var(--muted);font-size:12px}
+  .stars{color:#c98a12;letter-spacing:2px;font-size:14px;margin-left:auto}
+  [data-theme="dark"] .stars{color:#f3c96b}
+  .review p{font-size:17px;line-height:1.45}
+  .review .variant{margin-top:14px;font-size:13px;color:var(--muted)}
+  .review .variant em{font-style:normal;color:var(--text);border-bottom:1px dotted var(--muted)}
+  .close{
+    position:fixed;top:calc(env(safe-area-inset-top) + 16px);right:18px;z-index:23;
+    width:46px;height:46px;border-radius:50%;border:0;background:var(--card);
+    color:var(--text);font-size:22px;display:none;cursor:pointer;box-shadow:0 2px 8px rgba(0,0,0,.12);
+  }
+  .close.open{display:grid;place-items:center}
+
+  .hint{
+    position:fixed;bottom:calc(env(safe-area-inset-bottom) + 14px);left:50%;transform:translateX(-50%);
+    z-index:6;font-size:12px;color:var(--muted);background:var(--card);
+    padding:8px 14px;border-radius:999px;box-shadow:0 2px 10px rgba(0,0,0,.1);white-space:nowrap;
+    animation:fadeout 1s 5s forwards;
+  }
+  @keyframes fadeout{to{opacity:0;visibility:hidden}}
+
+  @media (prefers-reduced-motion:reduce){
+    .card{opacity:1;transform:none}
+    .card.in{animation:none;box-shadow:0 0 0 1.5px color-mix(in srgb,var(--hue) 40%,transparent)}
+    .review,.veil{transition:none}
+  }
+</style>
+</head>
+<body>
+<div class="phone">
+  <header>
+    <button class="back" aria-label="Back">
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path d="M15 5l-7 7 7 7"/></svg>
+    </button>
+    <h1>Photos and clips from buyers</h1>
+    <button class="theme" id="theme" aria-label="Switch to dark mode">
+      <svg class="sun" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/></svg>
+      <svg class="moon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8z"/></svg>
+    </button>
+  </header>
+
+  <div class="tabs" role="tablist">
+    <button role="tab" aria-selected="true" data-view="all">Photos (214)</button>
+    <button role="tab" aria-selected="false" data-view="clips">Clips (6)</button>
+  </div>
+
+  <div class="grid" id="grid" data-view="all"></div>
+  <div class="hint">Tap a tile · clips play as you scroll</div>
+</div>
+
+<div class="veil" id="veil"></div>
+<button class="close" id="close" aria-label="Close">×</button>
+<div class="review" id="review">
+  <div class="who">
+    <div class="avatar"></div>
+    <div><b id="rName"></b><span id="rDate"></span></div>
+    <div class="stars" id="rStars"></div>
+  </div>
+  <p id="rText"></p>
+  <div class="variant">Bought: <em id="rVariant"></em></div>
+</div>
+
+<script>
+/* ---------- theme toggle: light first, remembered for the session ---------- */
+const root=document.documentElement, themeBtn=document.getElementById("theme");
+themeBtn.addEventListener("click",()=>{
+  const dark=root.dataset.theme!=="dark";
+  root.dataset.theme=dark?"dark":"light";
+  themeBtn.setAttribute("aria-label",dark?"Switch to light mode":"Switch to dark mode");
+});
+
+/* =========================================================
+   DATA – swap `art` for <img> / `src` for real <video> URLs
+   ========================================================= */
+const names=["Amara O.","Tobias K.","Priya S.","Lena M.","Jun H.","Femi A.","Sofia R.","Noah B.","Ines D.","Kwame T."];
+const texts=[
+  "The glaze pools darker in the bottom of each cup – better than the listing photo.",
+  "Heavier than expected in a good way. Feels like it'll outlive me.",
+  "Arrived wrapped like a gift. The blue shifts green in morning light.",
+  "Used it every day for a month. Zero crazing, zero regrets.",
+  "The rim has a tiny wobble that makes it obviously handmade. Love that.",
+  "My tea tastes different in this. Placebo? Don't care."
+];
+const variants=["Tea set · Night glaze","Serving bowl · Sea glaze","Plate set · Ochre","Mug · Ash white","Vase · Raw clay"];
+/* warm, photo-like palettes so tiles read well on cream */
+const palettes=[
+  ["#2a6a72","#7fc4c8","#e8f1f0"],
+  ["#8a4a30","#d98c5f","#f3e4d6"],
+  ["#5d6a3f","#b7c48a","#eef1e3"],
+  ["#6a4a2a","#c9a06a","#f2e9da"],
+  ["#3f4d6a","#98a8c8","#e9edf4"],
+  ["#4a4a4a","#b9b2a6","#f0ede7"]
+];
+function potSVG(i){
+  const p=palettes[i%palettes.length];
+  const shapes=[
+    `<ellipse cx="50" cy="62" rx="30" ry="22"/><ellipse cx="50" cy="44" rx="30" ry="8" opacity=".6"/>`,
+    `<path d="M32 28 q18 -14 36 0 v34 q-18 16 -36 0z"/><rect x="30" y="26" width="40" height="5" rx="2" opacity=".6"/>`,
+    `<circle cx="50" cy="52" r="30"/><circle cx="50" cy="52" r="20" opacity=".45"/><circle cx="50" cy="52" r="9" opacity=".7"/>`,
+    `<path d="M38 24 h24 l8 44 h-40z"/><circle cx="50" cy="24" r="12" opacity=".5"/>`,
+    `<path d="M30 40 q20 -30 40 0 q10 30 -20 40 q-30 -10 -20 -40z"/>`,
+    `<rect x="28" y="30" width="44" height="40" rx="20"/><rect x="34" y="66" width="32" height="6" rx="3" opacity=".6"/>`
+  ];
+  return `<svg viewBox="0 0 100 100" preserveAspectRatio="xMidYMid slice">
+    <defs><radialGradient id="g${i}" cx="30%" cy="25%" r="90%"><stop offset="0" stop-color="${p[2]}"/><stop offset="1" stop-color="${p[1]}"/></radialGradient></defs>
+    <rect width="100" height="100" fill="url(#g${i})"/>
+    <g fill="${p[0]}" opacity=".9">${shapes[i%shapes.length]}</g>
+    <g fill="${p[1]}" opacity=".5">${shapes[(i+2)%shapes.length]}</g>
+  </svg>`;
+}
+const items=[];
+for(let i=0;i<30;i++){
+  const isClip=(i===1||i===6||i===11||i===17||i===22||i===27), isFile=(i===14);
+  items.push({id:i,type:isClip?"clip":isFile?"file":"photo",rating:4+((i*7)%2),
+    name:names[i%names.length],date:`${(i%27)+1} Aug`,text:texts[i%texts.length],
+    variant:variants[i%variants.length],dur:isClip?`0:${String(8+(i*5)%40).padStart(2,"0")}`:null,
+    pal:palettes[i%palettes.length]});
+}
+
+/* ---------- render ---------- */
+const grid=document.getElementById("grid");
+const reduce=matchMedia("(prefers-reduced-motion:reduce)").matches;
+items.forEach((it,idx)=>{
+  const el=document.createElement("button");
+  el.className="card"+(it.type==="file"?" file":"");
+  el.dataset.type=it.type; el.dataset.id=it.id;
+  el.style.setProperty("--d",(idx%6)*70+"ms");
+  el.style.setProperty("--phase",-(Math.random()*4600|0)+"ms");
+  if(it.type==="clip"){
+    el.innerHTML=`<canvas width="300" height="300"></canvas>
+      <div class="badge"><svg viewBox="0 0 24 24"><path d="M7 4l14 8-14 8z"/></svg></div>
+      <div class="meta"><span class="chip star">★ ${it.rating}</span><span class="chip">${it.dur}</span></div>`;
+  }else if(it.type==="file"){
+    el.innerHTML=`<div class="art"><div class="doc">Care guide from a buyer<b>PDF · 2 PAGES</b></div></div>
+      <div class="meta"><span class="chip">${it.name.split(" ")[0]}</span></div>`;
+  }else{
+    el.innerHTML=`<div class="art">${potSVG(it.id)}</div>
+      <div class="meta"><span class="chip star">★ ${it.rating}</span><span class="chip">${it.name.split(" ")[0]}</span></div>`;
+  }
+  grid.appendChild(el);
+});
+
+/* ---------- 1) arrive on scroll ---------- */
+const arrive=new IntersectionObserver(es=>{es.forEach(e=>{if(e.isIntersecting){e.target.classList.add("in");arrive.unobserve(e.target);}});},{rootMargin:"0px 0px -6% 0px"});
+document.querySelectorAll(".card").forEach(c=>arrive.observe(c));
+
+/* ---------- 2) clips play only while ≥50% visible ----------
+   For real footage: replace the canvas with
+   <video muted playsinline loop preload="metadata" src="...">
+   and call video.play()/pause() from the same observer.        */
+const clipAnims=new Map();
+function drawClip(canvas,pal){
+  const ctx=canvas.getContext("2d");let t=0,raf=null;
+  const frame=()=>{
+    const w=canvas.width,h=canvas.height;
+    ctx.fillStyle=pal[2];ctx.fillRect(0,0,w,h);
+    for(let r=130;r>10;r-=14){
+      ctx.beginPath();
+      for(let a=0;a<=Math.PI*2+0.1;a+=0.1){
+        const wob=Math.sin(a*3+t*2+r*0.05)*6;
+        const x=w/2+Math.cos(a+t)*(r+wob),y=h/2+Math.sin(a+t)*(r+wob);
+        a===0?ctx.moveTo(x,y):ctx.lineTo(x,y);
+      }
+      ctx.closePath();ctx.fillStyle=(r/14)%2?pal[0]:pal[1];ctx.globalAlpha=.9;ctx.fill();ctx.globalAlpha=1;
+    }
+  };
+  const loop=()=>{t+=0.012;frame();raf=requestAnimationFrame(loop);};
+  frame();
+  return {play(){if(!raf)loop();},pause(){cancelAnimationFrame(raf);raf=null;}};
+}
+document.querySelectorAll('.card[data-type="clip"] canvas').forEach(cv=>{
+  const card=cv.parentElement;clipAnims.set(card,drawClip(cv,items[+card.dataset.id].pal));
+});
+const player=new IntersectionObserver(es=>{es.forEach(e=>{
+  const a=clipAnims.get(e.target);if(!a)return;
+  if(e.intersectionRatio>=0.5&&!reduce){a.play();e.target.classList.add("playing");}
+  else{a.pause();e.target.classList.remove("playing");}
+});},{threshold:[0,0.5,1]});
+clipAnims.forEach((_,card)=>player.observe(card));
+
+/* ---------- 3) tabs ---------- */
+const tabs=document.querySelector(".tabs");
+tabs.querySelectorAll("button").forEach(b=>b.addEventListener("click",()=>{
+  tabs.querySelectorAll("button").forEach(x=>x.setAttribute("aria-selected",x===b));
+  grid.dataset.view=b.dataset.view;
+  grid.querySelectorAll(".card").forEach(c=>{c.classList.remove("in");void c.offsetWidth;arrive.observe(c);});
+}));
+
+/* ---------- 4) hero zoom (FLIP) ---------- */
+const veil=document.getElementById("veil"),review=document.getElementById("review"),closeBtn=document.getElementById("close");
+let hero=null,origin=null;
+function openCard(card){
+  if(hero)return;origin=card;
+  const it=items[+card.dataset.id],r=card.getBoundingClientRect();
+  hero=document.createElement("div");hero.className="hero";
+  hero.innerHTML=card.querySelector(".art")?card.querySelector(".art").outerHTML:"";
+  if(it.type==="clip"){const cv=document.createElement("canvas");cv.width=600;cv.height=600;hero.appendChild(cv);hero._anim=drawClip(cv,it.pal);if(!reduce)hero._anim.play();}
+  Object.assign(hero.style,{left:r.left+"px",top:r.top+"px",width:r.width+"px",height:r.height+"px"});
+  document.body.appendChild(hero);card.classList.add("hidden");
+  const vw=Math.min(innerWidth,430),W=vw-36,L=(innerWidth-W)/2,T=Math.max(80,(innerHeight-W)*0.35);
+  hero.animate([{left:r.left+"px",top:r.top+"px",width:r.width+"px",height:r.height+"px",borderRadius:"14px"},
+                {left:L+"px",top:T+"px",width:W+"px",height:W+"px",borderRadius:"26px"}],
+               {duration:reduce?0:420,easing:"cubic-bezier(.2,.9,.25,1.1)",fill:"forwards"});
+  veil.classList.add("open");closeBtn.classList.add("open");
+  document.getElementById("rName").textContent=it.name;
+  document.getElementById("rDate").textContent=it.date+" · verified buyer";
+  document.getElementById("rStars").textContent="★".repeat(it.rating)+"☆".repeat(5-it.rating);
+  document.getElementById("rText").textContent=it.type==="file"?"Attached a care guide – mostly “don’t put it in the dishwasher, it deserves better.”":it.text;
+  document.getElementById("rVariant").textContent=it.variant;
+  setTimeout(()=>review.classList.add("open"),reduce?0:120);
+}
+function closeCard(){
+  if(!hero)return;const r=origin.getBoundingClientRect(),cs=getComputedStyle(hero);
+  review.classList.remove("open");veil.classList.remove("open");closeBtn.classList.remove("open");
+  const a=hero.animate([{left:cs.left,top:cs.top,width:cs.width,height:cs.height,borderRadius:"26px"},
+                        {left:r.left+"px",top:r.top+"px",width:r.width+"px",height:r.height+"px",borderRadius:"14px"}],
+                       {duration:reduce?0:340,easing:"cubic-bezier(.3,.7,.3,1)",fill:"forwards"});
+  a.onfinish=()=>{hero._anim&&hero._anim.pause();hero.remove();hero=null;origin.classList.remove("hidden");origin=null;};
+}
+grid.addEventListener("click",e=>{const c=e.target.closest(".card");if(c)openCard(c);});
+veil.addEventListener("click",closeCard);closeBtn.addEventListener("click",closeCard);
+addEventListener("keydown",e=>{if(e.key==="Escape")closeCard();});
+addEventListener("scroll",()=>{if(hero)closeCard();},{passive:true});
+</script>
+</body>
+</html>

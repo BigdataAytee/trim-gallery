@@ -1,0 +1,316 @@
+[
+  {
+    "id": "t00",
+    "type": "photo",
+    "src": "/media/photos/t00.jpg",
+    "rating": 5,
+    "buyer": "Amara O.",
+    "date": "2026-07-14",
+    "text": "The glaze pools darker in the bottom of each cup — better than the listing photo.",
+    "variant": "Tea set · Night glaze"
+  },
+  {
+    "id": "t01",
+    "type": "clip",
+    "src": "/media/clips/t01.mp4",
+    "poster": "/media/posters/t01.jpg",
+    "duration": "0:08",
+    "rating": 5,
+    "buyer": "Tobias K.",
+    "date": "2026-07-19",
+    "text": "Heavier than expected in a good way. Feels like it'll outlive me.",
+    "variant": "Serving bowl · Sea glaze"
+  },
+  {
+    "id": "t02",
+    "type": "photo",
+    "src": "/media/photos/t02.jpg",
+    "rating": 5,
+    "buyer": "Priya S.",
+    "date": "2026-07-22",
+    "text": "Arrived wrapped like a gift. The blue shifts green in morning light.",
+    "variant": "Plate set · Ochre"
+  },
+  {
+    "id": "t03",
+    "type": "photo",
+    "src": "/media/photos/t03.jpg",
+    "rating": 5,
+    "buyer": "Lena M.",
+    "date": "2026-07-28",
+    "text": "Used it every day for a month. Zero crazing, zero regrets.",
+    "variant": "Mug · Ash white"
+  },
+  {
+    "id": "t04",
+    "type": "photo",
+    "src": "/media/photos/t04.jpg",
+    "rating": 4,
+    "buyer": "Jun H.",
+    "date": "2026-08-01",
+    "text": "The rim has a tiny wobble that makes it obviously handmade. Love that.",
+    "variant": "Vase · Raw clay"
+  },
+  {
+    "id": "t05",
+    "type": "photo",
+    "src": "/media/photos/t05.jpg",
+    "rating": 5,
+    "buyer": "Femi A.",
+    "date": "2026-08-03",
+    "text": "My tea tastes different in this. Placebo? Don't care.",
+    "variant": "Jar · Celadon"
+  },
+  {
+    "id": "t06",
+    "type": "clip",
+    "src": "/media/clips/t06.mp4",
+    "poster": "/media/posters/t06.jpg",
+    "duration": "0:06",
+    "rating": 5,
+    "buyer": "Sofia R.",
+    "date": "2026-08-06",
+    "text": "Third order from this shop. The ochre is even better in person than the sea glaze.",
+    "variant": "Tea set · Night glaze"
+  },
+  {
+    "id": "t07",
+    "type": "photo",
+    "src": "/media/photos/t07.jpg",
+    "rating": 5,
+    "buyer": "Noah B.",
+    "date": "2026-08-09",
+    "text": "Packed in straw, not plastic. Small thing, but it mattered to me.",
+    "variant": "Serving bowl · Sea glaze"
+  },
+  {
+    "id": "t08",
+    "type": "photo",
+    "src": "/media/photos/t08.jpg",
+    "rating": 5,
+    "buyer": "Ines D.",
+    "date": "2026-08-12",
+    "text": "Holds heat far longer than the mug it replaced. Morning coffee is still hot at the end.",
+    "variant": "Plate set · Ochre"
+  },
+  {
+    "id": "t09",
+    "type": "photo",
+    "src": "/media/photos/t09.jpg",
+    "rating": 4,
+    "buyer": "Kwame T.",
+    "date": "2026-08-15",
+    "text": "One arrived chipped and was replaced in four days, no argument. Buying again.",
+    "variant": "Mug · Ash white"
+  },
+  {
+    "id": "t10",
+    "type": "photo",
+    "src": "/media/photos/t10.jpg",
+    "rating": 5,
+    "buyer": "Mira L.",
+    "date": "2026-08-18",
+    "text": "The glaze pools darker in the bottom of each cup — better than the listing photo.",
+    "variant": "Vase · Raw clay"
+  },
+  {
+    "id": "t11",
+    "type": "clip",
+    "src": "/media/clips/t11.mp4",
+    "poster": "/media/posters/t11.jpg",
+    "duration": "0:10",
+    "rating": 4,
+    "buyer": "Otto V.",
+    "date": "2026-08-21",
+    "text": "Heavier than expected in a good way. Feels like it'll outlive me.",
+    "variant": "Jar · Celadon"
+  },
+  {
+    "id": "t12",
+    "type": "photo",
+    "src": "/media/photos/t12.jpg",
+    "rating": 5,
+    "buyer": "Amara O.",
+    "date": "2026-07-14",
+    "text": "Arrived wrapped like a gift. The blue shifts green in morning light.",
+    "variant": "Tea set · Night glaze"
+  },
+  {
+    "id": "t13",
+    "type": "photo",
+    "src": "/media/photos/t13.jpg",
+    "rating": 5,
+    "buyer": "Tobias K.",
+    "date": "2026-07-19",
+    "text": "Used it every day for a month. Zero crazing, zero regrets.",
+    "variant": "Serving bowl · Sea glaze"
+  },
+  {
+    "id": "t14",
+    "type": "file",
+    "src": "/media/care-guide.pdf",
+    "label": "Care guide from a buyer",
+    "meta": "PDF · 2 pages",
+    "rating": 5,
+    "buyer": "Priya S.",
+    "date": "2026-07-22",
+    "text": "Attached the care guide I wrote for my own studio — mostly \"don't put it in the dishwasher, it deserves better.\"",
+    "variant": "Plate set · Ochre"
+  },
+  {
+    "id": "t15",
+    "type": "photo",
+    "src": "/media/photos/t15.jpg",
+    "rating": 5,
+    "buyer": "Lena M.",
+    "date": "2026-07-28",
+    "text": "My tea tastes different in this. Placebo? Don't care.",
+    "variant": "Mug · Ash white"
+  },
+  {
+    "id": "t16",
+    "type": "photo",
+    "src": "/media/photos/t16.jpg",
+    "rating": 4,
+    "buyer": "Jun H.",
+    "date": "2026-08-01",
+    "text": "Third order from this shop. The ochre is even better in person than the sea glaze.",
+    "variant": "Vase · Raw clay"
+  },
+  {
+    "id": "t17",
+    "type": "clip",
+    "src": "/media/clips/t17.mp4",
+    "poster": "/media/posters/t17.jpg",
+    "duration": "0:10",
+    "rating": 5,
+    "buyer": "Femi A.",
+    "date": "2026-08-03",
+    "text": "Packed in straw, not plastic. Small thing, but it mattered to me.",
+    "variant": "Jar · Celadon"
+  },
+  {
+    "id": "t18",
+    "type": "photo",
+    "src": "/media/photos/t18.jpg",
+    "rating": 5,
+    "buyer": "Sofia R.",
+    "date": "2026-08-06",
+    "text": "Holds heat far longer than the mug it replaced. Morning coffee is still hot at the end.",
+    "variant": "Tea set · Night glaze"
+  },
+  {
+    "id": "t19",
+    "type": "photo",
+    "src": "/media/photos/t19.jpg",
+    "rating": 5,
+    "buyer": "Noah B.",
+    "date": "2026-08-09",
+    "text": "One arrived chipped and was replaced in four days, no argument. Buying again.",
+    "variant": "Serving bowl · Sea glaze"
+  },
+  {
+    "id": "t20",
+    "type": "photo",
+    "src": "/media/photos/t20.jpg",
+    "rating": 5,
+    "buyer": "Ines D.",
+    "date": "2026-08-12",
+    "text": "The glaze pools darker in the bottom of each cup — better than the listing photo.",
+    "variant": "Plate set · Ochre"
+  },
+  {
+    "id": "t21",
+    "type": "photo",
+    "src": "/media/photos/t21.jpg",
+    "rating": 4,
+    "buyer": "Kwame T.",
+    "date": "2026-08-15",
+    "text": "Heavier than expected in a good way. Feels like it'll outlive me.",
+    "variant": "Mug · Ash white"
+  },
+  {
+    "id": "t22",
+    "type": "clip",
+    "src": "/media/clips/t22.mp4",
+    "poster": "/media/posters/t22.jpg",
+    "duration": "0:08",
+    "rating": 5,
+    "buyer": "Mira L.",
+    "date": "2026-08-18",
+    "text": "Arrived wrapped like a gift. The blue shifts green in morning light.",
+    "variant": "Vase · Raw clay"
+  },
+  {
+    "id": "t23",
+    "type": "photo",
+    "src": "/media/photos/t23.jpg",
+    "rating": 5,
+    "buyer": "Otto V.",
+    "date": "2026-08-21",
+    "text": "Used it every day for a month. Zero crazing, zero regrets.",
+    "variant": "Jar · Celadon"
+  },
+  {
+    "id": "t24",
+    "type": "photo",
+    "src": "/media/photos/t24.jpg",
+    "rating": 5,
+    "buyer": "Amara O.",
+    "date": "2026-07-14",
+    "text": "The rim has a tiny wobble that makes it obviously handmade. Love that.",
+    "variant": "Tea set · Night glaze"
+  },
+  {
+    "id": "t25",
+    "type": "photo",
+    "src": "/media/photos/t25.jpg",
+    "rating": 5,
+    "buyer": "Tobias K.",
+    "date": "2026-07-19",
+    "text": "My tea tastes different in this. Placebo? Don't care.",
+    "variant": "Serving bowl · Sea glaze"
+  },
+  {
+    "id": "t26",
+    "type": "photo",
+    "src": "/media/photos/t26.jpg",
+    "rating": 4,
+    "buyer": "Priya S.",
+    "date": "2026-07-22",
+    "text": "Third order from this shop. The ochre is even better in person than the sea glaze.",
+    "variant": "Plate set · Ochre"
+  },
+  {
+    "id": "t27",
+    "type": "clip",
+    "src": "/media/clips/t27.mp4",
+    "poster": "/media/posters/t27.jpg",
+    "duration": "0:06",
+    "rating": 5,
+    "buyer": "Lena M.",
+    "date": "2026-07-28",
+    "text": "Packed in straw, not plastic. Small thing, but it mattered to me.",
+    "variant": "Mug · Ash white"
+  },
+  {
+    "id": "t28",
+    "type": "photo",
+    "src": "/media/photos/t28.jpg",
+    "rating": 5,
+    "buyer": "Jun H.",
+    "date": "2026-08-01",
+    "text": "Holds heat far longer than the mug it replaced. Morning coffee is still hot at the end.",
+    "variant": "Vase · Raw clay"
+  },
+  {
+    "id": "t29",
+    "type": "photo",
+    "src": "/media/photos/t29.jpg",
+    "rating": 5,
+    "buyer": "Femi A.",
+    "date": "2026-08-03",
+    "text": "One arrived chipped and was replaced in four days, no argument. Buying again.",
+    "variant": "Jar · Celadon"
+  }
+]
