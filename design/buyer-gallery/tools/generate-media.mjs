@@ -74,6 +74,10 @@ async function raster(page, svg, out, size) {
 /**
  * Encodes a still into a short clip with a slow push-in — the closest honest
  * stand-in for a buyer's handheld clip, and it exercises the real <video> path.
+ *
+ * Written twice: H.264/MP4 for broad device support, and VP9/WebM because plenty of
+ * Chromium builds ship without the proprietary H.264 decoder and would otherwise show
+ * nothing but the poster. The player offers both and lets the browser choose.
  */
 function encodeClip(still, out, seconds, seed) {
   const r = rng(seed);
@@ -100,6 +104,15 @@ function encodeClip(still, out, seconds, seed) {
     '-movflags', '+faststart',
     '-an',
     out,
+  ]);
+
+  sh(FFMPEG, [
+    '-y', '-loglevel', 'error',
+    '-i', out,
+    '-c:v', 'libvpx-vp9', '-crf', '40', '-b:v', '0',
+    '-deadline', 'good', '-cpu-used', '4', '-row-mt', '1',
+    '-an',
+    out.replace(/\.mp4$/, '.webm'),
   ]);
 }
 
@@ -153,6 +166,9 @@ for (let i = 0; i < TOTAL; i++) {
       id,
       type: 'clip',
       src: `/media/clips/${id}.mp4`,
+      // Optional alternate encoding. The section 6 shape is unchanged; a real API may
+      // simply omit this field and the player falls back to `src`.
+      srcWebm: `/media/clips/${id}.webm`,
       poster: `/media/posters/${id}.jpg`,
       duration: `0:${String(seconds).padStart(2, '0')}`,
       rating,

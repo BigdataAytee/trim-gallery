@@ -119,6 +119,36 @@ environment's egress policy (a confirmed gateway denial, not a tooling fault).
 
 ---
 
+### Added — buyer gallery screen (design reference, not shipped)
+
+`design/buyer-gallery/` is now complete: the "Photos and clips from buyers" screen from
+`buyer-gallery-spec/`, built with React + Vite, Tailwind v4, Motion and Lucide.
+
+It still does not ship — ARCHITECTURE.md §11 requires Compose Multiplatform for every
+screen — but it is now a finished, running reference for the gallery shell's motion at
+milestone 8 rather than a scaffold.
+
+Every animation in DESIGN_SPEC.md §4 is implemented: breathing tiles out of phase, clips
+that play muted only while ≥50% visible, staggered arrival, the hero zoom with its review
+sheet, press feedback, and a full `prefers-reduced-motion` fallback.
+
+**Verified in a real browser — 45 assertions, all passing**, covering all seven items of
+the §7 acceptance checklist. The suite ships as `tests/acceptance.mjs` and exits non-zero
+on failure. Three real bugs it caught along the way:
+
+- An unlayered `* { margin: 0; padding: 0 }` reset outranked **every** Tailwind v4
+  utility (unlayered CSS beats `@layer utilities`), silently killing `px-*`, `mx-*` and
+  `mb-*` — the shell was not even centred.
+- Motion drops inline `style` keys it does not manage once a layout animation starts, so
+  the source tile's `visibility: hidden` was discarded and the tile stayed drawn behind
+  the veil. Now hidden via an attribute selector CSS owns.
+- The play badge showed "playing" whenever playback was *requested*, not when it actually
+  started — a visible lie whenever `play()` was refused. It now follows the element's own
+  play/pause events.
+
+Clips are offered as WebM as well as H.264 MP4: many Chromium builds ship no H.264
+decoder and would otherwise show nothing but the poster.
+
 ## Earlier — first Android-only skeleton (superseded)
 
 The initial single-module Android skeleton, its `no-internet` lint check, and the
