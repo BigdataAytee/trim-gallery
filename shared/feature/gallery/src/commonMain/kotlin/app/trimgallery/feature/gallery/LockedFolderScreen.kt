@@ -18,9 +18,9 @@ import app.trimgallery.core.domain.lock.LockedFolderGate
 import app.trimgallery.core.model.MediaItem
 import app.trimgallery.core.ui.motion.pressScale
 import app.trimgallery.core.ui.theme.TrimTheme
-import kotlin.time.Instant
 import kotlinx.datetime.LocalDate
 import kotlinx.datetime.TimeZone
+import kotlin.time.Instant
 
 /**
  * The locked folder (BUILD.md § 9: "Locked folder (biometric)").

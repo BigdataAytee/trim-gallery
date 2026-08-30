@@ -66,11 +66,7 @@ object LibraryDiff {
      * their faces. Only rows belonging to a grant that was scanned may be reported
      * [Change.Removed]; anything else is simply absent from this diff.
      */
-    fun diff(
-        stored: List<MediaItem>,
-        scanned: List<MediaItem>,
-        scannedGrants: Set<String>,
-    ): Result {
+    fun diff(stored: List<MediaItem>, scanned: List<MediaItem>, scannedGrants: Set<String>): Result {
         val storedByRef: Map<MediaRef, MediaItem> = stored.associateBy { it.platformRef }
         val seen = mutableSetOf<MediaRef>()
 

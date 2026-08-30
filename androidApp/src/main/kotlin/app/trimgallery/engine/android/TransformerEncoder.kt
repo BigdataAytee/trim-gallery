@@ -21,7 +21,6 @@ import app.trimgallery.engine.EncodeSpec
 import app.trimgallery.engine.HwEncoder
 import app.trimgallery.engine.TempFile
 import app.trimgallery.engine.VideoCodec
-import java.io.File
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -30,6 +29,7 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import java.io.File
 
 /**
  * Milestone 1 (BUILD.md § 13.1, ARCHITECTURE.md § 15): decode → encode → mux one file
@@ -61,34 +61,31 @@ class TransformerEncoder(
      * output: a cancelled job never leaves a half-written file behind. The same applies
      * on failure.
      */
-    override suspend fun encode(
-        input: MediaRef,
-        out: TempFile,
-        onProgress: (Float) -> Unit,
-    ): EncodeOutcome = withContext(Dispatchers.Main) {
-        val startedAt = System.currentTimeMillis()
-        val output = File(out.path)
-        output.parentFile?.mkdirs()
-        output.delete()
+    override suspend fun encode(input: MediaRef, out: TempFile, onProgress: (Float) -> Unit): EncodeOutcome =
+        withContext(Dispatchers.Main) {
+            val startedAt = System.currentTimeMillis()
+            val output = File(out.path)
+            output.parentFile?.mkdirs()
+            output.delete()
 
-        val finished = CompletableDeferred<EncodeOutcome>()
-        val transformer = buildTransformer(finished, output, startedAt)
+            val finished = CompletableDeferred<EncodeOutcome>()
+            val transformer = buildTransformer(finished, output, startedAt)
 
-        coroutineScope {
-            val poller = launch { pollProgress(transformer, onProgress) }
-            try {
-                transformer.start(composition(input), output.absolutePath)
-                finished.await()
-            } catch (t: Throwable) {
-                // Covers cancellation of the caller as well as export failure.
-                runCatching { transformer.cancel() }
-                output.delete()
-                throw t
-            } finally {
-                poller.cancel()
+            coroutineScope {
+                val poller = launch { pollProgress(transformer, onProgress) }
+                try {
+                    transformer.start(composition(input), output.absolutePath)
+                    finished.await()
+                } catch (@Suppress("TooGenericExceptionCaught") t: Throwable) {
+                    // Covers cancellation of the caller as well as export failure.
+                    runCatching { transformer.cancel() }
+                    output.delete()
+                    throw t
+                } finally {
+                    poller.cancel()
+                }
             }
         }
-    }
 
     private suspend fun CoroutineScope.pollProgress(transformer: Transformer, onProgress: (Float) -> Unit) {
         val holder = ProgressHolder()
@@ -150,26 +147,25 @@ class TransformerEncoder(
         )
         .build()
 
-    private fun videoEncoderSettings(): VideoEncoderSettings =
-        VideoEncoderSettings.Builder()
-            .setBitrate(spec.setting.bitrate)
-            .apply {
-                if (spec.setting.mode == BitrateMode.CQ) {
-                    // Only reachable when CodecCaps.cqSupported said so; the search runs
-                    // on VBR because CQ is not universally supported (PROJECT.md).
-                    setBitrateMode(android.media.MediaCodecInfo.EncoderCapabilities.BITRATE_MODE_CQ)
-                }
+    private fun videoEncoderSettings(): VideoEncoderSettings = VideoEncoderSettings.Builder()
+        .setBitrate(spec.setting.bitrate)
+        .apply {
+            if (spec.setting.mode == BitrateMode.CQ) {
+                // Only reachable when CodecCaps.cqSupported said so; the search runs
+                // on VBR because CQ is not universally supported (PROJECT.md).
+                setBitrateMode(android.media.MediaCodecInfo.EncoderCapabilities.BITRATE_MODE_CQ)
             }
-            .setiFrameIntervalSeconds(spec.gopSeconds)
-            // Background codec priority. KEY_PRIORITY = 1 is what lets a foreground
-            // camera or video call reclaim the hardware from the night job
-            // (BUILD.md § 5, `codec-priority` skill). Play-to-compress passes
-            // background = false, since the user is watching that encode happen.
-            .setEncoderPerformanceParameters(
-                VideoEncoderSettings.RATE_UNSET,
-                if (background) MediaCodecFactory.PRIORITY_BACKGROUND else MediaCodecFactory.PRIORITY_REALTIME,
-            )
-            .build()
+        }
+        .setiFrameIntervalSeconds(spec.gopSeconds)
+        // Background codec priority. KEY_PRIORITY = 1 is what lets a foreground
+        // camera or video call reclaim the hardware from the night job
+        // (BUILD.md § 5, `codec-priority` skill). Play-to-compress passes
+        // background = false, since the user is watching that encode happen.
+        .setEncoderPerformanceParameters(
+            VideoEncoderSettings.RATE_UNSET,
+            if (background) MediaCodecFactory.PRIORITY_BACKGROUND else MediaCodecFactory.PRIORITY_REALTIME,
+        )
+        .build()
 
     /**
      * One item, video re-encoded, **audio transmuxed**.

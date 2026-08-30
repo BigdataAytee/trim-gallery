@@ -52,8 +52,7 @@ object MediaFormatting {
      * A run that saved no space says so elsewhere; it must not be dressed up as "Freed
      * 0 B".
      */
-    fun freedLine(bytesFreed: Long): String? =
-        if (bytesFreed <= 0) null else "Freed ${bytes(bytesFreed)}"
+    fun freedLine(bytesFreed: Long): String? = if (bytesFreed <= 0) null else "Freed ${bytes(bytesFreed)}"
 
     /**
      * How much smaller the file got, as a percentage.

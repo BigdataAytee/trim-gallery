@@ -37,8 +37,7 @@ object TilePhase {
     }
 
     /** The same offset as a 0..1 fraction of the cycle. */
-    fun fraction(id: String): Float =
-        offsetMs(id).toFloat() / MotionSpec.Breathing.PERIOD_MS
+    fun fraction(id: String): Float = offsetMs(id).toFloat() / MotionSpec.Breathing.PERIOD_MS
 
     private const val FNV_OFFSET_BASIS = -0x7EE3623B // 0x811C9DC5
     private const val FNV_PRIME = 0x01000193

@@ -86,8 +86,8 @@ class PhotoQualitySearch(private val config: Config = Config()) {
     suspend fun search(target: Double, scorer: Scorer): Outcome {
         val probes = mutableListOf<Probe>()
 
-        var low = config.minQuality      // known-or-assumed failing side
-        var high = config.maxQuality     // known-or-assumed passing side
+        var low = config.minQuality // known-or-assumed failing side
+        var high = config.maxQuality // known-or-assumed passing side
         var best: Probe? = null
         var next = config.startQuality
 

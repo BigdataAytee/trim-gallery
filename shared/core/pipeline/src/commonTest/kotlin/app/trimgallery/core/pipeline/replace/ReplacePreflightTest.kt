@@ -15,8 +15,7 @@ class ReplacePreflightTest {
     private fun proceed(state: AssetState) =
         assertIs<ReplacePreflight.Verdict.Proceed>(ReplacePreflight.check(state)).carry
 
-    private fun skip(state: AssetState) =
-        assertIs<ReplacePreflight.Verdict.Skip>(ReplacePreflight.check(state))
+    private fun skip(state: AssetState) = assertIs<ReplacePreflight.Verdict.Skip>(ReplacePreflight.check(state))
 
     // ------------------------------------------------------------ carry-over
 

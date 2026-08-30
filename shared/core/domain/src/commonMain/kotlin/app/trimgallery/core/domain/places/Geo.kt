@@ -76,20 +76,14 @@ object Geo {
     }
 
     /** A rectangle on the map, in degrees. */
-    data class Bounds(
-        val south: Double,
-        val west: Double,
-        val north: Double,
-        val east: Double,
-    ) {
+    data class Bounds(val south: Double, val west: Double, val north: Double, val east: Double) {
         val center: GeoPoint get() = GeoPoint(lat = (south + north) / 2, lon = (west + east) / 2)
 
         /** The diagonal in metres, for "this trip covered 40 km". */
         val spanMeters: Double
             get() = Geo.distanceMeters(GeoPoint(south, west), GeoPoint(north, east))
 
-        fun contains(point: GeoPoint): Boolean =
-            point.lat in south..north && point.lon in west..east
+        fun contains(point: GeoPoint): Boolean = point.lat in south..north && point.lon in west..east
 
         /** Grown by a margin so pins are not against the edge of the view. */
         fun padded(fraction: Double = 0.1): Bounds {

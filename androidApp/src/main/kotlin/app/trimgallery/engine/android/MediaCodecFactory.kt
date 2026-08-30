@@ -14,7 +14,6 @@ import app.trimgallery.engine.EncodeSpec
 import app.trimgallery.engine.EncoderCaps
 import app.trimgallery.engine.HwEncoder
 import app.trimgallery.engine.PerformancePoint
-import app.trimgallery.engine.VideoCodec
 
 /**
  * **The only place in the app that touches `MediaCodecList` or creates a codec.**
@@ -78,13 +77,12 @@ class MediaCodecFactory(private val context: Context) : CodecFactory {
         }
     }
 
-    override fun encoder(spec: EncodeSpec, background: Boolean): HwEncoder =
-        TransformerEncoder(
-            context = context,
-            spec = spec,
-            background = background,
-            encoderSelector = hardwareOnlySelector(),
-        )
+    override fun encoder(spec: EncodeSpec, background: Boolean): HwEncoder = TransformerEncoder(
+        context = context,
+        spec = spec,
+        background = background,
+        encoderSelector = hardwareOnlySelector(),
+    )
 
     /**
      * An [EncoderSelector] that can only ever offer hardware encoders.
@@ -110,10 +108,9 @@ class MediaCodecFactory(private val context: Context) : CodecFactory {
      * have been wrong on some devices, so the name check stays as a second line of
      * defence.
      */
-    private fun isHardware(info: MediaCodecInfo): Boolean =
-        info.isHardwareAccelerated &&
-            !info.isSoftwareOnly &&
-            SOFTWARE_NAME_PREFIXES.none { info.name.startsWith(it, ignoreCase = true) }
+    private fun isHardware(info: MediaCodecInfo): Boolean = info.isHardwareAccelerated &&
+        !info.isSoftwareOnly &&
+        SOFTWARE_NAME_PREFIXES.none { info.name.startsWith(it, ignoreCase = true) }
 
     companion object {
         private val SOFTWARE_NAME_PREFIXES = listOf("OMX.google.", "c2.android.")

@@ -47,7 +47,8 @@ object TrashPolicy {
         val expiry = entry.expiresAt ?: return null
         if (expiry <= now) return 0
         val remaining = expiry - now
-        return remaining.inWholeDays.toInt() + if (remaining.inWholeNanoseconds % 1.days.inWholeNanoseconds > 0) 1 else 0
+        return remaining.inWholeDays.toInt() +
+            if (remaining.inWholeNanoseconds % 1.days.inWholeNanoseconds > 0) 1 else 0
     }
 
     /** True once the sweep may delete it (ARCHITECTURE.md § 7, `undo.sweep()`). */
@@ -79,11 +80,8 @@ object TrashPolicy {
      *   gone. Null is treated as *not* succeeded: an entry whose job cannot be found is an
      *   entry nothing can vouch for.
      */
-    fun expired(
-        entries: List<UndoEntry>,
-        now: Instant,
-        jobStateOf: (UndoEntry) -> JobState?,
-    ): List<UndoEntry> = entries.filter { isExpired(it, now) && jobStateOf(it) == JobState.SUCCEEDED }
+    fun expired(entries: List<UndoEntry>, now: Instant, jobStateOf: (UndoEntry) -> JobState?): List<UndoEntry> =
+        entries.filter { isExpired(it, now) && jobStateOf(it) == JobState.SUCCEEDED }
 
     /**
      * Entries that are due but held back because their job did not succeed.
@@ -92,11 +90,8 @@ object TrashPolicy {
      * kept past its window because a night went wrong is a thing an operator should be able
      * to see, and a user should not be told the space was freed.
      */
-    fun heldBack(
-        entries: List<UndoEntry>,
-        now: Instant,
-        jobStateOf: (UndoEntry) -> JobState?,
-    ): List<UndoEntry> = entries.filter { isExpired(it, now) && jobStateOf(it) != JobState.SUCCEEDED }
+    fun heldBack(entries: List<UndoEntry>, now: Instant, jobStateOf: (UndoEntry) -> JobState?): List<UndoEntry> =
+        entries.filter { isExpired(it, now) && jobStateOf(it) != JobState.SUCCEEDED }
 
     /**
      * What the row says under the thumbnail.
@@ -124,8 +119,7 @@ object TrashPolicy {
     }
 
     /** Restorable entries, soonest to expire first — the ones the user must act on. */
-    fun restorable(entries: List<UndoEntry>, now: Instant): List<UndoEntry> =
-        entries
-            .filter { it.state == UndoState.ACTIVE && !isExpired(it, now) }
-            .sortedWith(compareBy(nullsLast()) { it.expiresAt })
+    fun restorable(entries: List<UndoEntry>, now: Instant): List<UndoEntry> = entries
+        .filter { it.state == UndoState.ACTIVE && !isExpired(it, now) }
+        .sortedWith(compareBy(nullsLast()) { it.expiresAt })
 }

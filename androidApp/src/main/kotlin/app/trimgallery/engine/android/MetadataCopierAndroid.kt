@@ -6,13 +6,13 @@ import androidx.exifinterface.media.ExifInterface
 import app.trimgallery.core.model.MediaRef
 import app.trimgallery.engine.MetadataCopier
 import app.trimgallery.engine.TempFile
-import java.io.File
-import java.io.FileOutputStream
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import org.mp4parser.IsoFile
 import org.mp4parser.boxes.iso14496.part12.MovieHeaderBox
 import org.mp4parser.boxes.iso14496.part12.TrackHeaderBox
+import java.io.File
+import java.io.FileOutputStream
 
 /**
  * Carries the original's identity onto the replacement (BUILD.md § 2.4).
@@ -102,7 +102,7 @@ class MetadataCopierAndroid(private val context: Context) : MetadataCopier {
             }
             check(rewritten.length() > 0) { "rewriting the container produced an empty file" }
             check(rewritten.renameTo(target)) { "could not put the re-tagged container back" }
-        } catch (e: Exception) {
+        } catch (@Suppress("TooGenericExceptionCaught") e: Exception) {
             rewritten.delete()
             throw e
         }
@@ -113,8 +113,7 @@ class MetadataCopierAndroid(private val context: Context) : MetadataCopier {
         creation?.let { target.setLastModified(it.time) }
     }
 
-    private fun isStill(uri: Uri): Boolean =
-        context.contentResolver.getType(uri)?.startsWith("image/") == true
+    private fun isStill(uri: Uri): Boolean = context.contentResolver.getType(uri)?.startsWith("image/") == true
 
     private companion object {
         /**

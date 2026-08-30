@@ -24,9 +24,9 @@ import app.trimgallery.core.pipeline.night.NightRun
 import app.trimgallery.core.pipeline.replace.OriginalLocator
 import app.trimgallery.core.pipeline.replace.UndoJournal
 import app.trimgallery.engine.PauseReason
-import kotlin.time.Instant
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.withContext
+import kotlin.time.Instant
 
 /**
  * The database side of the night pass.
@@ -219,9 +219,13 @@ class TrimRepository(
         queries.selectMediaByGrants(grants.map { it.id }, ::toMediaItem).executeAsList()
     }
 
-    override suspend fun insert(item: MediaItem) { upsert(item) }
+    override suspend fun insert(item: MediaItem) {
+        upsert(item)
+    }
 
-    override suspend fun update(item: MediaItem) { upsert(item) }
+    override suspend fun update(item: MediaItem) {
+        upsert(item)
+    }
 
     /**
      * Deletes the row, not the file — there is nothing left to delete.
@@ -309,7 +313,7 @@ class TrimRepository(
                 queries.insertFace(
                     id = newId(),
                     media_id = item.id,
-                    person_id = null,   // clustering assigns this; see FaceClustering
+                    person_id = null, // clustering assigns this; see FaceClustering
                     l = face.box.left.toDouble(),
                     t = face.box.top.toDouble(),
                     r = face.box.right.toDouble(),

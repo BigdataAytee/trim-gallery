@@ -9,13 +9,12 @@ class FastScrollTest {
 
     private val today = LocalDate(2026, 8, 30)
 
-    private fun section(label: String, year: Int, month: Int, count: Int) =
-        DateSections.Section(
-            key = "$year-$month",
-            label = label,
-            date = LocalDate(year, month, 1),
-            items = List(count) { "$label-$it" },
-        )
+    private fun section(label: String, year: Int, month: Int, count: Int) = DateSections.Section(
+        key = "$year-$month",
+        label = label,
+        date = LocalDate(year, month, 1),
+        items = List(count) { "$label-$it" },
+    )
 
     private val library = listOf(
         section("August", 2026, 8, 40),

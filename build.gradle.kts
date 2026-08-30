@@ -25,19 +25,44 @@ subprojects {
     extensions.configure<io.gitlab.arturbosch.detekt.extensions.DetektExtension> {
         config.setFrom(rootProject.file("config/detekt/detekt.yml"))
         buildUponDefaultConfig = true
+        // One baseline for the whole build: detekt matches on rule and signature, and a
+        // signature names the file, not the module. See the file's own header for what it
+        // is allowed to contain.
+        baseline = rootProject.file("config/detekt/baseline.xml")
+
+        // Detekt's default source set is `src/main/kotlin` and `src/test/kotlin`, which no
+        // Kotlin Multiplatform module has: theirs are `src/commonMain/kotlin`,
+        // `src/androidMain/kotlin` and so on. Every `:shared:*:detekt` task was therefore
+        // NO-SOURCE — static analysis configured since milestone 2 and analysing nothing but
+        // the Android app. This points it at whatever source directories the module has,
+        // KMP or not.
+        source.setFrom(
+            project.file("src").listFiles().orEmpty()
+                .map { File(it, "kotlin") }
+                .filter { it.isDirectory }
+                .sorted(),
+        )
     }
 }
+
+/**
+ * The shared modules that are actually modules.
+ *
+ * `:shared`, `:shared:core` and `:shared:feature` exist only as path segments — `include`
+ * creates a project for every intermediate segment — and they have no build file, no Kotlin
+ * plugin and therefore no `jvmTest`. Filtering on the path prefix alone asked for
+ * `:shared:core:jvmTest`, which failed the whole build with "task not found" before a
+ * single test ran.
+ */
+val sharedModules: List<Project>
+    get() = subprojects.filter { it.path.startsWith(":shared:") && it.buildFile.exists() }
 
 // `./gradlew sharedTest` — the JVM half of ARCHITECTURE.md § 14, runnable without an
 // Android SDK or a Mac. This is what CI gates on.
 tasks.register("sharedTest") {
     group = "verification"
     description = "Runs the shared JVM unit tests for every shared module."
-    dependsOn(
-        subprojects
-            .filter { it.path.startsWith(":shared:") }
-            .map { "${it.path}:jvmTest" },
-    )
+    dependsOn(sharedModules.map { "${it.path}:jvmTest" })
 }
 
 /**
@@ -55,14 +80,12 @@ if (System.getProperty("os.name").startsWith("Mac")) {
         group = "verification"
         description = "Compiles every shared module for both iOS targets."
         dependsOn(
-            subprojects
-                .filter { it.path.startsWith(":shared:") }
-                .flatMap {
-                    listOf(
-                        "${it.path}:compileKotlinIosArm64",
-                        "${it.path}:compileKotlinIosSimulatorArm64",
-                    )
-                },
+            sharedModules.flatMap {
+                listOf(
+                    "${it.path}:compileKotlinIosArm64",
+                    "${it.path}:compileKotlinIosSimulatorArm64",
+                )
+            },
         )
     }
 }

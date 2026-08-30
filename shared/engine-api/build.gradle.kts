@@ -27,14 +27,12 @@ kotlin {
                 // Interfaces speak in model types (Label, TextBlock, ...). model is a
                 // leaf, so this does not violate the § 2 dependency flow.
                 api(projects.shared.core.model)
-
             }
         }
         commonTest {
             dependencies {
                 implementation(libs.kotlin.test)
                 implementation(libs.kotlinx.coroutines.test)
-
             }
         }
     }

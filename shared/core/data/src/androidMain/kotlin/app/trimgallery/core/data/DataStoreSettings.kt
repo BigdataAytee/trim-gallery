@@ -39,10 +39,8 @@ private val Context.settingsDataStore: DataStore<Preferences> by preferencesData
  * throwing. A settings file is the one piece of state that, if it fails to load, takes the
  * whole app with it — and it is also the one the user can most easily do without.
  */
-class DataStoreSettings(
-    private val store: DataStore<Preferences>,
-    private val tier: suspend () -> Tier,
-) : SettingsStore {
+class DataStoreSettings(private val store: DataStore<Preferences>, private val tier: suspend () -> Tier) :
+    SettingsStore {
 
     constructor(context: Context, tier: suspend () -> Tier) : this(context.settingsDataStore, tier)
 

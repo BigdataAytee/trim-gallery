@@ -31,9 +31,9 @@ object EnergyEstimate {
      * being optimistic about battery they have no reason to believe the space figures either.
      */
     val BENCH_MWH_PER_MINUTE_4K = mapOf(
-        "flagship" to 55.0,      // recent large-core SoCs with a dedicated encoder block
-        "midrange" to 85.0,      // the target market of BUILD.md § 3
-        "entry" to 130.0,        // older or cut-down encoder blocks, longer per file
+        "flagship" to 55.0, // recent large-core SoCs with a dedicated encoder block
+        "midrange" to 85.0, // the target market of BUILD.md § 3
+        "entry" to 130.0, // older or cut-down encoder blocks, longer per file
     )
 
     /** Used when the chip family is not in the table. The pessimistic row, on purpose. */

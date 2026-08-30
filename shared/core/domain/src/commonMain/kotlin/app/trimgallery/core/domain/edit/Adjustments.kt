@@ -36,8 +36,11 @@ enum class Slider {
 
     /** Sliders that move light, as opposed to colour. Grouped this way in the UI. */
     val isLight: Boolean
-        get() = this == EXPOSURE || this == CONTRAST || this == HIGHLIGHTS ||
-            this == SHADOWS || this == BLACK_POINT
+        get() = this == EXPOSURE ||
+            this == CONTRAST ||
+            this == HIGHLIGHTS ||
+            this == SHADOWS ||
+            this == BLACK_POINT
 }
 
 /**

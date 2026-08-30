@@ -52,11 +52,10 @@ class TripsTest {
     )
 
     /** A scattering around a point, so a place is not a single repeated coordinate. */
-    private fun around(point: GeoPoint, count: Int, fromDay: Double, spreadKm: Double = 3.0) =
-        (0 until count).map {
-            val offset = (it % 5 - 2) * spreadKm / 111.32
-            photo(GeoPoint(point.lat + offset, point.lon + offset), fromDay + it * 0.1)
-        }
+    private fun around(point: GeoPoint, count: Int, fromDay: Double, spreadKm: Double = 3.0) = (0 until count).map {
+        val offset = (it % 5 - 2) * spreadKm / 111.32
+        photo(GeoPoint(point.lat + offset, point.lon + offset), fromDay + it * 0.1)
+    }
 
     private fun home(count: Int = 60) = around(london, count, fromDay = 0.0)
 

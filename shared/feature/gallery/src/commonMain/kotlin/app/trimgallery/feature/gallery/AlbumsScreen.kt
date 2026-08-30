@@ -61,12 +61,7 @@ fun AlbumsScreen(
 }
 
 @Composable
-private fun AlbumCard(
-    album: Album,
-    index: Int,
-    onOpen: (Album) -> Unit,
-    cover: @Composable (Album) -> Unit,
-) {
+private fun AlbumCard(album: Album, index: Int, onOpen: (Album) -> Unit, cover: @Composable (Album) -> Unit) {
     val colors = TrimTheme.colors
 
     Column(
@@ -122,7 +117,12 @@ fun sortAlbums(albums: List<Album>): List<Album> = albums.sortedWith(
 /** Builds the fixed entries that always exist, whatever is in the library. */
 fun standingAlbums(favouriteCount: Int, trashCount: Int, lockedCount: Int): List<Album> = listOf(
     Album(id = Album.FAVOURITES_ID, name = "Favourites", kind = AlbumKind.FAVOURITES, count = favouriteCount),
-    Album(id = Album.RECENTLY_DELETED_ID, name = "Recently deleted", kind = AlbumKind.RECENTLY_DELETED, count = trashCount),
+    Album(
+        id = Album.RECENTLY_DELETED_ID,
+        name = "Recently deleted",
+        kind = AlbumKind.RECENTLY_DELETED,
+        count = trashCount,
+    ),
     Album(id = Album.LOCKED_ID, name = "Locked folder", kind = AlbumKind.LOCKED, count = lockedCount),
 )
 

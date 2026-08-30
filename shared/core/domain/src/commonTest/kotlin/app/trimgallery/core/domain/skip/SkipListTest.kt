@@ -19,11 +19,7 @@ class SkipListTest {
 
     private var counter = 0
 
-    private fun item(
-        status: MediaStatus,
-        reason: SkipReason? = null,
-        kind: MediaKind = MediaKind.VIDEO,
-    ) = MediaItem(
+    private fun item(status: MediaStatus, reason: SkipReason? = null, kind: MediaKind = MediaKind.VIDEO) = MediaItem(
         id = "item-${counter++}",
         platformRef = MediaRef("ref-$counter"),
         name = "clip.mp4",

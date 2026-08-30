@@ -50,7 +50,12 @@ fun ViewerInfoSheet(
     Column(
         modifier = modifier
             .fillMaxWidth()
-            .clip(RoundedCornerShape(topStart = MotionSpec.Sheet.CORNER_RADIUS_DP.dp, topEnd = MotionSpec.Sheet.CORNER_RADIUS_DP.dp))
+            .clip(
+                RoundedCornerShape(
+                    topStart = MotionSpec.Sheet.CORNER_RADIUS_DP.dp,
+                    topEnd = MotionSpec.Sheet.CORNER_RADIUS_DP.dp,
+                ),
+            )
             .background(colors.band)
             .padding(horizontal = PADDING_H_DP.dp, vertical = PADDING_V_DP.dp),
         verticalArrangement = Arrangement.spacedBy(ROW_GAP_DP.dp),

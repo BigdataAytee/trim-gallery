@@ -115,26 +115,22 @@ class TriageStep(
         )
     }
 
-    private suspend fun enrich(item: MediaItem): MediaItem =
-        containers.read(item.platformRef)?.applyTo(item) ?: item
+    private suspend fun enrich(item: MediaItem): MediaItem = containers.read(item.platformRef)?.applyTo(item) ?: item
 
     /** @return 1 if the item is a candidate, 0 if it was skipped. */
-    private suspend fun record(
-        item: MediaItem,
-        caps: CodecCaps?,
-        skipped: MutableMap<SkipReason, Int>,
-    ): Int = when (val verdict = Triager.triage(item, caps)) {
-        is Triager.Verdict.Candidate -> {
-            sink.recordVerdict(item, MediaStatus.CANDIDATE, reason = null, estSaving = verdict.estimatedSaving)
-            1
-        }
+    private suspend fun record(item: MediaItem, caps: CodecCaps?, skipped: MutableMap<SkipReason, Int>): Int =
+        when (val verdict = Triager.triage(item, caps)) {
+            is Triager.Verdict.Candidate -> {
+                sink.recordVerdict(item, MediaStatus.CANDIDATE, reason = null, estSaving = verdict.estimatedSaving)
+                1
+            }
 
-        is Triager.Verdict.Skip -> {
-            skipped[verdict.reason] = (skipped[verdict.reason] ?: 0) + 1
-            sink.recordVerdict(item, MediaStatus.SKIPPED, reason = verdict.reason, estSaving = null)
-            0
+            is Triager.Verdict.Skip -> {
+                skipped[verdict.reason] = (skipped[verdict.reason] ?: 0) + 1
+                sink.recordVerdict(item, MediaStatus.SKIPPED, reason = verdict.reason, estSaving = null)
+                0
+            }
         }
-    }
 }
 
 /**

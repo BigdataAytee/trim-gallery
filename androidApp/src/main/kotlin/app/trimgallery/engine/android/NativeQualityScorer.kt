@@ -3,14 +3,14 @@ package app.trimgallery.engine.android
 import app.trimgallery.engine.Image
 import app.trimgallery.engine.QualityScorer
 import app.trimgallery.engine.YuvWindow
-import java.nio.ByteBuffer
-import java.nio.ByteOrder
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.awaitCancellation
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import java.nio.ByteBuffer
+import java.nio.ByteOrder
 
 /**
  * The Android implementation of [QualityScorer], over the native C ABI.
@@ -47,19 +47,18 @@ internal class NativeQualityScorer : QualityScorer {
         }
     }
 
-    override suspend fun vmaf(a: YuvWindow, b: YuvWindow, subsample: Int): Double =
-        withContext(Dispatchers.Default) {
-            withCancelFlag { cancel ->
-                val out = DoubleArray(1)
-                val code = TrimNative.nativeVmaf(
-                    direct(0, a.y), direct(1, a.u), direct(2, a.v), a.width, a.chromaWidth, a.chromaWidth,
-                    direct(3, b.y), direct(4, b.u), direct(5, b.v), b.width, b.chromaWidth, b.chromaWidth,
-                    a.width, a.height, a.frameCount, subsample,
-                    cancel, out,
-                )
-                resultOf(code, out)
-            }
+    override suspend fun vmaf(a: YuvWindow, b: YuvWindow, subsample: Int): Double = withContext(Dispatchers.Default) {
+        withCancelFlag { cancel ->
+            val out = DoubleArray(1)
+            val code = TrimNative.nativeVmaf(
+                direct(0, a.y), direct(1, a.u), direct(2, a.v), a.width, a.chromaWidth, a.chromaWidth,
+                direct(3, b.y), direct(4, b.u), direct(5, b.v), b.width, b.chromaWidth, b.chromaWidth,
+                a.width, a.height, a.frameCount, subsample,
+                cancel, out,
+            )
+            resultOf(code, out)
         }
+    }
 
     /**
      * SSIMULACRA 2, the photo gate (BUILD.md § 5).
@@ -76,20 +75,23 @@ internal class NativeQualityScorer : QualityScorer {
         withCancelFlag { cancel ->
             val out = DoubleArray(1)
             val code = TrimNative.nativeSsim2(
-                copyOf(a.rgba), a.width * RGBA_BYTES,
-                copyOf(b.rgba), b.width * RGBA_BYTES,
-                a.width, a.height,
-                cancel, out,
+                copyOf(a.rgba),
+                a.width * RGBA_BYTES,
+                copyOf(b.rgba),
+                b.width * RGBA_BYTES,
+                a.width,
+                a.height,
+                cancel,
+                out,
             )
             resultOf(code, out)
         }
     }
 
-    private fun copyOf(bytes: ByteArray): ByteBuffer =
-        ByteBuffer.allocateDirect(bytes.size).apply {
-            put(bytes)
-            rewind()
-        }
+    private fun copyOf(bytes: ByteArray): ByteBuffer = ByteBuffer.allocateDirect(bytes.size).apply {
+        put(bytes)
+        rewind()
+    }
 
     /**
      * Runs [block] with a flag the native loop polls between frames, raised when this

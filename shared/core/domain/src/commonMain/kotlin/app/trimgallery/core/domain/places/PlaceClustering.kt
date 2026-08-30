@@ -38,11 +38,7 @@ object PlaceClustering {
     const val SAME_PLACE_METERS = 250.0
 
     /** One pin. */
-    data class Cluster(
-        val center: GeoPoint,
-        val items: List<MediaItem>,
-        val bounds: Geo.Bounds,
-    ) {
+    data class Cluster(val center: GeoPoint, val items: List<MediaItem>, val bounds: Geo.Bounds) {
         val count: Int get() = items.size
 
         /**

@@ -77,12 +77,7 @@ object Predictor {
      * variance is the signal that a narrow bracket would be wrong however many samples
      * back it.
      */
-    data class Entry(
-        val key: Key,
-        val settingBps: Int,
-        val samples: Int,
-        val settingVar: Double = 0.0,
-    ) {
+    data class Entry(val key: Key, val settingBps: Int, val samples: Int, val settingVar: Double = 0.0) {
         val confident: Boolean
             get() = samples >= CONFIDENT_SAMPLES && relativeSpread <= MAX_RELATIVE_SPREAD
 

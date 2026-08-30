@@ -40,11 +40,7 @@ object ChatMediaReview {
     val VERY_OLD = 365.days
 
     /** One bucket of the review screen. */
-    data class Bucket(
-        val app: String,
-        val label: String,
-        val items: List<MediaItem>,
-    ) {
+    data class Bucket(val app: String, val label: String, val items: List<MediaItem>) {
         val bytes: Long get() = items.sumOf { it.size }
     }
 
@@ -66,12 +62,7 @@ object ChatMediaReview {
      *   missing thumbnail or an access time the filesystem may not keep would offer up
      *   photographs the user looks at often.
      */
-    fun review(
-        items: List<MediaItem>,
-        paths: Map<String, String>,
-        opened: Set<String>,
-        now: Instant,
-    ): List<Bucket> {
+    fun review(items: List<MediaItem>, paths: Map<String, String>, opened: Set<String>, now: Instant): List<Bucket> {
         val candidates = items.filter { !it.hidden && !it.favourite }
 
         return candidates
@@ -79,10 +70,10 @@ object ChatMediaReview {
                 val app = appFor(paths[item.id]) ?: return@mapNotNull null
                 val age = age(item, now)
                 val label = when {
-                    item.id in opened -> null                       // seen; not our business
+                    item.id in opened -> null // seen; not our business
                     age >= VERY_OLD -> "Over a year old, never opened"
                     age >= OLD -> "Over three months old, never opened"
-                    else -> null                                    // too recent to suggest
+                    else -> null // too recent to suggest
                 }
                 label?.let { Triple(app, it, item) }
             }
@@ -108,6 +99,5 @@ object ChatMediaReview {
      * The user has already said one matters; the other is behind a biometric prompt and has
      * no business appearing on a cleanup screen at all.
      */
-    private fun age(item: MediaItem, now: Instant) =
-        now - (item.takenAt ?: Instant.fromEpochMilliseconds(item.mtime))
+    private fun age(item: MediaItem, now: Instant) = now - (item.takenAt ?: Instant.fromEpochMilliseconds(item.mtime))
 }

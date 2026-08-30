@@ -36,7 +36,6 @@ enum class AutoAlbum(val displayName: String) {
     DOCUMENTS("Documents"),
     VIDEOS("Videos"),
     CHAT_MEDIA("Chat media"),
-    ;
 }
 
 data class Album(

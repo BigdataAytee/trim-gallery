@@ -8,16 +8,16 @@ import app.trimgallery.core.model.StopReason
 import app.trimgallery.engine.GuardResult
 import app.trimgallery.engine.Guards
 import app.trimgallery.engine.PauseReason
+import kotlinx.coroutines.CompletableDeferred
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.test.currentTime
+import kotlinx.coroutines.test.runTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertTrue
-import kotlinx.coroutines.CompletableDeferred
-import kotlinx.coroutines.delay
-import kotlinx.coroutines.launch
-import kotlinx.coroutines.flow.MutableStateFlow
-import kotlinx.coroutines.flow.StateFlow
-import kotlinx.coroutines.test.currentTime
-import kotlinx.coroutines.test.runTest
 
 /**
  * ARCHITECTURE.md § 7's loop, with virtual time so a five-minute encode and a five-second
@@ -61,7 +61,9 @@ class NightRunTest {
 
     private class Recorder : NightRun.Checkpoint {
         val saved = mutableListOf<RunSession>()
-        override suspend fun save(session: RunSession) { saved += session }
+        override suspend fun save(session: RunSession) {
+            saved += session
+        }
     }
 
     private fun run(
@@ -134,7 +136,10 @@ class NightRunTest {
         val session = run(
             guards = ScriptedGuards(GuardResult.Stop(PauseReason.NOT_CHARGING)),
             items = listOf(item("a")),
-            step = { stepsRun += 1; NightRun.Outcome.Done(0) },
+            step = {
+                stepsRun += 1
+                NightRun.Outcome.Done(0)
+            },
             nowMs = { currentTime },
         )()
 
@@ -229,7 +234,7 @@ class NightRunTest {
             queue = { queue.removeFirstOrNull() },
             step = {
                 try {
-                    delay(5 * 60 * 1000L)   // a five-minute encode
+                    delay(5 * 60 * 1000L) // a five-minute encode
                     completed = true
                     NightRun.Outcome.Done(1)
                 } catch (e: kotlinx.coroutines.CancellationException) {
@@ -272,7 +277,11 @@ class NightRunTest {
         val job = backgroundScope.launch {
             night.run(
                 { queue.removeFirstOrNull() },
-                { started.complete(Unit); delay(60 * 60 * 1000L); NightRun.Outcome.Done(1) },
+                {
+                    started.complete(Unit)
+                    delay(60 * 60 * 1000L)
+                    NightRun.Outcome.Done(1)
+                },
                 Recorder(),
             )
         }

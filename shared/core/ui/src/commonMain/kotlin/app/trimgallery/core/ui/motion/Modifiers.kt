@@ -1,19 +1,18 @@
 package app.trimgallery.core.ui.motion
 
 import androidx.compose.animation.core.Animatable
-import androidx.compose.animation.core.animateFloat
 import androidx.compose.animation.core.CubicBezierEasing
 import androidx.compose.animation.core.Easing
 import androidx.compose.animation.core.LinearEasing
 import androidx.compose.animation.core.RepeatMode
 import androidx.compose.animation.core.StartOffset
+import androidx.compose.animation.core.animateFloat
 import androidx.compose.animation.core.infiniteRepeatable
 import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.border
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.gestures.detectTapGestures
-import androidx.compose.runtime.Composable
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
@@ -40,59 +39,54 @@ fun MotionSpec.Easing.toCompose(): Easing = CubicBezierEasing(x1, y1, x2, y2)
  *   neighbours never pulse together.
  * @param active false for tiles that are not currently queued or processing.
  */
-fun Modifier.breathing(
-    id: String,
-    active: Boolean,
-    accent: Color,
-    glowAlpha: Float,
-    cornerRadius: Dp,
-): Modifier = composed {
-    val reduce = LocalReduceMotion.current
+fun Modifier.breathing(id: String, active: Boolean, accent: Color, glowAlpha: Float, cornerRadius: Dp): Modifier =
+    composed {
+        val reduce = LocalReduceMotion.current
 
-    if (!active) return@composed this
+        if (!active) return@composed this
 
-    if (reduce) {
-        // A static ring says the same thing without the movement (DESIGN_SPEC § 4.6).
-        return@composed this.border(
-            width = MotionSpec.Breathing.STATIC_RING_DP.dp,
-            color = accent.copy(alpha = MotionSpec.Breathing.STATIC_RING_ALPHA),
-            shape = RoundedCornerShape(cornerRadius),
-        )
-    }
-
-    val transition = rememberInfiniteTransition(label = "breathing")
-    val pulse by transition.animateFloat(
-        initialValue = 0f,
-        targetValue = 1f,
-        animationSpec = infiniteRepeatable(
-            animation = tween(MotionSpec.Breathing.PERIOD_MS / 2, easing = LinearEasing),
-            repeatMode = RepeatMode.Reverse,
-            initialStartOffset = StartOffset(TilePhase.offsetMs(id)),
-        ),
-        label = "pulse",
-    )
-
-    this
-        .drawBehind {
-            // The halo sits outside the tile, so it is drawn behind rather than clipped.
-            val halo = MotionSpec.Breathing.HALO_DP.dp.toPx() * pulse
-            if (halo <= 0f) return@drawBehind
-            drawCircle(
-                brush = Brush.radialGradient(
-                    colors = listOf(accent.copy(alpha = glowAlpha * pulse * HALO_STRENGTH), Color.Transparent),
-                    center = Offset(size.width / 2f, size.height / 2f),
-                    radius = size.minDimension / 2f + halo,
-                ),
-                radius = size.minDimension / 2f + halo,
-                center = Offset(size.width / 2f, size.height / 2f),
+        if (reduce) {
+            // A static ring says the same thing without the movement (DESIGN_SPEC § 4.6).
+            return@composed this.border(
+                width = MotionSpec.Breathing.STATIC_RING_DP.dp,
+                color = accent.copy(alpha = MotionSpec.Breathing.STATIC_RING_ALPHA),
+                shape = RoundedCornerShape(cornerRadius),
             )
         }
-        .border(
-            width = MotionSpec.Breathing.RING_DP.dp * pulse,
-            color = accent.copy(alpha = glowAlpha * pulse),
-            shape = RoundedCornerShape(cornerRadius),
+
+        val transition = rememberInfiniteTransition(label = "breathing")
+        val pulse by transition.animateFloat(
+            initialValue = 0f,
+            targetValue = 1f,
+            animationSpec = infiniteRepeatable(
+                animation = tween(MotionSpec.Breathing.PERIOD_MS / 2, easing = LinearEasing),
+                repeatMode = RepeatMode.Reverse,
+                initialStartOffset = StartOffset(TilePhase.offsetMs(id)),
+            ),
+            label = "pulse",
         )
-}
+
+        this
+            .drawBehind {
+                // The halo sits outside the tile, so it is drawn behind rather than clipped.
+                val halo = MotionSpec.Breathing.HALO_DP.dp.toPx() * pulse
+                if (halo <= 0f) return@drawBehind
+                drawCircle(
+                    brush = Brush.radialGradient(
+                        colors = listOf(accent.copy(alpha = glowAlpha * pulse * HALO_STRENGTH), Color.Transparent),
+                        center = Offset(size.width / 2f, size.height / 2f),
+                        radius = size.minDimension / 2f + halo,
+                    ),
+                    radius = size.minDimension / 2f + halo,
+                    center = Offset(size.width / 2f, size.height / 2f),
+                )
+            }
+            .border(
+                width = MotionSpec.Breathing.RING_DP.dp * pulse,
+                color = accent.copy(alpha = glowAlpha * pulse),
+                shape = RoundedCornerShape(cornerRadius),
+            )
+    }
 
 /**
  * Tiles fade, rise and settle as they arrive.

@@ -9,14 +9,14 @@ import app.trimgallery.engine.ProbeEncoder
 import app.trimgallery.engine.QualityScorer
 import app.trimgallery.engine.Setting
 import app.trimgallery.engine.TempFile
-import app.trimgallery.engine.YuvSource
 import app.trimgallery.engine.VideoCodec
+import app.trimgallery.engine.YuvSource
 import app.trimgallery.engine.YuvWindow
+import kotlinx.coroutines.test.runTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertIs
 import kotlin.test.assertTrue
-import kotlinx.coroutines.test.runTest
 
 /**
  * ARCHITECTURE.md § 2.7: every platform class ships with a fake, and the pipeline is
@@ -34,15 +34,6 @@ class ProbeAndSearchTest {
 
         override suspend fun decodeWindow(file: TempFile, start: Ms, len: Ms, width: Int): YuvWindow =
             YuvWindow(width, height, frameCount = 1, y = ByteArray(1), u = ByteArray(1), v = ByteArray(1))
-    }
-
-    private class FakeProbeEncoder : ProbeEncoder {
-        val encodes = mutableListOf<Setting>()
-
-        override suspend fun encodeWindow(yuv: YuvWindow, setting: Setting): YuvWindow {
-            encodes += setting
-            return yuv
-        }
     }
 
     /** Quality rises with bitrate, as the real metric does (asserted in milestone 2). */
@@ -89,7 +80,10 @@ class ProbeAndSearchTest {
         val encoder = RecordingEncoder(scorer)
 
         val result = ProbeAndSearch(source, encoder, scorer).run(
-            item = item(), threshold = 40.0, fallback = fallback, prediction = null,
+            item = item(),
+            threshold = 40.0,
+            fallback = fallback,
+            prediction = null,
         )
 
         assertEquals(1, source.decoded.size, "decoded ${source.decoded.size} times")
@@ -104,7 +98,10 @@ class ProbeAndSearchTest {
         val encoder = RecordingEncoder(scorer)
 
         val result = ProbeAndSearch(source, encoder, scorer).run(
-            item = item(durationMs = 600_000), threshold = 40.0, fallback = fallback, prediction = null,
+            item = item(durationMs = 600_000),
+            threshold = 40.0,
+            fallback = fallback,
+            prediction = null,
         )
 
         assertEquals(3, source.decoded.size)
@@ -129,7 +126,10 @@ class ProbeAndSearchTest {
         }
         val scorer = FakeScorer(3_300_000)
         ProbeAndSearch(source, RecordingEncoder(scorer), scorer).run(
-            item = item(width = 3840, height = 2160), threshold = 40.0, fallback = fallback, prediction = null,
+            item = item(width = 3840, height = 2160),
+            threshold = 40.0,
+            fallback = fallback,
+            prediction = null,
         )
         // 3840x2160 scaled to 720 high is 1280 wide.
         assertEquals(1280, requestedWidth)
@@ -149,7 +149,10 @@ class ProbeAndSearchTest {
         }
         val scorer = FakeScorer(3_300_000)
         ProbeAndSearch(source, RecordingEncoder(scorer), scorer).run(
-            item = item(width = 854, height = 480), threshold = 40.0, fallback = fallback, prediction = null,
+            item = item(width = 854, height = 480),
+            threshold = 40.0,
+            fallback = fallback,
+            prediction = null,
         )
         assertEquals(854, requestedWidth)
     }
@@ -170,7 +173,10 @@ class ProbeAndSearchTest {
             }
             val scorer = FakeScorer(3_300_000)
             ProbeAndSearch(source, RecordingEncoder(scorer), scorer).run(
-                item = item(width = w, height = h), threshold = 40.0, fallback = fallback, prediction = null,
+                item = item(width = w, height = h),
+                threshold = 40.0,
+                fallback = fallback,
+                prediction = null,
             )
             assertEquals(0, requestedWidth % 2, "width $requestedWidth from ${w}x$h is odd")
         }
@@ -204,7 +210,10 @@ class ProbeAndSearchTest {
         val source = FakeYuvSource()
         val scorer = FakeScorer(3_300_000)
         val result = ProbeAndSearch(source, RecordingEncoder(scorer), scorer).run(
-            item = item().copy(duration = null), threshold = 40.0, fallback = fallback, prediction = null,
+            item = item().copy(duration = null),
+            threshold = 40.0,
+            fallback = fallback,
+            prediction = null,
         )
         assertEquals(0, source.decoded.size)
         assertIs<SettingSearch.Outcome.NotReachable>(result.outcome)
@@ -214,7 +223,10 @@ class ProbeAndSearchTest {
     fun `an unreachable file reports the probes it spent`() = runTest {
         val scorer = FakeScorer(cutoffBps = 400_000_000)
         val result = ProbeAndSearch(FakeYuvSource(), RecordingEncoder(scorer), scorer).run(
-            item(), threshold = 40.0, fallback = fallback, prediction = null,
+            item(),
+            threshold = 40.0,
+            fallback = fallback,
+            prediction = null,
         )
         assertIs<SettingSearch.Outcome.NotReachable>(result.outcome)
         assertTrue(result.probes > 0)

@@ -58,8 +58,7 @@ object SettingsPolicy {
      * not hidden. A user who cannot see what Pro adds has no reason to buy it, and a user
      * who finds a hidden feature later feels tricked.
      */
-    fun lockedFor(tier: Tier): Set<Locked> =
-        Locked.entries.filterNot { Entitlements.allows(tier, it.feature) }.toSet()
+    fun lockedFor(tier: Tier): Set<Locked> = Locked.entries.filterNot { Entitlements.allows(tier, it.feature) }.toSet()
 
     fun lockExplanation(locked: Locked): String = when (locked) {
         Locked.COMPACT_MODE -> "Compact mode frees more space at a slightly lower quality target. Pro."
@@ -142,10 +141,9 @@ object SettingsPolicy {
      * WorkManager holds the constraints it was given; changing "start when full" without
      * telling it leaves the phone waiting for a condition the user turned off.
      */
-    fun requiresReschedule(old: Settings, new: Settings): Boolean =
-        old.startWhenFull != new.startWhenFull ||
-            old.keepWorkingWhileUsing != new.keepWorkingWhileUsing ||
-            old.stopByTime != new.stopByTime
+    fun requiresReschedule(old: Settings, new: Settings): Boolean = old.startWhenFull != new.startWhenFull ||
+        old.keepWorkingWhileUsing != new.keepWorkingWhileUsing ||
+        old.stopByTime != new.stopByTime
 
     /**
      * What to tell the user, when a change needs saying out loud.

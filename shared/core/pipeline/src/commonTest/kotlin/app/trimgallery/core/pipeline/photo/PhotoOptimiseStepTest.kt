@@ -18,13 +18,13 @@ import app.trimgallery.engine.Source
 import app.trimgallery.engine.Stat
 import app.trimgallery.engine.TempFile
 import app.trimgallery.engine.YuvWindow
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.emptyFlow
+import kotlinx.coroutines.test.runTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertIs
 import kotlin.test.assertTrue
-import kotlinx.coroutines.flow.Flow
-import kotlinx.coroutines.flow.emptyFlow
-import kotlinx.coroutines.test.runTest
 
 /**
  * BUILD.md rule 3 applies to photographs exactly as it does to video, and photographs are

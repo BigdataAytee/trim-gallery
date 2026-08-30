@@ -205,8 +205,7 @@ object Triager {
         }
     }
 
-    private fun saving(size: Long, factor: Double): Long =
-        (size * (1.0 - factor)).toLong().coerceAtLeast(0)
+    private fun saving(size: Long, factor: Double): Long = (size * (1.0 - factor)).toLong().coerceAtLeast(0)
 
     private fun String.isH264() = contains("avc") || contains("h264") || contains("h.264")
     private fun String.isHevc() = contains("hevc") || contains("h265") || contains("h.265") || contains("hvc")

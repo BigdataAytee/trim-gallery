@@ -1039,6 +1039,46 @@ Recorded by class, as each one is fixed:
   Google Maven. `shared/core/data` commonMain and jvmMain now compile here, against the
   generated schema, which also makes the migration tests of task 6(f) writable without CI.
 
+- **Two files had a syntax error and nobody knew.** `TrimTheme.kt` carried a stray closing
+  brace, and `MainActivity.kt` and `GalleryTile.kt` each had `` `shared/feature/*` `` inside
+  a KDoc — Kotlin block comments *nest*, so the `/*` opened a comment that the KDoc's own
+  `*/` closed, leaving the rest of the file inside a comment that never ended. Neither file
+  had ever been through a compiler: `core/ui` and every `shared/feature` module need Compose
+  Multiplatform, which cannot resolve here. Found by ktlint's parser, which needs no
+  dependencies at all, and is now the cheapest syntax check available in this environment.
+
+- **`sharedTest` and `iosCompile` asked for tasks in projects that are not modules.**
+  `include(":shared:core:model")` creates a project for every intermediate path segment, so
+  `:shared`, `:shared:core` and `:shared:feature` exist with no build file and no Kotlin
+  plugin. Filtering on the path prefix asked for `:shared:core:jvmTest`, which does not
+  exist, and the build failed before running a single test. Filter on `buildFile.exists()`.
+
+- **Detekt was analysing nothing, and ktlint was formatting to a style nobody chose.**
+  Every `:shared:*:detekt` task reported NO-SOURCE: detekt's default source set is
+  `src/main/kotlin` and `src/test/kotlin`, which no Kotlin Multiplatform module has. Static
+  analysis had been configured since milestone 2 and had never looked at anything but the
+  Android app. Pointed at the real source sets it found 357 issues; the ones that were
+  defects are fixed in the same change (below), the rest are baselined with a written
+  rationale in `config/detekt/baseline.xml`. Separately there was no `.editorconfig` at all,
+  so ktlint used its own default — `ktlint_official`, its most opinionated style, and 3,185
+  violations of hand-formatting that reads perfectly well. The style is now pinned to
+  `intellij_idea` (the Kotlin coding conventions) on purpose rather than by accident.
+
+- **Defects the static analysis found once it could see the code.**
+  - `SettingSearch.bisect` and `bisectUpward` both took a `bounds` parameter and neither
+    read it — the bracket arrived a second time as `lowBps`/`highBps`. Dead weight in the
+    search that milestone 3 exists for.
+  - `GalleryTile` took an `index` it never used; the caller applies the staggered-arrival
+    modifier itself.
+  - `ProbeAndSearchTest` carried a `FakeProbeEncoder` nothing constructed.
+  - `NightWorker` caught every exception from a whole night's work and returned
+    `Result.retry()` without recording anything anywhere. A night can now fail and leave a
+    log line; that it cannot yet leave a *row* is a new open question below.
+
+- **`androidApp`'s engine package did not match its directory.** Twenty files declared
+  `package app.trimgallery.engine.android` from `.../engine/`. Harmless to the compiler,
+  noise to every tool that resolves a type by path, and now correct.
+
 ### The guards guard themselves
 
 - **A rule declares the languages it polices, and must have a planted violation in each.**
@@ -1262,3 +1302,18 @@ the same reason nothing Compose is: it has never been compiled.
   files, so "every version pair" is vacuously satisfied. What is missing is the harness that
   would stop the *first* migration landing untested; it needs SQLDelight's generated code,
   which is compiled only in CI, so it should be written in the same change as that migration.
+- **A night that falls over leaves no row saying so.** `run_session` records how a pass
+  *stopped* — `StopReason` — which has no value for "threw". `NightWorker` now logs the
+  exception rather than discarding it, but a diagnostics export still cannot answer "why did
+  last night do nothing", which is the first question a field test asks. It wants a nullable
+  failure column on `run_session`, and that is a schema change, so it belongs with the first
+  migration rather than in a hardening pass.
+- **`androidApp` still has no `storage/` and `scheduler/` packages.** The note above about
+  ARCHITECTURE.md § 3 is half-closed: the twenty engine files now live in
+  `app/trimgallery/engine/android/`, matching the package they always declared, but the split
+  into `storage/` and `scheduler/` has not been made. Same reason as before — the compiler
+  cannot check the imports here — and now a smaller move than it was.
+- **The detekt baseline is 37 findings, and should only ever shrink.** They are shape rather
+  than defect: five long `when` chains, seven six-parameter functions, a thirty-method
+  repository. Each is working, tested code, and refactoring to a threshold in a hardening
+  pass is churn with a risk attached. Anything new fails the build.

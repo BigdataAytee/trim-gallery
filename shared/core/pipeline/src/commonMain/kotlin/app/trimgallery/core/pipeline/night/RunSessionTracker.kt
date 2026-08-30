@@ -15,11 +15,7 @@ import app.trimgallery.core.model.StopReason
  * end a background task at any instant and Android can lose the window, so a tally that
  * only existed at the end would be lost exactly on the nights it most needs explaining.
  */
-class RunSessionTracker(
-    private val id: String,
-    private val startedAtMs: Long,
-    private val budget: NightBudget,
-) {
+class RunSessionTracker(private val id: String, private val startedAtMs: Long, private val budget: NightBudget) {
     private var filesDone = 0
     private var filesSkipped = 0
     private var filesFailed = 0
@@ -34,9 +30,13 @@ class RunSessionTracker(
         energyWh += wh
     }
 
-    fun recordSkipped() { filesSkipped += 1 }
+    fun recordSkipped() {
+        filesSkipped += 1
+    }
 
-    fun recordFailed() { filesFailed += 1 }
+    fun recordFailed() {
+        filesFailed += 1
+    }
 
     /**
      * A snapshot, safe to persist at any point.

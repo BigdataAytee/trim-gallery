@@ -25,12 +25,7 @@ import app.trimgallery.core.model.SkipReason
 object SkipList {
 
     /** One row on the Skipped screen. */
-    data class Row(
-        val item: MediaItem,
-        val reason: SkipReason?,
-        val explanation: String,
-        val retryable: Boolean,
-    )
+    data class Row(val item: MediaItem, val reason: SkipReason?, val explanation: String, val retryable: Boolean)
 
     /** A group of rows sharing a reason, for a screen that would otherwise be a long list. */
     data class Group(
@@ -98,7 +93,7 @@ object SkipList {
      * a second run would spend three more encodes reaching the same conclusion.
      */
     fun isRetryable(reason: SkipReason?): Boolean = when (reason) {
-        null -> true                              // a failure
+        null -> true // a failure
         SkipReason.IN_CLOUD_ONLY -> true
         else -> false
     }
@@ -129,23 +124,22 @@ object SkipList {
      * screen nobody scrolls. Within each half, the biggest group leads: it is both the most
      * informative and the most likely to explain a number the user came here to question.
      */
-    fun groups(items: List<MediaItem>): List<Group> =
-        items.mapNotNull(::row)
-            .groupBy { it.reason }
-            .map { (reason, rows) ->
-                Group(
-                    reason = reason,
-                    heading = heading(reason),
-                    explanation = explain(reason),
-                    items = rows.map { it.item },
-                    retryable = isRetryable(reason),
-                )
-            }
-            .sortedWith(
-                compareByDescending<Group> { it.retryable }
-                    .thenByDescending { it.count }
-                    .thenBy { it.heading },
+    fun groups(items: List<MediaItem>): List<Group> = items.mapNotNull(::row)
+        .groupBy { it.reason }
+        .map { (reason, rows) ->
+            Group(
+                reason = reason,
+                heading = heading(reason),
+                explanation = explain(reason),
+                items = rows.map { it.item },
+                retryable = isRetryable(reason),
             )
+        }
+        .sortedWith(
+            compareByDescending<Group> { it.retryable }
+                .thenByDescending { it.count }
+                .thenBy { it.heading },
+        )
 
     /**
      * Items a "Try again" would actually re-queue.

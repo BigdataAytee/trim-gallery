@@ -40,7 +40,9 @@ data class EncodeSpec(
     val fps: Double,
     val gopSeconds: Float = DEFAULT_GOP_SECONDS,
 ) {
-    companion object { const val DEFAULT_GOP_SECONDS = 2f }
+    companion object {
+        const val DEFAULT_GOP_SECONDS = 2f
+    }
 }
 
 enum class VideoCodec { HEVC, AV1 }
@@ -114,10 +116,7 @@ data class EncoderCaps(
  * ARCHITECTURE.md § 13: pre-check caps, fall back to VBR or a lower level — never to
  * software.
  */
-data class CodecCaps(
-    val hevc: EncoderCaps = EncoderCaps(),
-    val av1: EncoderCaps = EncoderCaps(),
-) {
+data class CodecCaps(val hevc: EncoderCaps = EncoderCaps(), val av1: EncoderCaps = EncoderCaps()) {
     fun forCodec(codec: VideoCodec): EncoderCaps = when (codec) {
         VideoCodec.HEVC -> hevc
         VideoCodec.AV1 -> av1
@@ -171,12 +170,7 @@ sealed interface EncodeOutcome {
  * short duration, a dropped audio track means the passthrough silently failed, and a
  * zero-byte file opens as nothing at all.
  */
-data class ProbedOutput(
-    val durationMs: Ms,
-    val hasVideo: Boolean,
-    val hasAudio: Boolean,
-    val sizeBytes: Long,
-)
+data class ProbedOutput(val durationMs: Ms, val hasVideo: Boolean, val hasAudio: Boolean, val sizeBytes: Long)
 
 /**
  * Everything triage needs, read from a file's header (BUILD.md § 5).
@@ -305,7 +299,16 @@ sealed interface GuardResult {
  * removes the limit (MONETIZATION.md § Conversion moments). Collapsing them would either
  * nag a user who is not capped or fail to offer Pro to one who is.
  */
-enum class PauseReason { FOREGROUND, NOT_CHARGING, BATTERY_NOT_FULL, THERMAL, STOP_BY_TIME, STORAGE_LOW, CAP_REACHED, FREE_TIER_CAP }
+enum class PauseReason {
+    FOREGROUND,
+    NOT_CHARGING,
+    BATTERY_NOT_FULL,
+    THERMAL,
+    STOP_BY_TIME,
+    STORAGE_LOW,
+    CAP_REACHED,
+    FREE_TIER_CAP,
+}
 
 /** What the OS scheduler should wait for before waking the night pass. */
 data class NightConstraints(

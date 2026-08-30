@@ -1,12 +1,12 @@
 package app.trimgallery.core.pipeline.replace
 
 import app.trimgallery.core.model.MediaRef
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.test.runTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertIs
 import kotlin.test.assertTrue
-import kotlinx.coroutines.CancellationException
-import kotlinx.coroutines.test.runTest
 
 /**
  * The one ordering that separates "offload" from "delete": copy, verify, *then* remove.
@@ -103,7 +103,7 @@ class OffloadMoveTest {
         var thrown = false
         try {
             OffloadMove(ops).move(source, destination)
-        } catch (e: CancellationException) {
+        } catch (expected: CancellationException) {
             thrown = true
         }
 

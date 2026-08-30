@@ -32,6 +32,7 @@ class IndexStep(
         suspend fun faces(item: MediaItem, faces: List<app.trimgallery.core.model.FaceEmbedding>)
         suspend fun text(item: MediaItem, blocks: List<app.trimgallery.core.model.TextBlock>)
         suspend fun hashes(item: MediaItem, phash: Long?, sha256: String?)
+
         /** Marks the item indexed, so the next pass skips it. */
         suspend fun indexed(item: MediaItem)
     }
@@ -103,11 +104,7 @@ class IndexStep(
      * object the DI graph makes a singleton — which meant one bad file's failures followed
      * every file indexed after it for the rest of the night.
      */
-    private suspend inline fun stage(
-        failures: MutableList<String>,
-        name: String,
-        block: () -> Int,
-    ): Int = try {
+    private suspend inline fun stage(failures: MutableList<String>, name: String, block: () -> Int): Int = try {
         block()
     } catch (e: CancellationException) {
         throw e
@@ -139,7 +136,10 @@ class IndexStep(
             }
             val out = ByteArray(total)
             var offset = 0
-            chunks.forEach { it.copyInto(out, offset); offset += it.size }
+            chunks.forEach {
+                it.copyInto(out, offset)
+                offset += it.size
+            }
             out
         }
 
@@ -164,5 +164,7 @@ class IndexStep(
         return out
     }
 
-    private companion object { const val CHUNK = 64 * 1024 }
+    private companion object {
+        const val CHUNK = 64 * 1024
+    }
 }

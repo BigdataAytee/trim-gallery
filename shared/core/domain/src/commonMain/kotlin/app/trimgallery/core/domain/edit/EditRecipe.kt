@@ -67,10 +67,9 @@ data class EditRecipe(
      * one that keeps what the user asked for. Treating it as identity instead would silently
      * throw a trim away on exactly the files whose metadata is already unreliable.
      */
-    fun isIdentity(sourceDurationMs: Long? = null): Boolean =
-        orientation.isIdentity &&
-            !changesPixels &&
-            (trim == null || (sourceDurationMs != null && trim.isFull(sourceDurationMs)))
+    fun isIdentity(sourceDurationMs: Long? = null): Boolean = orientation.isIdentity &&
+        !changesPixels &&
+        (trim == null || (sourceDurationMs != null && trim.isFull(sourceDurationMs)))
 
     /** How the edit reads in the viewer's info sheet: "Cropped · Vivid · Trimmed". */
     fun describe(): String = buildList {

@@ -20,13 +20,13 @@ import app.trimgallery.engine.Stat
 import app.trimgallery.engine.TempFile
 import app.trimgallery.engine.YuvSource
 import app.trimgallery.engine.YuvWindow
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.emptyFlow
+import kotlinx.coroutines.test.runTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertIs
 import kotlin.test.assertTrue
-import kotlinx.coroutines.flow.Flow
-import kotlinx.coroutines.flow.emptyFlow
-import kotlinx.coroutines.test.runTest
 
 /**
  * BUILD.md § 5: *"If VMAF < 95, step up one notch and re-encode; max twice, then log as
@@ -70,7 +70,9 @@ class VerifyPassTest {
         override suspend fun openRead(ref: MediaRef): Source = error("not needed")
         override suspend fun tempFile(): TempFile = TempFile("/tmp/${counter++}")
         override suspend fun writeTemp(bytes: ByteArray): TempFile = TempFile("/tmp/${counter++}")
-        override suspend fun discard(file: TempFile) { discarded += file }
+        override suspend fun discard(file: TempFile) {
+            discarded += file
+        }
     }
 
     private class FakeYuv : YuvSource {
@@ -117,7 +119,14 @@ class VerifyPassTest {
     ) { setting ->
         encodes += setting
         scorer.lastSetting = setting
-        EncodeOutcome.Success(TempFile("/tmp/out-${encodes.size}.mp4"), 40_000_000, 60_000, "video/hevc", "audio/mp4a-latm", 1000)
+        EncodeOutcome.Success(
+            TempFile("/tmp/out-${encodes.size}.mp4"),
+            40_000_000,
+            60_000,
+            "video/hevc",
+            "audio/mp4a-latm",
+            1000,
+        )
     }
 
     @Test
@@ -163,7 +172,9 @@ class VerifyPassTest {
         val encodes = mutableListOf<Setting>()
         val storage = FakeStorage(Stat(100_000_000, 1_700_000_000_000, exists = true))
         run(
-            storage, BitrateScorer(perMbps = 5.0), encodes = encodes,
+            storage,
+            BitrateScorer(perMbps = 5.0),
+            encodes = encodes,
             config = VerifyPass.Config(maxStepUps = 0),
         )
         assertEquals(1, encodes.size)
@@ -174,8 +185,10 @@ class VerifyPassTest {
         val encodes = mutableListOf<Setting>()
         val storage = FakeStorage(Stat(100_000_000, 1_700_000_000_000, exists = true))
         val result = run(
-            storage, BitrateScorer(perMbps = 13.0),
-            probe = probeOf(size = 110_000_000), encodes = encodes,
+            storage,
+            BitrateScorer(perMbps = 13.0),
+            probe = probeOf(size = 110_000_000),
+            encodes = encodes,
         )
         val skipped = assertIs<VerifyPass.Result.Skipped>(result)
         assertEquals(SkipReason.WOULD_NOT_SHRINK, skipped.reason)
@@ -188,8 +201,10 @@ class VerifyPassTest {
         val encodes = mutableListOf<Setting>()
         val storage = FakeStorage(Stat(100_000_000, 1_700_000_000_000, exists = true))
         val result = run(
-            storage, BitrateScorer(perMbps = 13.0),
-            probe = probeOf(durationMs = 12_000), encodes = encodes,
+            storage,
+            BitrateScorer(perMbps = 13.0),
+            probe = probeOf(durationMs = 12_000),
+            encodes = encodes,
         )
         assertIs<VerifyPass.Result.Failed>(result)
         assertEquals(1, encodes.size, "a truncated mux is not a bitrate problem")
@@ -217,7 +232,8 @@ class VerifyPassTest {
     fun `no hardware encoder is a skip, never a software fallback`() = runTest {
         val storage = FakeStorage(Stat(100_000_000, 1_700_000_000_000, exists = true))
         val result = VerifyPass(
-            Verifier(probeOf(), FakeYuv(), BitrateScorer(13.0)), storage,
+            Verifier(probeOf(), FakeYuv(), BitrateScorer(13.0)),
+            storage,
         ).run(
             item = item,
             snapshot = snapshot,

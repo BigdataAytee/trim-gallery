@@ -2,9 +2,9 @@ package app.trimgallery.engine.android
 
 import android.content.ContentResolver
 import android.content.Context
+import android.media.MediaScannerConnection
 import android.net.Uri
 import android.provider.DocumentsContract
-import android.media.MediaScannerConnection
 import app.trimgallery.core.model.MediaRef
 import app.trimgallery.core.pipeline.replace.Committed
 import app.trimgallery.core.pipeline.replace.ReplaceOps
@@ -19,12 +19,12 @@ import app.trimgallery.engine.ReplaceResult
 import app.trimgallery.engine.Replacer
 import app.trimgallery.engine.TempFile
 import app.trimgallery.engine.UndoStore
-import java.io.File
-import kotlin.coroutines.resume
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.suspendCancellableCoroutine
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeoutOrNull
+import java.io.File
+import kotlin.coroutines.resume
 
 /**
  * The only class on Android that writes to a folder the user granted.
@@ -96,44 +96,43 @@ class SafeReplacerAndroid(
          * invents `VID_0001 (1).mp4`, which is why the ordering in `ReplaceSequence` is
          * not negotiable.
          */
-        override suspend fun commit(replacement: TempFile, under: MediaRef): Committed =
-            withContext(Dispatchers.IO) {
-                val originalUri = Uri.parse(under.value)
-                val parent = requireNotNull(parentOf(originalUri)) {
-                    "no parent tree for $originalUri; the grant cannot be written to"
-                }
-                val displayName = requireNotNull(displayNameOf(originalUri)) {
-                    "could not read the original's display name"
-                }
-
-                val staged = requireNotNull(
-                    DocumentsContract.createDocument(resolver, parent, mimeFor(displayName), stagedName(displayName)),
-                ) { "could not create the replacement document" }
-
-                val source = File(replacement.path)
-                val written = try {
-                    resolver.openOutputStream(staged, "wt").use { out ->
-                        requireNotNull(out) { "could not open the staged document for writing" }
-                        source.inputStream().use { it.copyTo(out) }
-                    }
-                    // Length as the tree reports it, not as the local file claims: a card
-                    // that quietly dropped the tail must not be mistaken for a good write.
-                    lengthOf(staged)
-                } catch (e: Exception) {
-                    runCatching { DocumentsContract.deleteDocument(resolver, staged) }
-                    throw e
-                }
-
-                check(written == source.length()) {
-                    "staged document is $written B against a ${source.length()} B replacement"
-                }
-
-                val committed = requireNotNull(
-                    DocumentsContract.renameDocument(resolver, staged, displayName),
-                ) { "could not rename the replacement onto the original's name" }
-
-                Committed(MediaRef(committed.toString()), written)
+        override suspend fun commit(replacement: TempFile, under: MediaRef): Committed = withContext(Dispatchers.IO) {
+            val originalUri = Uri.parse(under.value)
+            val parent = requireNotNull(parentOf(originalUri)) {
+                "no parent tree for $originalUri; the grant cannot be written to"
             }
+            val displayName = requireNotNull(displayNameOf(originalUri)) {
+                "could not read the original's display name"
+            }
+
+            val staged = requireNotNull(
+                DocumentsContract.createDocument(resolver, parent, mimeFor(displayName), stagedName(displayName)),
+            ) { "could not create the replacement document" }
+
+            val source = File(replacement.path)
+            val written = try {
+                resolver.openOutputStream(staged, "wt").use { out ->
+                    requireNotNull(out) { "could not open the staged document for writing" }
+                    source.inputStream().use { it.copyTo(out) }
+                }
+                // Length as the tree reports it, not as the local file claims: a card
+                // that quietly dropped the tail must not be mistaken for a good write.
+                lengthOf(staged)
+            } catch (@Suppress("TooGenericExceptionCaught") e: Exception) {
+                runCatching { DocumentsContract.deleteDocument(resolver, staged) }
+                throw e
+            }
+
+            check(written == source.length()) {
+                "staged document is $written B against a ${source.length()} B replacement"
+            }
+
+            val committed = requireNotNull(
+                DocumentsContract.renameDocument(resolver, staged, displayName),
+            ) { "could not rename the replacement onto the original's name" }
+
+            Committed(MediaRef(committed.toString()), written)
+        }
 
         override suspend fun uncommit(committed: Committed) = withContext(Dispatchers.IO) {
             DocumentsContract.deleteDocument(resolver, Uri.parse(committed.ref.value))

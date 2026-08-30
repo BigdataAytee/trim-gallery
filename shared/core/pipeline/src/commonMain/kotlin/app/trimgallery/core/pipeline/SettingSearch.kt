@@ -112,15 +112,15 @@ class SettingSearch(private val config: Config = Config()) {
                 return Outcome.Found(low.bitrateBps, low.score, probes)
             }
             // The low bound is too far; the answer is between it and the first probe.
-            return bisect(bounds, threshold, low.bitrateBps, first.bitrateBps, first, probes, ::probe)
+            return bisect(threshold, low.bitrateBps, first.bitrateBps, first, probes, ::probe)
         }
 
         return if (first.score >= threshold) {
             // It passes, so something cheaper might too.
-            bisect(bounds, threshold, bounds.lowBps, first.bitrateBps, first, probes, ::probe)
+            bisect(threshold, bounds.lowBps, first.bitrateBps, first, probes, ::probe)
         } else {
             // It fails, so the answer is above it — if it exists at all.
-            bisectUpward(bounds, threshold, first.bitrateBps, bounds.highBps, probes, ::probe)
+            bisectUpward(threshold, first.bitrateBps, bounds.highBps, probes, ::probe)
         }
     }
 
@@ -129,7 +129,6 @@ class SettingSearch(private val config: Config = Config()) {
      * that still does.
      */
     private suspend fun bisect(
-        bounds: Bounds,
         threshold: Double,
         lowBps: Int,
         highBps: Int,
@@ -157,7 +156,6 @@ class SettingSearch(private val config: Config = Config()) {
 
     /** Searches `(low, high]` when nothing has passed yet. */
     private suspend fun bisectUpward(
-        bounds: Bounds,
         threshold: Double,
         lowBps: Int,
         highBps: Int,

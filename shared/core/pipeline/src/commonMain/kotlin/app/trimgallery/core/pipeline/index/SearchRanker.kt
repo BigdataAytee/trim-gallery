@@ -73,15 +73,11 @@ object SearchRanker {
      * @param nowMs used to age results. Passed in rather than read, so a test can pin it
      *   and so the ordering does not change while the user is looking at it.
      */
-    fun rank(
-        query: SearchQuery.Parsed,
-        candidates: List<Evidence>,
-        nowMs: Long,
-    ): List<Hit> {
+    fun rank(query: SearchQuery.Parsed, candidates: List<Evidence>, nowMs: Long): List<Hit> {
         if (query.isEmpty) return emptyList()
 
         return candidates
-            .filter { !it.item.hidden }   // the locked folder is excluded from search
+            .filter { !it.item.hidden } // the locked folder is excluded from search
             .mapNotNull { evidence -> score(query, evidence, nowMs) }
             .sortedWith(compareByDescending<Hit> { it.score }.thenBy { it.item.id })
     }
@@ -168,7 +164,7 @@ object SearchRanker {
 
     private fun Set<String>.lowercased(): Set<String> = mapTo(mutableSetOf()) { it.lowercase() }
 
-    private const val YEAR_MS = 31_556_952_000L    // the mean Gregorian year
+    private const val YEAR_MS = 31_556_952_000L // the mean Gregorian year
     private const val DECADE_MS = YEAR_MS * 10
     private const val EPOCH_YEAR = 1970L
 }

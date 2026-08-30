@@ -29,31 +29,59 @@ internal object TrimNative {
 
     @Suppress("LongParameterList")
     external fun nativeXpsnr(
-        refY: ByteBuffer, refU: ByteBuffer, refV: ByteBuffer,
-        refYStride: Int, refUStride: Int, refVStride: Int,
-        distY: ByteBuffer, distU: ByteBuffer, distV: ByteBuffer,
-        distYStride: Int, distUStride: Int, distVStride: Int,
-        width: Int, height: Int, frames: Int, frameRate: Int,
-        cancel: ByteBuffer, out: DoubleArray,
+        refY: ByteBuffer,
+        refU: ByteBuffer,
+        refV: ByteBuffer,
+        refYStride: Int,
+        refUStride: Int,
+        refVStride: Int,
+        distY: ByteBuffer,
+        distU: ByteBuffer,
+        distV: ByteBuffer,
+        distYStride: Int,
+        distUStride: Int,
+        distVStride: Int,
+        width: Int,
+        height: Int,
+        frames: Int,
+        frameRate: Int,
+        cancel: ByteBuffer,
+        out: DoubleArray,
     ): Int
 
     @Suppress("LongParameterList")
     external fun nativeVmaf(
-        refY: ByteBuffer, refU: ByteBuffer, refV: ByteBuffer,
-        refYStride: Int, refUStride: Int, refVStride: Int,
-        distY: ByteBuffer, distU: ByteBuffer, distV: ByteBuffer,
-        distYStride: Int, distUStride: Int, distVStride: Int,
-        width: Int, height: Int, frames: Int, subsample: Int,
-        cancel: ByteBuffer, out: DoubleArray,
+        refY: ByteBuffer,
+        refU: ByteBuffer,
+        refV: ByteBuffer,
+        refYStride: Int,
+        refUStride: Int,
+        refVStride: Int,
+        distY: ByteBuffer,
+        distU: ByteBuffer,
+        distV: ByteBuffer,
+        distYStride: Int,
+        distUStride: Int,
+        distVStride: Int,
+        width: Int,
+        height: Int,
+        frames: Int,
+        subsample: Int,
+        cancel: ByteBuffer,
+        out: DoubleArray,
     ): Int
 
     /** SSIMULACRA 2, the photo gate. Packed RGBA on both sides, alpha ignored. */
     @Suppress("LongParameterList")
     external fun nativeSsim2(
-        refRgba: ByteBuffer, refStride: Int,
-        distRgba: ByteBuffer, distStride: Int,
-        width: Int, height: Int,
-        cancel: ByteBuffer, out: DoubleArray,
+        refRgba: ByteBuffer,
+        refStride: Int,
+        distRgba: ByteBuffer,
+        distStride: Int,
+        width: Int,
+        height: Int,
+        cancel: ByteBuffer,
+        out: DoubleArray,
     ): Int
 
     /*

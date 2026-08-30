@@ -3,10 +3,9 @@ package app.trimgallery.engine.android
 import android.content.Context
 import android.content.Intent
 import androidx.core.content.FileProvider
-import app.trimgallery.core.domain.field.Diagnostics
-import java.io.File
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
+import java.io.File
 
 /**
  * "Export diagnostics" on Android (LAUNCH.md § Support, USER_JOURNEY.md § 13 under Privacy).

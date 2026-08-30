@@ -80,11 +80,7 @@ class VerifyPass(
         ) : Result
 
         /** Permanently skipped, with the reason the user will be shown (BUILD.md § 9). */
-        data class Skipped(
-            val reason: SkipReason,
-            val detail: String,
-            override val attempts: List<Attempt>,
-        ) : Result
+        data class Skipped(val reason: SkipReason, val detail: String, override val attempts: List<Attempt>) : Result
 
         /**
          * The user edited the file while we were encoding it.
@@ -93,16 +89,10 @@ class VerifyPass(
          * because what we measured is no longer what is on disk (safe-replace skill,
          * step 5).
          */
-        data class SourceChanged(
-            val detail: String,
-            override val attempts: List<Attempt>,
-        ) : Result
+        data class SourceChanged(val detail: String, override val attempts: List<Attempt>) : Result
 
         /** The encode itself failed or was interrupted; retried per ARCHITECTURE.md § 13. */
-        data class Failed(
-            val detail: String,
-            override val attempts: List<Attempt>,
-        ) : Result
+        data class Failed(val detail: String, override val attempts: List<Attempt>) : Result
     }
 
     /**

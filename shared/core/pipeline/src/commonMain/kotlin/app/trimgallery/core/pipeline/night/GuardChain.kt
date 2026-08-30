@@ -52,10 +52,7 @@ data class NightConditions(
  * battery fills. An unplugged phone, a passed deadline and a spent cap do not undo
  * themselves.
  */
-class GuardChain(
-    val thermal: ThermalGate = ThermalGate(),
-    private val config: Config = Config(),
-) {
+class GuardChain(val thermal: ThermalGate = ThermalGate(), private val config: Config = Config()) {
 
     data class Config(
         /**
@@ -88,7 +85,9 @@ class GuardChain(
      */
     fun evaluate(conditions: NightConditions, settings: Settings, tier: Tier): GuardResult {
         var firstPause: PauseReason? = null
-        fun pause(reason: PauseReason) { if (firstPause == null) firstPause = reason }
+        fun pause(reason: PauseReason) {
+            if (firstPause == null) firstPause = reason
+        }
 
         // 1. Foreground. BUILD.md rule 7: the gallery must stay at refresh rate, so
         //    background work yields to the person using the phone. The one exception is

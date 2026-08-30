@@ -159,38 +159,37 @@ object Diagnostics {
     }
 
     /** The redacted rows on their own, for a caller that wants them without the prose. */
-    fun rows(jobs: List<Job>, itemOf: (Job) -> MediaItem?): List<FileRow> =
-        jobs.mapIndexedNotNull { position, job ->
-            val item = itemOf(job) ?: return@mapIndexedNotNull null
-            FileRow(
-                index = position + 1,
-                kind = item.kind,
-                sourceCodec = item.codec,
-                sourceBitrate = item.bitrate,
-                width = item.width,
-                height = item.height,
-                fps = item.fps,
-                cameraModel = item.cameraModel,
-                engine = job.engine,
-                setting = job.setting,
-                probes = job.probes,
-                attempts = job.attempts,
-                xpsnr = job.xpsnr,
-                vmaf = job.vmaf,
-                ssim2 = job.ssim2,
-                factor = job.factor,
-                encodeMs = job.encodeMs,
-                verifyMs = job.verifyMs,
-                realtimeMultiple = job.realtimeMultiple,
-                thermalStart = job.thermalStart,
-                thermalEnd = job.thermalEnd,
-                energyWh = job.energyWh,
-                state = job.state,
-                // The flag, never `job.error`: an exception message can quote a path, and a
-                // path is a filename with its folder attached.
-                failed = job.state == JobState.FAILED,
-            )
-        }
+    fun rows(jobs: List<Job>, itemOf: (Job) -> MediaItem?): List<FileRow> = jobs.mapIndexedNotNull { position, job ->
+        val item = itemOf(job) ?: return@mapIndexedNotNull null
+        FileRow(
+            index = position + 1,
+            kind = item.kind,
+            sourceCodec = item.codec,
+            sourceBitrate = item.bitrate,
+            width = item.width,
+            height = item.height,
+            fps = item.fps,
+            cameraModel = item.cameraModel,
+            engine = job.engine,
+            setting = job.setting,
+            probes = job.probes,
+            attempts = job.attempts,
+            xpsnr = job.xpsnr,
+            vmaf = job.vmaf,
+            ssim2 = job.ssim2,
+            factor = job.factor,
+            encodeMs = job.encodeMs,
+            verifyMs = job.verifyMs,
+            realtimeMultiple = job.realtimeMultiple,
+            thermalStart = job.thermalStart,
+            thermalEnd = job.thermalEnd,
+            energyWh = job.energyWh,
+            state = job.state,
+            // The flag, never `job.error`: an exception message can quote a path, and a
+            // path is a filename with its folder attached.
+            failed = job.state == JobState.FAILED,
+        )
+    }
 
     const val HEADER =
         "index,kind,source_codec,source_bitrate,width,height,fps,camera_model,engine,setting," +

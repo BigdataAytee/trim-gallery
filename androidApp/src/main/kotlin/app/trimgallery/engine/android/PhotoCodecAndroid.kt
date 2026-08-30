@@ -5,10 +5,10 @@ import android.graphics.BitmapFactory
 import androidx.heifwriter.HeifWriter
 import app.trimgallery.engine.Image
 import app.trimgallery.engine.PhotoCodec
-import java.io.File
-import java.nio.ByteBuffer
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
+import java.io.File
+import java.nio.ByteBuffer
 
 /**
  * The Android still-image codecs (BUILD.md § 5, milestone 7).
@@ -97,10 +97,7 @@ class PhotoCodecAndroid(private val cacheDir: File) : PhotoCodec {
      * Ask for the size, allocate exactly that, fill it. Guessing a capacity and growing on
      * failure would encode twice for nothing.
      */
-    private inline fun transcode(
-        src: ByteArray,
-        call: (ByteBuffer, Int, ByteBuffer?, IntArray) -> Int,
-    ): ByteArray {
+    private inline fun transcode(src: ByteArray, call: (ByteBuffer, Int, ByteBuffer?, IntArray) -> Int): ByteArray {
         val input = ByteBuffer.allocateDirect(src.size)
         input.put(src)
         input.rewind()

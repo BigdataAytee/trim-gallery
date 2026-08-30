@@ -1,0 +1,33 @@
+# Formatting rules for ktlint (and any editor that reads this file).
+#
+# Pinned rather than left to default because ktlint's default is `ktlint_official`, its
+# most opinionated style: it breaks every parameter list of more than one parameter across
+# lines whether or not it fits, which over this codebase is three thousand violations of
+# hand-formatting that reads fine. `intellij_idea` is the style in the Kotlin coding
+# conventions, and is what the code was written to.
+#
+# There was no .editorconfig at all until the hardening pass, so the style in force was
+# whichever one ktlint happened to default to — a thing worth choosing on purpose.
+
+root = true
+
+[*]
+charset = utf-8
+end_of_line = lf
+indent_size = 4
+indent_style = space
+insert_final_newline = true
+trim_trailing_whitespace = true
+
+[*.{kt,kts}]
+ktlint_code_style = intellij_idea
+# Matches config/detekt/detekt.yml, so the two tools cannot disagree about a line.
+max_line_length = 120
+# Composables are PascalCase by convention, as config/detekt/detekt.yml already says.
+ktlint_function_naming_ignore_when_annotated_with = Composable
+
+[*.{yml,yaml,json,md}]
+indent_size = 2
+
+[*.sq]
+indent_size = 4

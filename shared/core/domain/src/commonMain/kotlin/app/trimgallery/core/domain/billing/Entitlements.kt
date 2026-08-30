@@ -48,7 +48,7 @@ object Entitlements {
     /** MONETIZATION.md § Conversion moments: *"never nag more than once per week"*. */
     val OFFER_COOLDOWN = 7.days
 
-    fun allows(tier: Tier, feature: ProFeature): Boolean = tier == Tier.PRO
+    fun allows(tier: Tier, @Suppress("UNUSED_PARAMETER") feature: ProFeature): Boolean = tier == Tier.PRO
 
     /**
      * Bytes this tier may still free this month.
@@ -95,8 +95,7 @@ object Entitlements {
      */
     fun mayRestore(): Boolean = true
 
-    fun mayCompressNow(tier: Tier, usedToday: Int): Boolean =
-        tier == Tier.PRO || usedToday < FREE_COMPRESS_NOW_PER_DAY
+    fun mayCompressNow(tier: Tier, usedToday: Int): Boolean = tier == Tier.PRO || usedToday < FREE_COMPRESS_NOW_PER_DAY
 
     /**
      * The retention the user may actually choose, clamped to their tier.

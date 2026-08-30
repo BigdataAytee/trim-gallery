@@ -97,7 +97,6 @@ data class TrimTypography(
         private const val TABULAR_FIGURES = "tnum"
     }
 }
-}
 
 val LocalTrimColors: ProvidableCompositionLocal<TrimColors> =
     staticCompositionLocalOf { TrimColors.from(TrimPalette.Dark) }

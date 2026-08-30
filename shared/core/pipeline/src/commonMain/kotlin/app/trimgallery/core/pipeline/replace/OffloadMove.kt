@@ -69,7 +69,7 @@ class OffloadMove(private val ops: Ops) {
             ops.copy(source, destination)
         } catch (e: CancellationException) {
             throw e
-        } catch (e: Exception) {
+        } catch (@Suppress("TooGenericExceptionCaught") e: Exception) {
             return Outcome.Failed("copy to the offload volume failed: ${e.message}")
         }
 
@@ -81,7 +81,7 @@ class OffloadMove(private val ops: Ops) {
             // let the cancellation continue — the source has not been touched.
             removeQuietly(copy)
             throw e
-        } catch (e: Exception) {
+        } catch (@Suppress("TooGenericExceptionCaught") e: Exception) {
             removeQuietly(copy)
             return Outcome.Failed("could not verify the offloaded copy: ${e.message}")
         }
@@ -97,7 +97,7 @@ class OffloadMove(private val ops: Ops) {
             Outcome.Moved(copy)
         } catch (e: CancellationException) {
             throw e
-        } catch (e: Exception) {
+        } catch (@Suppress("TooGenericExceptionCaught") e: Exception) {
             // The copy is good, so nothing is lost — there are simply two of it now. Left
             // in place deliberately: deleting the verified copy to "tidy up" would throw
             // away the one thing that is known to be intact.
@@ -110,7 +110,7 @@ class OffloadMove(private val ops: Ops) {
             ops.removeCopy(copy)
         } catch (e: CancellationException) {
             throw e
-        } catch (@Suppress("SwallowedException") e: Exception) {
+        } catch (@Suppress("SwallowedException", "TooGenericExceptionCaught") e: Exception) {
             // Best effort: a stray copy is untidy, never dangerous.
         }
     }

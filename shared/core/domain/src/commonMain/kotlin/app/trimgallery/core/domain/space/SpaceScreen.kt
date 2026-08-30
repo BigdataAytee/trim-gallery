@@ -97,7 +97,8 @@ object SpaceScreen {
             projectedSaving = projectedSaving,
             energyWh = sessions.sumOf { it.energyWh },
             showProOffer = Entitlements.mayShowOffer(tier, lastOfferShown, now, inViewer) &&
-                cap != null && freedThisMonth >= cap,
+                cap != null &&
+                freedThisMonth >= cap,
         )
     }
 

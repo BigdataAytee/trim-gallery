@@ -22,6 +22,58 @@ when splits abi filters are set : arm64-v8a
 Android. Splits exist to produce one APK per ABI; with a single ABI there is nothing to
 split, and `abiFilters` is what every library module already uses. Removed the split.
 
+That was the first of five configuration-time faults, each of which hid every error behind
+it. In order:
+
+- **An eager `tasks.named("assembleDebug")` inside `androidComponents.onVariants`.**
+  `onVariants` runs while AGP is still building the variant model, before it has registered
+  the lifecycle tasks that model produces. Every job died in `:androidApp` — including the
+  iOS job, on a Mac, which had asked for nothing Android: Gradle configures every project on
+  every invocation.
+- **`sharedTest` asking for `:shared:core:jvmTest`.** `include(":shared:core:model")` creates
+  a project for every path segment, so `:shared:core` exists with no build file and no Kotlin
+  plugin. The task list was built by path prefix; it now filters on `buildFile.exists()`.
+- **Eight overrides in `core/data` that never compiled.** Every `Unit`-returning port —
+  `UndoJournal.forget`, `NightRun.Checkpoint.save`, `TriageStep.Sink.insert` and the rest —
+  was an expression body over a SQLDelight call, so its inferred type was `QueryResult<Long>`
+  and none of them overrode anything. The module needs SQLDelight's generated interface to
+  compile and had therefore never been compiled anywhere. Found by pointing the real
+  SQLDelight plugin at the real `.sq` files: it comes from Maven Central, unlike AGP and
+  Compose, so this half of the build can be run here after all.
+- **Three syntax errors in files no compiler had ever seen.** A stray `}` in `TrimTheme.kt`,
+  and `` `shared/feature/*` `` inside a KDoc in `MainActivity.kt` and `GalleryTile.kt` —
+  Kotlin block comments nest, so that `/*` opened a comment the KDoc's own `*/` closed,
+  leaving the rest of each file inside a comment that never ended. Found by ktlint's parser,
+  which needs no dependencies, and is now the cheapest syntax check available here.
+
+### The static analysis was not analysing anything
+
+Every `:shared:*:detekt` task reported `NO-SOURCE`. Detekt's default source set is
+`src/main/kotlin`, which no Kotlin Multiplatform module has, so analysis configured since
+milestone 2 had never looked at a line of the shared layer. Pointed at the real source sets
+it found 357 issues, and four of them were defects:
+
+- `SettingSearch.bisect` and `bisectUpward` each took a `bounds` parameter neither read.
+- `GalleryTile` took an `index` it never used.
+- A test carried a fake encoder nothing constructed.
+- `NightWorker` caught every exception from a whole night and returned `Result.retry()`
+  without recording anything anywhere.
+
+Those are fixed. The 37 that remain are shape rather than defect — long `when` chains,
+six-parameter functions, a thirty-method repository — and are recorded in
+`config/detekt/baseline.xml`, which is the mechanism for adopting a linter on existing code:
+everything *not* in that file fails the build, and the list only shrinks.
+
+`MagicNumber` is the one rule switched off rather than tuned. Its 220 hits were UUIDv7 bit
+shifts, degree/radian conversions, EXIF orientation codes and the design-token tables. The
+numbers it exists to catch — thresholds, gates, ratios — are already named constants carrying
+the reason they hold that value.
+
+There was also no `.editorconfig`, so ktlint had been formatting to `ktlint_official`, its
+most opinionated style, and 3,185 violations. The style is now `intellij_idea` — the Kotlin
+coding conventions — chosen on purpose rather than inherited by accident, and the tree is
+formatted to it.
+
 ### Guard self-tests
 
 Every other guard test checks a case somebody thought of. `GuardSelfTest` checks something

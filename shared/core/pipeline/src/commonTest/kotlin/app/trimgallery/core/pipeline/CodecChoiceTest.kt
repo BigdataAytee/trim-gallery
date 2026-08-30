@@ -18,26 +18,25 @@ import kotlin.test.assertTrue
 
 class CodecChoiceTest {
 
-    private fun clip(codec: String = "avc1", width: Int = 3840, height: Int = 2160, fps: Double = 30.0) =
-        MediaItem(
-            id = "m1",
-            platformRef = MediaRef("content://x"),
-            name = "clip.mp4",
-            kind = MediaKind.VIDEO,
-            codec = codec,
-            width = width,
-            height = height,
-            fps = fps,
-            bitrate = 40_000_000,
-            size = 400L * 1024 * 1024,
-            duration = 120_000,
-            takenAt = null,
-            location = null,
-            cameraModel = null,
-            phash = null,
-            sha256 = null,
-            mtime = 0,
-        )
+    private fun clip(codec: String = "avc1", width: Int = 3840, height: Int = 2160, fps: Double = 30.0) = MediaItem(
+        id = "m1",
+        platformRef = MediaRef("content://x"),
+        name = "clip.mp4",
+        kind = MediaKind.VIDEO,
+        codec = codec,
+        width = width,
+        height = height,
+        fps = fps,
+        bitrate = 40_000_000,
+        size = 400L * 1024 * 1024,
+        duration = 120_000,
+        takenAt = null,
+        location = null,
+        cameraModel = null,
+        phash = null,
+        sha256 = null,
+        mtime = 0,
+    )
 
     private val hevcOnly = CodecCaps(
         hevc = EncoderCaps(hardware = true, maxWidth = 3840, maxHeight = 2160, maxFps = 60.0, cqSupported = true),

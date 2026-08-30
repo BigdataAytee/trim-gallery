@@ -128,10 +128,22 @@ class PlayToCompressTap(
             // Only a Frame can produce FEED; the check is here so a future event that could
             // would fail to compile rather than feed the encoder a timestamp it invented.
             PlayToCompress.Effect.FEED -> if (event is PlayToCompress.Event.Frame) sink.feed(event.ptsUs)
-            PlayToCompress.Effect.HOLD -> { sink.hold(); startHoldTimer() }
-            PlayToCompress.Effect.RESUME -> { cancelHoldTimer(); sink.resume() }
-            PlayToCompress.Effect.FINISH -> { cancelHoldTimer(); sink.finish() }
-            PlayToCompress.Effect.DISCARD -> { cancelHoldTimer(); sink.discard() }
+            PlayToCompress.Effect.HOLD -> {
+                sink.hold()
+                startHoldTimer()
+            }
+            PlayToCompress.Effect.RESUME -> {
+                cancelHoldTimer()
+                sink.resume()
+            }
+            PlayToCompress.Effect.FINISH -> {
+                cancelHoldTimer()
+                sink.finish()
+            }
+            PlayToCompress.Effect.DISCARD -> {
+                cancelHoldTimer()
+                sink.discard()
+            }
             PlayToCompress.Effect.NONE -> Unit
         }
         report()

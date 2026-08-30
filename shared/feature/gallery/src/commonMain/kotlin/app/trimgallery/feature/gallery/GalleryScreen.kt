@@ -120,7 +120,6 @@ fun GalleryScreen(
                     item(key = mediaItem.id) {
                         GalleryTile(
                             item = mediaItem,
-                            index = index,
                             processing = mediaItem.id in processingIds,
                             onOpen = { open = it },
                             onBounds = { rect ->

@@ -16,11 +16,11 @@ import com.google.mlkit.vision.label.ImageLabeling
 import com.google.mlkit.vision.label.defaults.ImageLabelerOptions
 import com.google.mlkit.vision.text.TextRecognition
 import com.google.mlkit.vision.text.latin.TextRecognizerOptions
-import kotlin.coroutines.resume
-import kotlin.coroutines.resumeWithException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.suspendCancellableCoroutine
 import kotlinx.coroutines.withContext
+import kotlin.coroutines.resume
+import kotlin.coroutines.resumeWithException
 
 /**
  * On-device indexing with ML Kit (BUILD.md § 7, ARCHITECTURE.md § 15 milestone 9).
@@ -142,8 +142,7 @@ class MlKitIndexer(private val context: Context) : Indexer {
         return values.toFloatArray()
     }
 
-    private fun image(ref: MediaRef): InputImage =
-        InputImage.fromFilePath(context, Uri.parse(ref.value))
+    private fun image(ref: MediaRef): InputImage = InputImage.fromFilePath(context, Uri.parse(ref.value))
 
     /**
      * Bridges a Play-services `Task` to a coroutine.

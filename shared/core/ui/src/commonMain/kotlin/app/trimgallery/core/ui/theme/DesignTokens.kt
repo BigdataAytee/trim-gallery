@@ -41,6 +41,7 @@ object TrimShape {
     const val CARD_DP = 16f
     const val SHEET_DP = 24f
     const val BUTTON_DP = 12f
+
     /** Fully round. Chips are pills at any height. */
     const val CHIP_DP = 999f
 }

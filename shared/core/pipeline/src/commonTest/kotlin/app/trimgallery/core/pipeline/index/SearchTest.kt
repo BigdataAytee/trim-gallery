@@ -127,7 +127,10 @@ class SearchTest {
         val query = SearchQuery.parse("dog")
         val hits = SearchRanker.rank(
             query,
-            listOf(evidence("maybe", labels = mapOf("dog" to 0.3f)), evidence("certain", labels = mapOf("dog" to 0.98f))),
+            listOf(
+                evidence("maybe", labels = mapOf("dog" to 0.3f)),
+                evidence("certain", labels = mapOf("dog" to 0.98f)),
+            ),
             now,
         )
         assertEquals("certain", hits.first().item.id)

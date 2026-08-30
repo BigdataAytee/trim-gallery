@@ -1,11 +1,11 @@
 package app.trimgallery.core.pipeline.photo
 
 import app.trimgallery.core.model.QualityTarget
+import kotlinx.coroutines.test.runTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertIs
 import kotlin.test.assertTrue
-import kotlinx.coroutines.test.runTest
 
 /**
  * BUILD.md § 5: *"Gate with SSIMULACRA2 ≥ 85–90. Full binary search per file."*
@@ -83,7 +83,10 @@ class PhotoQualitySearchTest {
         var calls = 0
         val config = PhotoQualitySearch.Config(maxProbes = 3)
         // A pathological scorer that never converges.
-        PhotoQualitySearch(config).search(90.0) { calls += 1; if (calls % 2 == 0) 95.0 else 10.0 }
+        PhotoQualitySearch(config).search(90.0) {
+            calls += 1
+            if (calls % 2 == 0) 95.0 else 10.0
+        }
         assertTrue(calls <= 4, "spent $calls probes against a budget of 3 plus the ceiling")
     }
 
@@ -105,7 +108,7 @@ class PhotoQualitySearchTest {
             var threw = false
             try {
                 build()
-            } catch (e: IllegalArgumentException) {
+            } catch (expected: IllegalArgumentException) {
                 threw = true
             }
             assertTrue(threw, "an invalid config was accepted")

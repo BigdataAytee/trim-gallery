@@ -66,7 +66,7 @@ class ReplaceSequence(
             storage.stat(plan.original)
         } catch (e: CancellationException) {
             throw e
-        } catch (e: Exception) {
+        } catch (@Suppress("TooGenericExceptionCaught") e: Exception) {
             return ReplaceResult.RolledBack("could not read the original: ${e.message}")
         }
 
@@ -109,7 +109,7 @@ class ReplaceSequence(
         } catch (e: CancellationException) {
             unwind(done, plan)
             throw e
-        } catch (e: Exception) {
+        } catch (@Suppress("TooGenericExceptionCaught") e: Exception) {
             val failures = unwind(done, plan)
             val cause = e.message ?: e::class.simpleName ?: "unknown failure"
             return ReplaceResult.RolledBack(
@@ -127,21 +127,20 @@ class ReplaceSequence(
      *
      * @return a description of every inverse that itself failed, for the result message.
      */
-    private suspend fun unwind(done: List<Step>, plan: ReplacePlan): List<String> =
-        withContext(NonCancellable) {
-            val failures = ArrayList<String>()
-            for (step in done.asReversed()) {
-                try {
-                    step.undo()
-                } catch (e: CancellationException) {
-                    throw e
-                } catch (e: Exception) {
-                    failures += "could not undo ${step.name}: ${e.message}"
-                }
+    private suspend fun unwind(done: List<Step>, plan: ReplacePlan): List<String> = withContext(NonCancellable) {
+        val failures = ArrayList<String>()
+        for (step in done.asReversed()) {
+            try {
+                step.undo()
+            } catch (e: CancellationException) {
+                throw e
+            } catch (@Suppress("TooGenericExceptionCaught") e: Exception) {
+                failures += "could not undo ${step.name}: ${e.message}"
             }
-            discardQuietly(plan)
-            failures
         }
+        discardQuietly(plan)
+        failures
+    }
 
     /**
      * Throws away the temp file. Best effort by design: a leftover temp is swept later and
@@ -152,7 +151,7 @@ class ReplaceSequence(
             storage.discard(plan.replacement)
         } catch (e: CancellationException) {
             throw e
-        } catch (@Suppress("SwallowedException") e: Exception) {
+        } catch (@Suppress("SwallowedException", "TooGenericExceptionCaught") e: Exception) {
             // Intentionally ignored; see above.
         }
     }

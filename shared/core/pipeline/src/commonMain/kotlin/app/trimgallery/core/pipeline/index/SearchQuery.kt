@@ -33,10 +33,7 @@ object SearchQuery {
         val year: Int? = null,
     )
 
-    data class Parsed(
-        val raw: String,
-        val terms: List<Term>,
-    ) {
+    data class Parsed(val raw: String, val terms: List<Term>) {
         val isEmpty: Boolean get() = terms.isEmpty()
 
         fun termsFor(facet: Facet): List<Term> = terms.filter { facet in it.facets }
@@ -51,11 +48,7 @@ object SearchQuery {
      * Inferring either from the shape of the word would put every capitalised noun in the
      * people facet.
      */
-    fun parse(
-        raw: String,
-        knownPeople: Set<String> = emptySet(),
-        knownPlaces: Set<String> = emptySet(),
-    ): Parsed {
+    fun parse(raw: String, knownPeople: Set<String> = emptySet(), knownPlaces: Set<String> = emptySet()): Parsed {
         val people = knownPeople.map { it.lowercase() }.toSet()
         val places = knownPlaces.map { it.lowercase() }.toSet()
 

@@ -86,6 +86,7 @@ class Uuid7(private val random: Random = Random.Default) {
 
     companion object {
         private const val MAX_COUNTER = 0xFFF
+
         /** Seeded in the low half so a busy millisecond has room to count up. */
         private const val SEED_CEILING = 0x800
         private const val TIMESTAMP_MASK = 0xFFFF_FFFFFFFFL
@@ -93,6 +94,7 @@ class Uuid7(private val random: Random = Random.Default) {
         private const val SHIFT_VERSION = 12
         private const val VERSION_7 = 7L
         private const val VARIANT_CLEAR_MASK = 0x3FFF_FFFF_FFFF_FFFFL
+
         /** Top two bits `10`; `Long.MIN_VALUE` is exactly that bit pattern. */
         private const val VARIANT_RFC4122 = Long.MIN_VALUE
         private const val UUID_LENGTH = 36

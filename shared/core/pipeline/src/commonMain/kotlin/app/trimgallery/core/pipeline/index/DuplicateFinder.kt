@@ -40,11 +40,7 @@ object DuplicateFinder {
      *
      * [best] is a suggestion the user can override, never an action already taken.
      */
-    data class Group(
-        val kind: Kind,
-        val items: List<MediaItem>,
-        val best: MediaItem,
-    ) {
+    data class Group(val kind: Kind, val items: List<MediaItem>, val best: MediaItem) {
         /** What accepting the suggestion would free. */
         val reclaimable: Long get() = items.filter { it.id != best.id }.sumOf { it.size }
     }
@@ -53,10 +49,7 @@ object DuplicateFinder {
      * @param nearThreshold Hamming distance for the near pass. Raising it finds more
      *   bursts and starts joining different photographs taken in the same place.
      */
-    fun find(
-        items: List<MediaItem>,
-        nearThreshold: Int = PerceptualHash.NEAR_DUPLICATE_DISTANCE,
-    ): List<Group> {
+    fun find(items: List<MediaItem>, nearThreshold: Int = PerceptualHash.NEAR_DUPLICATE_DISTANCE): List<Group> {
         // Hidden items are excluded from every other view (SCHEMA.md `flags` bit 128), and
         // a cleanup screen that surfaced them would be a hole straight through the locked
         // folder.
@@ -74,12 +67,11 @@ object DuplicateFinder {
         return (exact + near).sortedByDescending { it.reclaimable }
     }
 
-    private fun groupExact(items: List<MediaItem>): List<Group> =
-        items.filter { it.sha256 != null }
-            .groupBy { it.sha256 }
-            .values
-            .filter { it.size > 1 }
-            .map { members -> Group(Kind.EXACT, order(members), pickBest(members)) }
+    private fun groupExact(items: List<MediaItem>): List<Group> = items.filter { it.sha256 != null }
+        .groupBy { it.sha256 }
+        .values
+        .filter { it.size > 1 }
+        .map { members -> Group(Kind.EXACT, order(members), pickBest(members)) }
 
     /**
      * Single-link grouping over the perceptual hashes.

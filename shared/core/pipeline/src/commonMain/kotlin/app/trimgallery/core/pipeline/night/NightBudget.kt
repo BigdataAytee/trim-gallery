@@ -14,7 +14,9 @@ package app.trimgallery.core.pipeline.night
  */
 class NightBudget(private val capMinutes: Int) {
 
-    init { require(capMinutes > 0) { "a nightly cap of $capMinutes minutes leaves no time to work" } }
+    init {
+        require(capMinutes > 0) { "a nightly cap of $capMinutes minutes leaves no time to work" }
+    }
 
     private var workedMs = 0L
     private var runningSince: Long? = null
@@ -43,5 +45,7 @@ class NightBudget(private val capMinutes: Int) {
     /** Minutes worked, for `RunSession.minutes_worked`. */
     fun minutesWorked(nowMs: Long): Double = workedMs(nowMs).toDouble() / MS_PER_MINUTE
 
-    private companion object { const val MS_PER_MINUTE = 60_000L }
+    private companion object {
+        const val MS_PER_MINUTE = 60_000L
+    }
 }

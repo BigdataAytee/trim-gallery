@@ -265,8 +265,10 @@ class EditSaveTest {
                 assertTrue(EditSave.describe(plan, destination).isNotBlank(), "$plan $destination")
             }
         }
-        assertTrue(EditSave.describe(EditRender.Plan.StreamCopy(VideoTrim(0, 1)), EditSave.Destination.NEW_COPY)
-            .contains("original quality"))
+        assertTrue(
+            EditSave.describe(EditRender.Plan.StreamCopy(VideoTrim(0, 1)), EditSave.Destination.NEW_COPY)
+                .contains("original quality"),
+        )
         assertTrue(
             EditSave.describe(EditRender.Plan.Reencode(), EditSave.Destination.OVER_ORIGINAL)
                 .contains("Recently deleted"),

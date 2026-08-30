@@ -15,7 +15,7 @@ import app.trimgallery.core.ui.theme.TrimTheme
 /**
  * The single Android host (ARCHITECTURE.md § 3, § 11).
  *
- * Every screen is Compose Multiplatform and lives in `shared/feature/*`; this Activity
+ * Every screen is Compose Multiplatform and lives under `shared/feature`; this Activity
  * exists to host the navigation graph and to own the things only a platform can do —
  * share sheets, permission dialogs, document pickers, biometrics — and to feed the
  * design system the platform's accessibility settings.
@@ -51,12 +51,11 @@ class MainActivity : ComponentActivity() {
      * Whether the system animation scale has been turned off, which is Android's signal
      * for "reduce motion" (DESIGN_SPEC.md § 4.6 has the same requirement on the web).
      */
-    private fun isReduceMotionEnabled(): Boolean =
-        android.provider.Settings.Global.getFloat(
-            contentResolver,
-            android.provider.Settings.Global.ANIMATOR_DURATION_SCALE,
-            DEFAULT_ANIMATION_SCALE,
-        ) == 0f
+    private fun isReduceMotionEnabled(): Boolean = android.provider.Settings.Global.getFloat(
+        contentResolver,
+        android.provider.Settings.Global.ANIMATOR_DURATION_SCALE,
+        DEFAULT_ANIMATION_SCALE,
+    ) == 0f
 
     private companion object {
         const val DEFAULT_ANIMATION_SCALE = 1f

@@ -1,5 +1,7 @@
 package app.trimgallery.core.pipeline.night
 
+import kotlinx.datetime.LocalTime
+import kotlinx.datetime.TimeZone
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
@@ -8,8 +10,6 @@ import kotlin.test.assertTrue
 import kotlin.time.Duration.Companion.hours
 import kotlin.time.Duration.Companion.minutes
 import kotlin.time.Instant
-import kotlinx.datetime.LocalTime
-import kotlinx.datetime.TimeZone
 
 class AlarmWindowTest {
 
@@ -85,7 +85,7 @@ class AlarmWindowTest {
     @Test
     fun `the earlier of the two bounds wins`() {
         val now = Instant.parse("2026-08-30T02:00:00Z")
-        val alarm = Instant.parse("2026-08-30T07:00:00Z")   // deadline 06:30
+        val alarm = Instant.parse("2026-08-30T07:00:00Z") // deadline 06:30
         // Stop-by is stricter.
         assertEquals(
             Instant.parse("2026-08-30T05:00:00Z"),
@@ -103,9 +103,9 @@ class AlarmWindowTest {
         // Europe/London springs forward at 01:00 UTC on 2026-03-29, so that night is 23
         // hours long. A stop-by of 06:00 must still mean six on the clock in the room —
         // adding 24 hours' worth of milliseconds would land at 07:00 local.
-        val now = Instant.parse("2026-03-28T23:30:00Z")     // 23:30 local, before the change
+        val now = Instant.parse("2026-03-28T23:30:00Z") // 23:30 local, before the change
         val deadline = AlarmWindow.deadline(now, null, LocalTime(6, 0), london)
-        assertEquals(Instant.parse("2026-03-29T05:00:00Z"), deadline)   // 06:00 BST
+        assertEquals(Instant.parse("2026-03-29T05:00:00Z"), deadline) // 06:00 BST
     }
 
     @Test

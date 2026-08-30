@@ -191,9 +191,33 @@ object PerceptualHash {
         while (order.size <= HASH_BITS) {
             order += v * WORKING_SIZE + u
             if (goingUp) {
-                if (u == WORKING_SIZE - 1) { v++; goingUp = false } else if (v == 0) { u++; goingUp = false } else { u++; v-- }
+                if (u ==
+                    WORKING_SIZE - 1
+                ) {
+                    v++
+                    goingUp = false
+                } else if (v ==
+                    0
+                ) {
+                    u++
+                    goingUp = false
+                } else {
+                    u++
+                    v--
+                }
             } else {
-                if (v == WORKING_SIZE - 1) { u++; goingUp = true } else if (u == 0) { v++; goingUp = true } else { u--; v++ }
+                if (v ==
+                    WORKING_SIZE - 1
+                ) {
+                    u++
+                    goingUp = true
+                } else if (u == 0) {
+                    v++
+                    goingUp = true
+                } else {
+                    u--
+                    v++
+                }
             }
         }
         return order.toIntArray()

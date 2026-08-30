@@ -91,12 +91,7 @@ object TrimPlanner {
      * @param otherEdits true when the recipe also crops, rotates, straightens or adjusts.
      *   Any of those needs the pixels, so the keyframes stop mattering.
      */
-    fun plan(
-        trim: VideoTrim,
-        keyframesMs: List<Long>,
-        sourceDurationMs: Long,
-        otherEdits: Boolean = false,
-    ): Plan {
+    fun plan(trim: VideoTrim, keyframesMs: List<Long>, sourceDurationMs: Long, otherEdits: Boolean = false): Plan {
         if (otherEdits) return Plan.Reencode(trim)
         if (trim.isFull(sourceDurationMs)) return Plan.StreamCopy(trim)
         if (keyframesMs.isEmpty()) return Plan.Reencode(trim)

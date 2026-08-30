@@ -4,9 +4,9 @@ import android.database.sqlite.SQLiteDatabase
 import android.database.sqlite.SQLiteException
 import app.trimgallery.core.domain.places.MapTiles
 import app.trimgallery.core.domain.places.MbTiles
-import java.io.File
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
+import java.io.File
 
 /**
  * The user's own basemap pack, read from an `.mbtiles` file (BUILD.md § 9 v1.1).
@@ -23,12 +23,11 @@ import kotlinx.coroutines.withContext
  */
 class MbTilesFile private constructor(private val db: SQLiteDatabase) : MbTiles.Rows {
 
-    override suspend fun tileData(zoom: Int, column: Int, tmsRow: Int): ByteArray? =
-        withContext(Dispatchers.IO) {
-            db.rawQuery(TILE_SQL, arrayOf(zoom.toString(), column.toString(), tmsRow.toString())).use { cursor ->
-                if (cursor.moveToFirst()) cursor.getBlob(0) else null
-            }
+    override suspend fun tileData(zoom: Int, column: Int, tmsRow: Int): ByteArray? = withContext(Dispatchers.IO) {
+        db.rawQuery(TILE_SQL, arrayOf(zoom.toString(), column.toString(), tmsRow.toString())).use { cursor ->
+            if (cursor.moveToFirst()) cursor.getBlob(0) else null
         }
+    }
 
     override suspend fun metadata(): Map<String, String> = withContext(Dispatchers.IO) {
         buildMap {
@@ -75,14 +74,14 @@ class MbTilesFile private constructor(private val db: SQLiteDatabase) : MbTiles.
         suspend fun open(file: File): Result = withContext(Dispatchers.IO) {
             val db = try {
                 SQLiteDatabase.openDatabase(file.absolutePath, null, SQLiteDatabase.OPEN_READONLY)
-            } catch (e: SQLiteException) {
+            } catch (ignored: SQLiteException) {
                 return@withContext Result.Refused(MbTiles.Rejection.NOT_A_PACK)
             }
 
             val rows = MbTilesFile(db)
             val opened = try {
                 MbTiles.open(rows.metadata(), rows.tileCount())
-            } catch (e: SQLiteException) {
+            } catch (ignored: SQLiteException) {
                 db.close()
                 return@withContext Result.Refused(MbTiles.Rejection.NOT_A_PACK)
             }

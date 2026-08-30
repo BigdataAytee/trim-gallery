@@ -12,30 +12,27 @@ import kotlin.test.assertTrue
 
 class AutoAlbumsTest {
 
-    private fun item(
-        name: String = "IMG_0001.jpg",
-        kind: MediaKind = MediaKind.PHOTO,
-        hidden: Boolean = false,
-    ) = MediaItem(
-        id = "1",
-        platformRef = MediaRef("ref"),
-        name = name,
-        kind = kind,
-        codec = "jpeg",
-        width = 4032,
-        height = 3024,
-        fps = null,
-        bitrate = null,
-        size = 3_000_000,
-        duration = null,
-        takenAt = null,
-        location = null,
-        cameraModel = null,
-        phash = null,
-        sha256 = null,
-        mtime = 0,
-        flags = MediaFlags(hidden = hidden),
-    )
+    private fun item(name: String = "IMG_0001.jpg", kind: MediaKind = MediaKind.PHOTO, hidden: Boolean = false) =
+        MediaItem(
+            id = "1",
+            platformRef = MediaRef("ref"),
+            name = name,
+            kind = kind,
+            codec = "jpeg",
+            width = 4032,
+            height = 3024,
+            fps = null,
+            bitrate = null,
+            size = 3_000_000,
+            duration = null,
+            takenAt = null,
+            location = null,
+            cameraModel = null,
+            phash = null,
+            sha256 = null,
+            mtime = 0,
+            flags = MediaFlags(hidden = hidden),
+        )
 
     private fun label(text: String, confidence: Float = 0.9f) = Label("1", text, confidence)
 

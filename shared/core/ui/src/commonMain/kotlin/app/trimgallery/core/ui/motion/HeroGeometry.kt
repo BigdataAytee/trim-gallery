@@ -69,9 +69,8 @@ object HeroGeometry {
     )
 
     /** Corner radius part-way through the same journey. */
-    fun lerpRadius(fraction: Float): Float =
-        MotionSpec.Hero.TILE_RADIUS_DP +
-            (MotionSpec.Hero.HERO_RADIUS_DP - MotionSpec.Hero.TILE_RADIUS_DP) * fraction
+    fun lerpRadius(fraction: Float): Float = MotionSpec.Hero.TILE_RADIUS_DP +
+        (MotionSpec.Hero.HERO_RADIUS_DP - MotionSpec.Hero.TILE_RADIUS_DP) * fraction
 
     /**
      * How far a drag has dismissed the viewer, 0..1.

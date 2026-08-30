@@ -5,11 +5,11 @@ import android.media.MediaExtractor
 import android.media.MediaFormat
 import android.media.MediaMetadataRetriever
 import android.net.Uri
+import androidx.exifinterface.media.ExifInterface
 import app.trimgallery.core.model.MediaFlags
 import app.trimgallery.core.model.MediaRef
 import app.trimgallery.engine.ContainerFacts
 import app.trimgallery.engine.ContainerReader
-import androidx.exifinterface.media.ExifInterface
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 
@@ -126,13 +126,11 @@ class ContainerReaderAndroid(private val context: Context) : ContainerReader {
         )
     }
 
-    private fun isImage(uri: Uri): Boolean =
-        context.contentResolver.getType(uri)?.startsWith("image/") == true
+    private fun isImage(uri: Uri): Boolean = context.contentResolver.getType(uri)?.startsWith("image/") == true
 
     private fun MediaFormat.optInt(key: String): Int = if (containsKey(key)) getInteger(key) else 0
 
-    private fun MediaMetadataRetriever.long(key: Int): Long? =
-        extractMetadata(key)?.toLongOrNull()
+    private fun MediaMetadataRetriever.long(key: Int): Long? = extractMetadata(key)?.toLongOrNull()
 
     private companion object {
         /**

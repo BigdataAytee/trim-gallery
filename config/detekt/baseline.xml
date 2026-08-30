@@ -1,0 +1,61 @@
+<?xml version="1.0" ?>
+<!--
+  Detekt baseline — the 37 findings that existed when static analysis was first pointed at
+  the shared layer, and only those.
+
+  Every `:shared:*:detekt` task was NO-SOURCE until the hardening pass: detekt's default
+  source set is `src/main/kotlin`, which no Kotlin Multiplatform module has, so the analysis
+  had been configured since milestone 2 and had never looked at anything but the Android app.
+  Turning it on found 357 issues. The ones that pointed at a defect — a dead `bounds`
+  parameter threaded through both bisection paths, an unused `index` on the gallery tile, a
+  dead test fixture, a night failure discarded without trace — were fixed in the same change.
+  What is left is shape: five long `when` chains, a few functions with six parameters, a
+  repository with thirty methods. Refactoring working, tested code to satisfy a threshold is
+  churn with a risk attached, so it is recorded here instead.
+
+  What this file is for: everything NOT in it fails the build. A new complex method, a new
+  six-parameter function, a new swallowed exception — those stop CI. This list only shrinks.
+  Do not regenerate it to make a new finding go away; fix the finding, or argue the rule.
+-->
+<SmellBaseline>
+  <ManuallySuppressedIssues/>
+  <CurrentIssues>
+    <ID>CyclomaticComplexMethod:GuardChain.kt$GuardChain$fun evaluate(conditions: NightConditions, settings: Settings, tier: Tier): GuardResult</ID>
+    <ID>CyclomaticComplexMethod:PhotoOptimiseStep.kt$PhotoOptimiseStep$@Suppress("ReturnCount") suspend fun run(item: MediaItem, settings: Settings, undoLocation: UndoLocation): Result</ID>
+    <ID>CyclomaticComplexMethod:PhotoQualitySearch.kt$PhotoQualitySearch$suspend fun search(target: Double, scorer: Scorer): Outcome</ID>
+    <ID>CyclomaticComplexMethod:SkipList.kt$SkipList$fun explain(reason: SkipReason?): String</ID>
+    <ID>CyclomaticComplexMethod:SkipList.kt$SkipList$fun heading(reason: SkipReason?): String</ID>
+    <ID>DestructuringDeclarationWithTooManyEntries:MbTiles.kt$MbTiles$val (west, south, east, north) = parts.map { it!! }</ID>
+    <ID>FunctionOnlyReturningConstant:EditSave.kt$EditSave$fun isAllowed(@Suppress("UNUSED_PARAMETER") tier: Tier): Boolean</ID>
+    <ID>FunctionOnlyReturningConstant:Entitlements.kt$Entitlements$fun mayIndex(@Suppress("UNUSED_PARAMETER") tier: Tier): Boolean</ID>
+    <ID>FunctionOnlyReturningConstant:Entitlements.kt$Entitlements$fun mayRestore(): Boolean</ID>
+    <ID>LongMethod:VerifyPass.kt$VerifyPass$@Suppress("LongParameterList", "ReturnCount") suspend fun run( item: MediaItem, snapshot: Snapshot, chosen: Setting, undoLocation: UndoLocation, originalHasAudio: Boolean, target: QualityTarget = QualityTarget.STANDARD, careful: Boolean = false, encode: Encode, ): Result</ID>
+    <ID>LongParameterList:AndroidGuards.kt$AndroidGuards$( private val context: Context, private val facts: NightFacts, private val foreground: () -&gt; Boolean, private val workedMs: () -&gt; Long, private val chain: GuardChain = GuardChain(), private val clock: Clock = Clock.System, private val zone: () -&gt; TimeZone = { TimeZone.currentSystemDefault() }, )</ID>
+    <ID>LongParameterList:CompressNow.kt$CompressNow$( item: MediaItem, tier: Tier, usedToday: Int, expectedSaving: Long? = item.estSaving, realtimeMultiple: Double? = null, batteryNoteSeen: Boolean = false, )</ID>
+    <ID>LongParameterList:CropGeometry.kt$CropGeometry$( current: Rect, handle: Handle, dx: Double = 0.0, dy: Double = 0.0, lock: AspectLock = AspectLock.Free, sourceAspect: Double = 1.0, )</ID>
+    <ID>LongParameterList:Diagnostics.kt$Diagnostics$( device: Device, sessions: List&lt;RunSession&gt;, jobs: List&lt;Job&gt;, undo: List&lt;UndoEntry&gt; = emptyList(), generatedOn: String, itemOf: (Job) -&gt; MediaItem?, )</ID>
+    <ID>LongParameterList:Memories.kt$Memories$( items: List&lt;MediaItem&gt;, now: Instant, zone: TimeZone, mutes: MemoryMutes = MemoryMutes(), peopleOf: (MediaItem) -&gt; Set&lt;String&gt; = { emptySet() }, personName: (String) -&gt; String? = { null }, )</ID>
+    <ID>LongParameterList:SettingSearch.kt$SettingSearch$( threshold: Double, lowBps: Int, highBps: Int, best: Probe, probes: MutableList&lt;Probe&gt;, probe: suspend (Int) -&gt; Probe, )</ID>
+    <ID>LongParameterList:TrimRepository.kt$TrimRepository$( private val db: TrimDatabase, private val io: CoroutineDispatcher, private val newId: () -&gt; String, private val nowMs: () -&gt; Long, private val readSettings: suspend () -&gt; Settings, private val readTier: suspend () -&gt; Tier, /** The start of the current calendar month, for MONETIZATION.md's monthly cap. */ private val monthStartMs: () -&gt; Long, )</ID>
+    <ID>LoopWithTooManyJumpStatements:DuplicateFinder.kt$DuplicateFinder$for</ID>
+    <ID>LoopWithTooManyJumpStatements:PhotoQualitySearch.kt$PhotoQualitySearch$while</ID>
+    <ID>LoopWithTooManyJumpStatements:SafStorage.kt$SafStorage$while</ID>
+    <ID>MatchingDeclarationName:ViewerInfoSheet.kt$ViewerAction</ID>
+    <ID>MemberNameEqualsClassName:Trips.kt$Trips$fun trips(items: List&lt;MediaItem&gt;, home: GeoPoint? = home(items)): List&lt;Trip&gt;</ID>
+    <ID>NestedBlockDepth:MetadataCopierAndroid.kt$MetadataCopierAndroid$private fun copyContainer(source: Uri, target: File)</ID>
+    <ID>NestedBlockDepth:PerceptualHash.kt$PerceptualHash$private fun boxReduce(gray: ByteArray, width: Int, height: Int): DoubleArray</ID>
+    <ID>NestedBlockDepth:PredictorTest.kt$PredictorTest$@Test fun `the bracket is always usable, whatever the table holds`()</ID>
+    <ID>ReturnCount:CodecChoice.kt$CodecChoice$fun choose( item: MediaItem, caps: CodecCaps, settings: Settings, tier: Tier, av1Speed: MeasuredSpeed? = null, ): Choice</ID>
+    <ID>ReturnCount:GuardChain.kt$GuardChain$fun evaluate(conditions: NightConditions, settings: Settings, tier: Tier): GuardResult</ID>
+    <ID>ReturnCount:PlayToCompress.kt$PlayToCompress$@Suppress("CyclomaticComplexMethod") fun on(event: Event): Effect</ID>
+    <ID>ReturnCount:Trips.kt$Trips$fun home(items: List&lt;MediaItem&gt;): GeoPoint?</ID>
+    <ID>ReturnCount:Trips.kt$Trips$private fun toTrip(run: List&lt;MediaItem&gt;, home: GeoPoint): Trip?</ID>
+    <ID>ReturnCount:Verifier.kt$Verifier$suspend fun verify(request: Request): Outcome</ID>
+    <ID>ThrowsCount:OffloadMove.kt$OffloadMove$suspend fun move(source: MediaRef, destination: MediaRef): Outcome</ID>
+    <ID>TooManyFunctions:Memories.kt$Memories</ID>
+    <ID>TooManyFunctions:PlayToCompressTap.kt$PlayToCompressTap : Listener</ID>
+    <ID>TooManyFunctions:Triager.kt$Triager</ID>
+    <ID>TooManyFunctions:TrimRepository.kt$TrimRepository : UndoJournalOriginalLocatorNightFactsQueueCheckpointOnInterruptedSinkSink</ID>
+    <ID>TooManyFunctions:UndoBinAndroid.kt$UndoBinAndroid : UndoStore</ID>
+  </CurrentIssues>
+</SmellBaseline>

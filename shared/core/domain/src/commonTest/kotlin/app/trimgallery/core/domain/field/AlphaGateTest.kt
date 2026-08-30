@@ -32,8 +32,7 @@ class AlphaGateTest {
 
     private fun threeGood() = mapOf("a" to summary(), "b" to summary(), "c" to summary())
 
-    private fun criterion(result: AlphaGate.Result, name: String) =
-        result.criteria.single { it.name == name }
+    private fun criterion(result: AlphaGate.Result, name: String) = result.criteria.single { it.name == name }
 
     @Test
     fun `three healthy devices pass`() {

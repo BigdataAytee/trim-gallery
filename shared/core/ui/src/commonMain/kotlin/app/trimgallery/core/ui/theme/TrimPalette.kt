@@ -57,12 +57,12 @@ data class TrimPalette(
             card = 0xFF1E1E21,
             text = 0xFFF2F2F0,
             muted = 0xFF9A9A9F,
-            line = 0x14F2F2F0,          // text at 8%
-            accent = 0xFF7CE7C4,        // mint
+            line = 0x14F2F2F0, // text at 8%
+            accent = 0xFF7CE7C4, // mint
             accentOn = 0xFF062018,
             danger = 0xFFFF6B6B,
             warning = 0xFFFFC857,
-            scrim = 0x99000000,         // rgba(0,0,0,.6)
+            scrim = 0x99000000, // rgba(0,0,0,.6)
             glowAlpha = 0.40f,
         )
 
@@ -82,12 +82,12 @@ data class TrimPalette(
             accentOn = 0xFF062018,
             danger = 0xFFD63B3B,
             warning = 0xFFB8860B,
-            scrim = 0x66000000,         // rgba(0,0,0,.4)
+            scrim = 0x66000000, // rgba(0,0,0,.4)
             glowAlpha = 0.55f,
         )
 
         fun of(dark: Boolean): TrimPalette = if (dark) Dark else Light
 
-        private const val CHROME_ALPHA = 0xD9L   // 85%
+        private const val CHROME_ALPHA = 0xD9L // 85%
     }
 }

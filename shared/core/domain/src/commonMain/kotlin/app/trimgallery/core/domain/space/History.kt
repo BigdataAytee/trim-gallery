@@ -149,29 +149,28 @@ object History {
      * be true rather than reassuring — a file on a card the user has taken out is not
      * "ready to restore", and saying so up front is better than a failure afterwards.
      */
-    fun restoreExplanation(restorable: Restorable, formatDate: (Instant) -> String): String =
-        when (restorable) {
-            is Restorable.FromBin ->
-                if (restorable.expiresAt == null) {
-                    "The original is on this phone and will be kept until you empty the bin."
-                } else {
-                    "The original is on this phone until ${formatDate(restorable.expiresAt)}."
-                }
-            Restorable.FromExternal ->
-                "The original is on your external storage. Connect it to restore this file."
-            is Restorable.FromSystemBin ->
-                if (restorable.expiresAt == null) {
-                    "Your original is in Photos, under Recently Deleted. Restore it from there."
-                } else {
-                    "Your original is in Photos, under Recently Deleted, until " +
-                        "${formatDate(restorable.expiresAt)}. Restore it from there."
-                }
-            is Restorable.Expired ->
-                restorable.removedAt?.let { "The original was removed on ${formatDate(it)}." }
-                    ?: "The original has already been removed."
-            Restorable.AlreadyRestored -> "The original has been restored."
-            Restorable.NotApplicable -> "This file was not changed."
-        }
+    fun restoreExplanation(restorable: Restorable, formatDate: (Instant) -> String): String = when (restorable) {
+        is Restorable.FromBin ->
+            if (restorable.expiresAt == null) {
+                "The original is on this phone and will be kept until you empty the bin."
+            } else {
+                "The original is on this phone until ${formatDate(restorable.expiresAt)}."
+            }
+        Restorable.FromExternal ->
+            "The original is on your external storage. Connect it to restore this file."
+        is Restorable.FromSystemBin ->
+            if (restorable.expiresAt == null) {
+                "Your original is in Photos, under Recently Deleted. Restore it from there."
+            } else {
+                "Your original is in Photos, under Recently Deleted, until " +
+                    "${formatDate(restorable.expiresAt)}. Restore it from there."
+            }
+        is Restorable.Expired ->
+            restorable.removedAt?.let { "The original was removed on ${formatDate(it)}." }
+                ?: "The original has already been removed."
+        Restorable.AlreadyRestored -> "The original has been restored."
+        Restorable.NotApplicable -> "This file was not changed."
+    }
 
     /** The morning card's headline: what one night did. */
     fun freedIn(rows: List<Row>): Long = rows.sumOf { it.saved ?: 0 }

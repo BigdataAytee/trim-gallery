@@ -27,11 +27,7 @@ class ProbeAndSearch(
 ) {
 
     /** What the search decided, plus what it cost. */
-    data class Result(
-        val outcome: SettingSearch.Outcome,
-        val windowsDecoded: Int,
-        val probes: Int,
-    )
+    data class Result(val outcome: SettingSearch.Outcome, val windowsDecoded: Int, val probes: Int)
 
     /**
      * @param threshold the XPSNR value calibrated to VMAF 95 for this bucket.

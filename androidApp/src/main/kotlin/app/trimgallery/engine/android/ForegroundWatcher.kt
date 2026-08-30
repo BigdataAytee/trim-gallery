@@ -28,9 +28,13 @@ object ForegroundWatcher : Application.ActivityLifecycleCallbacks {
         application.registerActivityLifecycleCallbacks(this)
     }
 
-    override fun onActivityStarted(activity: Activity) { started += 1 }
+    override fun onActivityStarted(activity: Activity) {
+        started += 1
+    }
 
-    override fun onActivityStopped(activity: Activity) { started = (started - 1).coerceAtLeast(0) }
+    override fun onActivityStopped(activity: Activity) {
+        started = (started - 1).coerceAtLeast(0)
+    }
 
     override fun onActivityCreated(activity: Activity, savedInstanceState: Bundle?) = Unit
     override fun onActivityResumed(activity: Activity) = Unit

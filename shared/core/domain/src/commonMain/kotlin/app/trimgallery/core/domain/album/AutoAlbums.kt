@@ -28,7 +28,13 @@ object AutoAlbums {
 
     /** Folders every major chat app writes into (BUILD.md § 8, "Chat media review"). */
     private val CHAT_PATH_HINTS = listOf(
-        "/whatsapp/", "/telegram/", "/signal/", "/messenger/", "/viber/", "/wechat/", "/line/",
+        "/whatsapp/",
+        "/telegram/",
+        "/signal/",
+        "/messenger/",
+        "/viber/",
+        "/wechat/",
+        "/line/",
     )
 
     private val DOCUMENT_LABELS = setOf("document", "text", "paper", "receipt", "menu", "whiteboard", "book")

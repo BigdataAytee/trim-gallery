@@ -107,8 +107,7 @@ class AndroidGuards(
         return if (reading.isNaN()) lastRealHeadroom else reading
     }
 
-    private fun batteryLevel(): Int =
-        batteryManager.getIntProperty(BatteryManager.BATTERY_PROPERTY_CAPACITY)
+    private fun batteryLevel(): Int = batteryManager.getIntProperty(BatteryManager.BATTERY_PROPERTY_CAPACITY)
 
     /**
      * Free space on the volume the app's scratch directory lives on.

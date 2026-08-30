@@ -93,23 +93,28 @@ object DateSections {
             }
 
             GridZoom.MONTH ->
-                if (date.year == today.year) monthName(date.monthNumber)
-                else "${monthName(date.monthNumber)} ${date.year}"
+                if (date.year == today.year) {
+                    monthName(date.monthNumber)
+                } else {
+                    "${monthName(date.monthNumber)} ${date.year}"
+                }
 
             GridZoom.YEAR -> date.year.toString()
         }
     }
 
     /** A short label for the fast-scroll bar, where there is room for very little. */
-    fun scrubberLabel(date: LocalDate, today: LocalDate): String =
-        if (date == UNDATED) "—"
-        else if (date.year == today.year) monthName(date.monthNumber).take(SHORT_MONTH)
-        else date.year.toString()
+    fun scrubberLabel(date: LocalDate, today: LocalDate): String = if (date == UNDATED) {
+        "—"
+    } else if (date.year == today.year) {
+        monthName(date.monthNumber).take(SHORT_MONTH)
+    } else {
+        date.year.toString()
+    }
 
     private fun monthName(month: Int): String = MONTHS[(month - 1).coerceIn(0, MONTHS.lastIndex)]
 
-    private fun LocalDate.minusDaysSafe(days: Int): LocalDate =
-        LocalDate.fromEpochDays(toEpochDays() - days)
+    private fun LocalDate.minusDaysSafe(days: Int): LocalDate = LocalDate.fromEpochDays(toEpochDays() - days)
 
     private val MONTHS = listOf(
         "January", "February", "March", "April", "May", "June",

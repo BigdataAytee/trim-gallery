@@ -6,6 +6,7 @@ import android.app.NotificationManager
 import android.content.Context
 import android.content.pm.ServiceInfo
 import android.os.Build
+import android.util.Log
 import androidx.work.CoroutineWorker
 import androidx.work.ForegroundInfo
 import androidx.work.WorkerParameters
@@ -33,10 +34,9 @@ import org.koin.core.component.get
  * Everything the worker actually decides lives in `NightRun` and `GuardChain`, which are
  * shared and unit tested. This class supplies Android's answers and Android's plumbing.
  */
-class NightWorker(
-    context: Context,
-    params: WorkerParameters,
-) : CoroutineWorker(context, params), KoinComponent {
+class NightWorker(context: Context, params: WorkerParameters) :
+    CoroutineWorker(context, params),
+    KoinComponent {
 
     override suspend fun doWork(): Result {
         val facts: NightFacts = get()
@@ -87,6 +87,14 @@ class NightWorker(
             // session survive, and the next window picks up where this one stopped.
             throw e
         } catch (@Suppress("TooGenericExceptionCaught") e: Exception) {
+            // Broad on purpose: a night that dies must still hand WorkManager a verdict, and
+            // an unexpected exception here is exactly the case a narrow catch would miss.
+            //
+            // Logged rather than discarded. `run_session` has no column for a failure — the
+            // row records how the night *stopped*, not that it fell over — so until it does
+            // (PROJECT.md § Open questions) this line is the only trace of why a night
+            // produced nothing.
+            Log.w(TAG, "night pass failed; asking WorkManager to retry", e)
             Result.retry()
         }
     }
@@ -142,6 +150,7 @@ class NightWorker(
     }
 
     companion object {
+        private const val TAG = "NightWorker"
         const val CHANNEL_ID = "night-pass"
         const val NOTIFICATION_ID = 1001
     }

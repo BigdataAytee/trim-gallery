@@ -81,8 +81,7 @@ class ThermalGate(
      * Deliberately not applied to *entering* a pause: heat is a reason to stop immediately
      * and always. The floor only ever delays resumption, never protection.
      */
-    private fun settled(nowMs: Long): Boolean =
-        !isPaused || nowMs - pausedAtMs >= minimumPauseMs
+    private fun settled(nowMs: Long): Boolean = !isPaused || nowMs - pausedAtMs >= minimumPauseMs
 
     fun reset() {
         isPaused = false

@@ -16,10 +16,10 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
-import androidx.compose.runtime.mutableStateOf
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.graphicsLayer
@@ -106,7 +106,7 @@ fun HeroViewer(
                 .fillMaxSize()
                 .graphicsLayer { alpha = progress.value * (1f - dismissProgress) }
                 .background(colors.scrim)
-                .pointerInput(Unit) { detectTapGestures { scope.launch { dismiss() } } }
+                .pointerInput(Unit) { detectTapGestures { scope.launch { dismiss() } } },
         )
 
         val frame = HeroGeometry.lerp(tileBounds(), target, progress.value)
@@ -129,7 +129,9 @@ fun HeroViewer(
                     detectVerticalDragGestures(
                         onDragEnd = {
                             scope.launch {
-                                if (HeroGeometry.dismissProgress(dragDp, windowHeight) > HeroGeometry.DISMISS_THRESHOLD) {
+                                if (HeroGeometry.dismissProgress(dragDp, windowHeight) >
+                                    HeroGeometry.DISMISS_THRESHOLD
+                                ) {
                                     dismiss()
                                 } else {
                                     // Springs back into place rather than snapping.

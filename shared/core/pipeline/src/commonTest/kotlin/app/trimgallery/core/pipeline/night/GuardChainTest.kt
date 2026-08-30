@@ -237,7 +237,7 @@ class GuardChainTest {
         // A run can end while merely paused — the OS takes the window back — and what the
         // user is owed then is why it was standing down, not "cancelled".
         PauseReason.entries.forEach { reason ->
-            GuardChain.stopReasonFor(reason)   // total by construction; fails to compile otherwise
+            GuardChain.stopReasonFor(reason) // total by construction; fails to compile otherwise
         }
         assertEquals(StopReason.UNPLUGGED, GuardChain.stopReasonFor(PauseReason.NOT_CHARGING))
         assertEquals(StopReason.THERMAL, GuardChain.stopReasonFor(PauseReason.THERMAL))

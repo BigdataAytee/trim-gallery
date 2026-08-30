@@ -9,6 +9,7 @@ class TrimPaletteTest {
 
     private fun luminance(argb: Long): Double {
         fun channel(shift: Int) = ((argb shr shift) and 0xFF).toDouble() / 255.0
+
         // sRGB relative luminance, with the standard 2.4 gamma.
         fun g(c: Double) = if (c <= 0.03928) c / 12.92 else Math.pow((c + 0.055) / 1.055, 2.4)
         return 0.2126 * g(channel(16)) + 0.7152 * g(channel(8)) + 0.0722 * g(channel(0))

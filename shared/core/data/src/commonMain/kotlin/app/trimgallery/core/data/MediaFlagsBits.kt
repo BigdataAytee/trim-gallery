@@ -30,13 +30,12 @@ object MediaFlagsBits {
         hidden = bits and HIDDEN != 0L,
     )
 
-    fun encode(flags: MediaFlags): Long =
-        (if (flags.hdr) HDR else 0L) or
-            (if (flags.motionPhoto) MOTION_PHOTO else 0L) or
-            (if (flags.ultraHdr) ULTRA_HDR else 0L) or
-            (if (flags.livePhoto) LIVE_PHOTO else 0L) or
-            (if (flags.raw) RAW else 0L) or
-            (if (flags.inCloudOnly) IN_CLOUD_ONLY else 0L) or
-            (if (flags.favourite) FAVOURITE else 0L) or
-            (if (flags.hidden) HIDDEN else 0L)
+    fun encode(flags: MediaFlags): Long = (if (flags.hdr) HDR else 0L) or
+        (if (flags.motionPhoto) MOTION_PHOTO else 0L) or
+        (if (flags.ultraHdr) ULTRA_HDR else 0L) or
+        (if (flags.livePhoto) LIVE_PHOTO else 0L) or
+        (if (flags.raw) RAW else 0L) or
+        (if (flags.inCloudOnly) IN_CLOUD_ONLY else 0L) or
+        (if (flags.favourite) FAVOURITE else 0L) or
+        (if (flags.hidden) HIDDEN else 0L)
 }

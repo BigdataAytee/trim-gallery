@@ -10,11 +10,11 @@ import app.trimgallery.engine.QualityScorer
 import app.trimgallery.engine.TempFile
 import app.trimgallery.engine.YuvSource
 import app.trimgallery.engine.YuvWindow
+import kotlinx.coroutines.test.runTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertIs
 import kotlin.test.assertTrue
-import kotlinx.coroutines.test.runTest
 
 /**
  * BUILD.md rule 3: *"Never delete or replace an original until the replacement has been
@@ -46,8 +46,7 @@ class VerifierTest {
             return window(width)
         }
 
-        private fun window(width: Int) =
-            YuvWindow(width, 1080, 1, ByteArray(1), ByteArray(1), ByteArray(1))
+        private fun window(width: Int) = YuvWindow(width, 1080, 1, ByteArray(1), ByteArray(1), ByteArray(1))
     }
 
     /** Returns the scores in order, so a test can make one window bad. */

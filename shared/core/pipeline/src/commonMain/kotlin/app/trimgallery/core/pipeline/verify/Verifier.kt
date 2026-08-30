@@ -1,7 +1,7 @@
 package app.trimgallery.core.pipeline.verify
 
-import app.trimgallery.core.model.QualityTarget
 import app.trimgallery.core.model.MediaRef
+import app.trimgallery.core.model.QualityTarget
 import app.trimgallery.core.pipeline.Scaling
 import app.trimgallery.core.pipeline.WindowPlan
 import app.trimgallery.engine.OutputProbe
@@ -82,22 +82,14 @@ class Verifier(
         /**
          * Cleared every gate. [vmaf] is the worst window, not the mean.
          */
-        data class Passed(
-            val vmaf: Double,
-            val windows: List<WindowScore>,
-            val newSize: Long,
-            val durationMs: Long,
-        ) : Outcome
+        data class Passed(val vmaf: Double, val windows: List<WindowScore>, val newSize: Long, val durationMs: Long) :
+            Outcome
 
         /**
          * Below the quality target. The **only** retryable outcome: stepping up the
          * bitrate is what fixes this and nothing else (BUILD.md § 5, "max twice").
          */
-        data class BelowTarget(
-            val vmaf: Double,
-            val windows: List<WindowScore>,
-            val target: Int,
-        ) : Outcome
+        data class BelowTarget(val vmaf: Double, val windows: List<WindowScore>, val target: Int) : Outcome
 
         /**
          * The output is broken: it does not open, is truncated, or lost a track.
@@ -141,7 +133,7 @@ class Verifier(
         if (drift > config.durationToleranceMs) {
             return Outcome.Unplayable(
                 "output is ${opened.durationMs} ms against ${request.originalDurationMs} ms " +
-                    "(${drift} ms out, tolerance ${config.durationToleranceMs} ms)",
+                    "($drift ms out, tolerance ${config.durationToleranceMs} ms)",
             )
         }
 
@@ -165,8 +157,11 @@ class Verifier(
     /** Decodes each window from both files at the scoring size and scores the pair. */
     private suspend fun score(request: Request): List<WindowScore> {
         val windows =
-            if (request.careful) WindowPlan.fullFileWindows(request.originalDurationMs)
-            else WindowPlan.verifyWindows(request.originalDurationMs)
+            if (request.careful) {
+                WindowPlan.fullFileWindows(request.originalDurationMs)
+            } else {
+                WindowPlan.verifyWindows(request.originalDurationMs)
+            }
 
         val width = Scaling.widthFor(request.originalWidth, request.originalHeight, config.scoringHeight)
 

@@ -83,11 +83,7 @@ object ReplacePreflight {
     )
 
     /** What may be carried across, once the preflight has allowed the replacement. */
-    data class CarryOver(
-        val albumIds: List<String>,
-        val favourite: Boolean,
-        val hidden: Boolean,
-    )
+    data class CarryOver(val albumIds: List<String>, val favourite: Boolean, val hidden: Boolean)
 
     sealed interface Verdict {
         data class Proceed(val carry: CarryOver) : Verdict

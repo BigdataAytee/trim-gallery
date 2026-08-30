@@ -1,11 +1,11 @@
 package app.trimgallery.core.pipeline.night
 
-import kotlin.time.Duration.Companion.minutes
 import kotlinx.datetime.LocalTime
 import kotlinx.datetime.TimeZone
 import kotlinx.datetime.atDate
 import kotlinx.datetime.toInstant
 import kotlinx.datetime.toLocalDateTime
+import kotlin.time.Duration.Companion.minutes
 import kotlin.time.Instant
 
 /**
@@ -29,12 +29,7 @@ object AlarmWindow {
      * The earlier of the two bounds wins: they are both promises, and the stricter promise
      * is the one that has to hold.
      */
-    fun deadline(
-        now: Instant,
-        nextAlarm: Instant?,
-        stopBy: LocalTime?,
-        zone: TimeZone,
-    ): Instant? {
+    fun deadline(now: Instant, nextAlarm: Instant?, stopBy: LocalTime?, zone: TimeZone): Instant? {
         val alarmBound = alarmDeadline(now, nextAlarm)
         val stopByBound = stopBy?.let { nextOccurrence(now, it, zone) }
         return listOfNotNull(alarmBound, stopByBound).minOrNull()

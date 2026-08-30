@@ -30,7 +30,8 @@ import app.trimgallery.core.ui.theme.TrimTheme
  * The artwork is a slot rather than an image loader call: this module then depends on
  * neither Coil nor a platform decoder, the Android host supplies the real thumbnail
  * pipeline, and a test or preview can pass a solid colour. It also keeps
- * `shared/feature/*` honest about the one-way dependency flow in ARCHITECTURE.md § 2.
+ * every `shared/feature` module honest about the one-way dependency flow in
+ * ARCHITECTURE.md § 2.
  *
  * @param onBounds reports the tile's rectangle in window coordinates, which is where the
  *   shared-element transition to the viewer starts from.
@@ -38,7 +39,6 @@ import app.trimgallery.core.ui.theme.TrimTheme
 @Composable
 fun GalleryTile(
     item: MediaItem,
-    index: Int,
     processing: Boolean,
     onOpen: (MediaItem) -> Unit,
     onBounds: (Rect) -> Unit,
@@ -104,6 +104,6 @@ private const val CHIP_ALPHA = 0.85f
 
 /** Fills the tile with a flat colour. Used by previews and tests in place of a decoder. */
 @Composable
-fun PlaceholderArtwork(item: MediaItem) {
+fun PlaceholderArtwork(@Suppress("UNUSED_PARAMETER") item: MediaItem) {
     Box(Modifier.fillMaxSize().background(TrimTheme.colors.band))
 }

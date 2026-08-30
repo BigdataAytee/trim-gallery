@@ -16,13 +16,13 @@ import app.trimgallery.engine.PhotoCodec
 import app.trimgallery.engine.Source
 import app.trimgallery.engine.Stat
 import app.trimgallery.engine.TempFile
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.emptyFlow
+import kotlinx.coroutines.test.runTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
-import kotlinx.coroutines.flow.Flow
-import kotlinx.coroutines.flow.emptyFlow
-import kotlinx.coroutines.test.runTest
 
 class IndexStepTest {
 
@@ -106,14 +106,22 @@ class IndexStepTest {
         var sha: String? = null
         var markedIndexed = false
 
-        override suspend fun labels(item: MediaItem, labels: List<Label>) { this.labels += labels }
-        override suspend fun faces(item: MediaItem, faces: List<FaceEmbedding>) { this.faces += faces }
-        override suspend fun text(item: MediaItem, blocks: List<TextBlock>) { this.text += blocks }
+        override suspend fun labels(item: MediaItem, labels: List<Label>) {
+            this.labels += labels
+        }
+        override suspend fun faces(item: MediaItem, faces: List<FaceEmbedding>) {
+            this.faces += faces
+        }
+        override suspend fun text(item: MediaItem, blocks: List<TextBlock>) {
+            this.text += blocks
+        }
         override suspend fun hashes(item: MediaItem, phash: Long?, sha256: String?) {
             this.phash = phash
             this.sha = sha256
         }
-        override suspend fun indexed(item: MediaItem) { markedIndexed = true }
+        override suspend fun indexed(item: MediaItem) {
+            markedIndexed = true
+        }
     }
 
     private fun step(indexer: Indexer, sink: FakeSink, codec: PhotoCodec = FakeCodec()) =

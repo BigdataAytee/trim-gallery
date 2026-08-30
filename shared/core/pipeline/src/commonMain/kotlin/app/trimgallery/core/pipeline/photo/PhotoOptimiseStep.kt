@@ -53,11 +53,7 @@ class PhotoOptimiseStep(
     }
 
     @Suppress("ReturnCount")
-    suspend fun run(
-        item: MediaItem,
-        settings: Settings,
-        undoLocation: UndoLocation,
-    ): Result {
+    suspend fun run(item: MediaItem, settings: Settings, undoLocation: UndoLocation): Result {
         val route = when (val decision = PhotoRouting.decide(item, settings)) {
             is PhotoRouting.Decision.Skip -> return Result.Skipped(decision.reason, "routing")
             is PhotoRouting.Decision.Take -> decision.route
@@ -125,12 +121,7 @@ class PhotoOptimiseStep(
     }
 
     private sealed interface Encoded {
-        data class Success(
-            val bytes: ByteArray,
-            val ssim2: Double?,
-            val quality: Int?,
-            val probes: Int,
-        ) : Encoded
+        data class Success(val bytes: ByteArray, val ssim2: Double?, val quality: Int?, val probes: Int) : Encoded
 
         data class Failure(val result: Result) : Encoded
     }
@@ -209,15 +200,11 @@ class PhotoOptimiseStep(
         }
     }
 
-    private suspend fun encodeAt(
-        original: ByteArray,
-        reference: Image,
-        route: PhotoRoute,
-        quality: Int,
-    ): ByteArray = when (route) {
-        PhotoRoute.HEIC -> codec.heic(reference, quality)
-        else -> codec.jpegli(original, quality)
-    }
+    private suspend fun encodeAt(original: ByteArray, reference: Image, route: PhotoRoute, quality: Int): ByteArray =
+        when (route) {
+            PhotoRoute.HEIC -> codec.heic(reference, quality)
+            else -> codec.jpegli(original, quality)
+        }
 
     /**
      * Whether any pixel is less than fully opaque.

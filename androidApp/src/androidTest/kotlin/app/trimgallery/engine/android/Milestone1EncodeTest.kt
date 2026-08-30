@@ -16,8 +16,6 @@ import app.trimgallery.engine.EncodeSpec
 import app.trimgallery.engine.Setting
 import app.trimgallery.engine.TempFile
 import app.trimgallery.engine.VideoCodec
-import java.io.File
-import kotlin.math.abs
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.runBlocking
@@ -30,6 +28,8 @@ import org.junit.Assume.assumeTrue
 import org.junit.Before
 import org.junit.Test
 import org.junit.runner.RunWith
+import java.io.File
+import kotlin.math.abs
 
 /**
  * Milestone 1 (BUILD.md § 13.1): encode one video to HEVC with audio passthrough at
@@ -153,10 +153,9 @@ class Milestone1EncodeTest {
         }
     }
 
-    private fun durationUs(file: File): Long =
-        trackFormats(file)
-            .filter { it.containsKey(MediaFormat.KEY_DURATION) }
-            .maxOf { it.getLong(MediaFormat.KEY_DURATION) }
+    private fun durationUs(file: File): Long = trackFormats(file)
+        .filter { it.containsKey(MediaFormat.KEY_DURATION) }
+        .maxOf { it.getLong(MediaFormat.KEY_DURATION) }
 
     private companion object {
         const val GOLDEN = "golden-h264-640x360-3s.mp4"

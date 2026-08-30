@@ -44,10 +44,7 @@ object EditRender {
          * the editor can offer "start 180 ms earlier and this is instant" rather than
          * silently spending the battery.
          */
-        data class Reencode(
-            val trim: VideoTrim? = null,
-            val losslessAlternative: VideoTrim? = null,
-        ) : Plan
+        data class Reencode(val trim: VideoTrim? = null, val losslessAlternative: VideoTrim? = null) : Plan
     }
 
     /**

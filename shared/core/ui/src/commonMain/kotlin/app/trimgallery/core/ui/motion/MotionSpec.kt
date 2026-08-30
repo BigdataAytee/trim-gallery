@@ -22,15 +22,16 @@ import app.trimgallery.core.ui.theme.TrimSpring
  */
 object MotionSpec {
 
-
     /** A cubic-Bézier easing curve. */
     data class Easing(val x1: Float, val y1: Float, val x2: Float, val y2: Float)
 
     /** Tiles fade, rise and settle as they scroll into view. */
     object Arrival {
         const val DURATION_MS = 600
+
         /** Each tile in a row group starts this much after the one before it. */
         const val STAGGER_MS = 70
+
         /** Stagger restarts every N tiles, so a long grid never accumulates delay. */
         const val STAGGER_GROUP = 6
         const val FROM_TRANSLATION_Y_DP = 18f
@@ -50,12 +51,15 @@ object MotionSpec {
      */
     object Breathing {
         const val PERIOD_MS = 4600
+
         /** DESIGN_SYSTEM.md, `progress-ring`: 2-px stroke in the accent, at 60 fps. */
         const val RING_DP = 2f
         const val HALO_DP = 30f
         const val HALO_SPREAD_DP = 6f
+
         /** Peak brightness multiplier at the middle of the cycle. */
         const val PEAK_BRIGHTNESS = 1.05f
+
         /** Reduced motion gets a static ring of this width instead of a pulse. */
         const val STATIC_RING_DP = 1.5f
         const val STATIC_RING_ALPHA = 0.4f
@@ -72,9 +76,11 @@ object MotionSpec {
      */
     object Hero {
         val SPRING = TrimSpring.STANDARD
+
         /** Thumbnail radius, opening out to a full-bleed square corner. */
         const val TILE_RADIUS_DP = TrimShape.THUMBNAIL_DP
         const val HERO_RADIUS_DP = 0f
+
         /** Reduce-motion fallback, and the window Macrobenchmark measures. */
         const val OPEN_MS = ReducedMotion.DURATION_MS
         const val CLOSE_MS = ReducedMotion.DURATION_MS
@@ -105,6 +111,7 @@ object MotionSpec {
     /** The morning card (DESIGN_SYSTEM.md, `result-card`). */
     object ResultCard {
         val SPRING = TrimSpring.GENTLE
+
         /** "Freed 6.2 GB" counts up. Decoration, so reduce-motion drops it entirely. */
         const val COUNT_UP_MS = 800
     }
@@ -126,6 +133,7 @@ object MotionSpec {
     /** The info sheet that follows the image up. */
     object Sheet {
         const val DURATION_MS = 450
+
         /** Starts after the zoom has visibly begun, so the image leads. */
         const val DELAY_MS = 120
         val EASING = Easing(0.2f, 0.8f, 0.2f, 1f)

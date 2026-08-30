@@ -8,19 +8,19 @@ import app.trimgallery.core.model.MediaRef
 import app.trimgallery.core.model.MediaStatus
 import app.trimgallery.core.model.SkipReason
 import app.trimgallery.engine.CodecCaps
-import app.trimgallery.engine.EncoderCaps
 import app.trimgallery.engine.ContainerFacts
 import app.trimgallery.engine.ContainerReader
+import app.trimgallery.engine.EncoderCaps
 import app.trimgallery.engine.LibraryStorage
 import app.trimgallery.engine.Source
 import app.trimgallery.engine.Stat
 import app.trimgallery.engine.TempFile
-import kotlin.test.Test
-import kotlin.test.assertEquals
-import kotlin.test.assertTrue
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.asFlow
 import kotlinx.coroutines.test.runTest
+import kotlin.test.Test
+import kotlin.test.assertEquals
+import kotlin.test.assertTrue
 
 class TriageStepTest {
 
@@ -84,9 +84,15 @@ class TriageStepTest {
         val savings = mutableMapOf<String, Long?>()
 
         override suspend fun stored(grants: List<FolderGrant>): List<MediaItem> = rows
-        override suspend fun insert(item: MediaItem) { inserted += item }
-        override suspend fun update(item: MediaItem) { updated += item }
-        override suspend fun remove(item: MediaItem) { removed += item }
+        override suspend fun insert(item: MediaItem) {
+            inserted += item
+        }
+        override suspend fun update(item: MediaItem) {
+            updated += item
+        }
+        override suspend fun remove(item: MediaItem) {
+            removed += item
+        }
         override suspend fun recordVerdict(
             item: MediaItem,
             status: MediaStatus,
@@ -101,7 +107,9 @@ class TriageStepTest {
     @Test
     fun `a new file is inserted and triaged`() = runTest {
         val sink = FakeSink(rows = emptyList())
-        val report = TriageStep(FakeStorage(listOf(video("a"))), FakeContainers(), sink, nowMs = { 1L }).run(listOf(grant))
+        val report = TriageStep(FakeStorage(listOf(video("a"))), FakeContainers(), sink, nowMs = {
+            1L
+        }).run(listOf(grant))
 
         assertEquals(listOf("a"), sink.inserted.map { it.id })
         assertEquals(listOf(Triple<String, MediaStatus, SkipReason?>("a", MediaStatus.CANDIDATE, null)), sink.verdicts)
@@ -254,7 +262,9 @@ class TriageStepTest {
         // BUILD.md § 5: metadata only, no decode. FakeStorage throws from openRead and
         // tempFile, so this passing is the assertion.
         val sink = FakeSink(rows = emptyList())
-        TriageStep(FakeStorage(listOf(video("a"), video("b"))), FakeContainers(), sink, nowMs = { 1L }).run(listOf(grant))
+        TriageStep(FakeStorage(listOf(video("a"), video("b"))), FakeContainers(), sink, nowMs = {
+            1L
+        }).run(listOf(grant))
         assertEquals(2, sink.verdicts.size)
     }
 }

@@ -154,12 +154,7 @@ object EditSave {
      *   original bytes, so the file is exactly as un-optimised as it was, and marking it
      *   would cost the user the saving the night pass would have found.
      */
-    fun afterSaveOver(
-        item: MediaItem,
-        plan: EditRender.Plan,
-        newSize: Long,
-        nowMs: Long,
-    ): MediaItem = item.copy(
+    fun afterSaveOver(item: MediaItem, plan: EditRender.Plan, newSize: Long, nowMs: Long): MediaItem = item.copy(
         size = newSize,
         mtime = nowMs,
         status = MediaStatus.NEW,

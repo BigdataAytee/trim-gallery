@@ -116,13 +116,12 @@ object Memories {
      * The locked folder is excluded structurally rather than by mute: hidden items are out
      * of every other view already, and a memory is a view.
      */
-    fun eligible(items: List<MediaItem>, mutes: MemoryMutes, zone: TimeZone): List<MediaItem> =
-        items.asSequence()
-            .filterNot { it.hidden }
-            .filter { it.takenAt != null }
-            .filterNot { item -> item.takenAt!!.toLocalDateTime(zone).date in mutes.dates }
-            .filterNot { item -> item.location?.let { muted(it, mutes) } == true }
-            .toList()
+    fun eligible(items: List<MediaItem>, mutes: MemoryMutes, zone: TimeZone): List<MediaItem> = items.asSequence()
+        .filterNot { it.hidden }
+        .filter { it.takenAt != null }
+        .filterNot { item -> item.takenAt!!.toLocalDateTime(zone).date in mutes.dates }
+        .filterNot { item -> item.location?.let { muted(it, mutes) } == true }
+        .toList()
 
     private fun muted(point: GeoPoint, mutes: MemoryMutes): Boolean =
         mutes.places.any { Geo.distanceMeters(it.center, point) <= it.radiusMeters }
@@ -198,25 +197,24 @@ object Memories {
         return kotlin.math.abs(date.dayOfYear - today.dayOfYear) <= ON_THIS_DAY_WINDOW_DAYS
     }
 
-    fun tripMemories(items: List<MediaItem>): List<Memory> =
-        Trips.trips(items).mapNotNull { trip ->
-            val chosen = select(trip.items)
-            if (chosen.size < MIN_ITEMS) {
-                null
-            } else {
-                Memory(
-                    kind = Kind.TRIP,
-                    // No place name: there is no geocoder, and "Barcelona" would be a guess.
-                    title = if (trip.days <= 1) "A day away" else "${trip.days} days away",
-                    subtitle = Trips.describeDistance(trip.distanceFromHomeMeters),
-                    items = chosen,
-                    cover = trip.cover ?: coverOf(chosen),
-                    start = trip.start,
-                    end = trip.end,
-                    center = trip.center,
-                )
-            }
+    fun tripMemories(items: List<MediaItem>): List<Memory> = Trips.trips(items).mapNotNull { trip ->
+        val chosen = select(trip.items)
+        if (chosen.size < MIN_ITEMS) {
+            null
+        } else {
+            Memory(
+                kind = Kind.TRIP,
+                // No place name: there is no geocoder, and "Barcelona" would be a guess.
+                title = if (trip.days <= 1) "A day away" else "${trip.days} days away",
+                subtitle = Trips.describeDistance(trip.distanceFromHomeMeters),
+                items = chosen,
+                cover = trip.cover ?: coverOf(chosen),
+                start = trip.start,
+                end = trip.end,
+                center = trip.center,
+            )
         }
+    }
 
     private fun personMemories(
         items: List<MediaItem>,
@@ -291,9 +289,11 @@ object Memories {
 
         for (item in ordered) {
             val hash = item.phash
-            val duplicate = hash != null && !item.favourite && kept.any { other ->
-                other.phash?.let { PerceptualDistance.near(it, hash) } == true
-            }
+            val duplicate = hash != null &&
+                !item.favourite &&
+                kept.any { other ->
+                    other.phash?.let { PerceptualDistance.near(it, hash) } == true
+                }
             if (!duplicate) kept += item
         }
 
@@ -357,6 +357,5 @@ object Memories {
 internal object PerceptualDistance {
     const val SAME_MOMENT = 6
 
-    fun near(a: Long, b: Long, threshold: Int = SAME_MOMENT): Boolean =
-        (a xor b).countOneBits() <= threshold
+    fun near(a: Long, b: Long, threshold: Int = SAME_MOMENT): Boolean = (a xor b).countOneBits() <= threshold
 }

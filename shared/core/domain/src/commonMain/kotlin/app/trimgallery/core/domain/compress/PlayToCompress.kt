@@ -198,7 +198,10 @@ class PlayToCompress(private val source: Source) {
 
         return when (current) {
             is State.Armed -> when (event) {
-                Event.Play -> { state = State.Recording(frames = 0, lastPtsUs = -1); Effect.START }
+                Event.Play -> {
+                    state = State.Recording(frames = 0, lastPtsUs = -1)
+                    Effect.START
+                }
                 // A frame before Play is the player's first-frame preview. It is not part of
                 // a tap that has not started.
                 else -> Effect.NONE
@@ -207,13 +210,19 @@ class PlayToCompress(private val source: Source) {
             is State.Recording -> when (event) {
                 is Event.Frame -> accept(current, event.ptsUs)
                 is Event.SeekTo -> seek(current, event.ptsUs)
-                Event.Pause -> { state = State.Held(current.frames, current.lastPtsUs); Effect.HOLD }
+                Event.Pause -> {
+                    state = State.Held(current.frames, current.lastPtsUs)
+                    Effect.HOLD
+                }
                 Event.EndOfStream -> end(current.frames, current.lastPtsUs)
                 else -> Effect.NONE
             }
 
             is State.Held -> when (event) {
-                Event.Play -> { state = State.Recording(current.frames, current.lastPtsUs); Effect.RESUME }
+                Event.Play -> {
+                    state = State.Recording(current.frames, current.lastPtsUs)
+                    Effect.RESUME
+                }
                 Event.HoldTimeout -> abandon(Reason.HELD_TOO_LONG)
                 // Players re-render the current frame while paused. Re-delivering a frame we
                 // already have is harmless and ignored; a *new* one means frames are being
@@ -249,7 +258,7 @@ class PlayToCompress(private val source: Source) {
 
         val gap = ptsUs - current.lastPtsUs
         return when {
-            gap == 0L -> Effect.NONE                       // the same frame delivered twice
+            gap == 0L -> Effect.NONE // the same frame delivered twice
             gap < 0L -> abandon(Reason.SEEKED_BACK)
             gap > gapToleranceUs() -> abandon(Reason.SKIPPED_FORWARD)
             else -> {

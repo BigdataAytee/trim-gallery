@@ -12,13 +12,13 @@ import app.trimgallery.engine.LibraryStorage
 import app.trimgallery.engine.Source
 import app.trimgallery.engine.Stat
 import app.trimgallery.engine.TempFile
-import java.io.File
-import java.io.InputStream
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.withContext
+import java.io.File
+import java.io.InputStream
 
 /**
  * Read-only access to the granted folders, plus the app's own scratch space.

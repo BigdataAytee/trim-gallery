@@ -5,9 +5,9 @@ import android.media.MediaFormat
 import app.trimgallery.engine.OutputProbe
 import app.trimgallery.engine.ProbedOutput
 import app.trimgallery.engine.TempFile
-import java.io.File
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
+import java.io.File
 
 /**
  * Re-opens a finished encode the way a player would.
@@ -58,7 +58,7 @@ class OutputProbeAndroid : OutputProbe {
                 hasAudio = hasAudio,
                 sizeBytes = path.length(),
             )
-        } catch (@Suppress("SwallowedException") e: Exception) {
+        } catch (@Suppress("SwallowedException", "TooGenericExceptionCaught") e: Exception) {
             // Any failure to parse is the answer: this file does not open.
             null
         } finally {
@@ -66,5 +66,7 @@ class OutputProbeAndroid : OutputProbe {
         }
     }
 
-    private companion object { const val MICROS_PER_MS = 1_000L }
+    private companion object {
+        const val MICROS_PER_MS = 1_000L
+    }
 }

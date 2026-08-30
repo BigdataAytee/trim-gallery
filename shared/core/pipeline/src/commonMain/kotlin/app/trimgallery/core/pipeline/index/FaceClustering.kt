@@ -52,11 +52,7 @@ object FaceClustering {
     const val MIN_CLUSTER_SIZE = 3
 
     /** One face, with the quality the detector reported. */
-    data class Face(
-        val id: String,
-        val embedding: FaceEmbedding,
-        val quality: Float = 1f,
-    )
+    data class Face(val id: String, val embedding: FaceEmbedding, val quality: Float = 1f)
 
     /**
      * A group of faces believed to be one person.
@@ -65,10 +61,7 @@ object FaceClustering {
      * against: comparing against the first member instead would let a cluster drift with
      * whichever face happened to arrive first.
      */
-    data class Cluster(
-        val faces: List<Face>,
-        val centroid: FloatArray,
-    ) {
+    data class Cluster(val faces: List<Face>, val centroid: FloatArray) {
         val size: Int get() = faces.size
 
         override fun equals(other: Any?): Boolean =
@@ -104,11 +97,7 @@ object FaceClustering {
      * the clusters, so by the time an ambiguous one is considered there is a well-defined
      * centroid to compare it against.
      */
-    fun cluster(
-        faces: List<Face>,
-        threshold: Double = SAME_PERSON,
-        minClusterSize: Int = MIN_CLUSTER_SIZE,
-    ): Result {
+    fun cluster(faces: List<Face>, threshold: Double = SAME_PERSON, minClusterSize: Int = MIN_CLUSTER_SIZE): Result {
         val ordered = faces.sortedWith(compareByDescending<Face> { it.quality }.thenBy { it.id })
         val clusters = mutableListOf<MutableList<Face>>()
         val centroids = mutableListOf<FloatArray>()

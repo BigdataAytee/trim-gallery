@@ -16,14 +16,14 @@ import app.trimgallery.engine.Source
 import app.trimgallery.engine.Stat
 import app.trimgallery.engine.TempFile
 import app.trimgallery.engine.UndoStore
-import kotlin.test.Test
-import kotlin.test.assertEquals
-import kotlin.test.assertIs
-import kotlin.test.assertTrue
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.emptyFlow
 import kotlinx.coroutines.test.runTest
+import kotlin.test.Test
+import kotlin.test.assertEquals
+import kotlin.test.assertIs
+import kotlin.test.assertTrue
 
 /**
  * ARCHITECTURE.md § 14 asks for exactly this: *"Replacer plan/rollback with fake
@@ -67,7 +67,9 @@ class ReplaceSequenceTest {
         override suspend fun openRead(ref: MediaRef): Source = error("originals are read-only, not opened here")
         override suspend fun tempFile(): TempFile = TempFile("/data/app/tmp/x")
         override suspend fun writeTemp(bytes: ByteArray): TempFile = TempFile("/data/app/tmp/x")
-        override suspend fun discard(file: TempFile) { world.tempDiscarded = true }
+        override suspend fun discard(file: TempFile) {
+            world.tempDiscarded = true
+        }
     }
 
     private class FakeMetadata(private val world: World, private val fail: Boolean = false) : MetadataCopier {
@@ -151,7 +153,9 @@ class ReplaceSequenceTest {
             return stored
         }
 
-        override suspend fun forget(entry: UndoEntry) { world.undoRow = null }
+        override suspend fun forget(entry: UndoEntry) {
+            world.undoRow = null
+        }
 
         override suspend fun expiring(nowEpochMs: Long): List<UndoEntry> = listOfNotNull(world.undoRow)
 
@@ -374,7 +378,9 @@ class ReplaceSequenceTest {
                 world.calls += "commit"
                 throw CancellationException("unplugged")
             }
-            override suspend fun uncommit(committed: Committed) { world.calls += "uncommit" }
+            override suspend fun uncommit(committed: Committed) {
+                world.calls += "uncommit"
+            }
             override suspend fun restoreTimestamps(committed: Committed, mtime: Long) = Unit
             override suspend fun notifyLibrary(committed: Committed) = Unit
             override suspend fun saveCopy(plan: NewCopyPlan): NewCopyResult =
@@ -384,7 +390,7 @@ class ReplaceSequenceTest {
         var thrown = false
         try {
             sequence(world, ops = ops).replace(plan)
-        } catch (e: CancellationException) {
+        } catch (expected: CancellationException) {
             thrown = true
         }
 

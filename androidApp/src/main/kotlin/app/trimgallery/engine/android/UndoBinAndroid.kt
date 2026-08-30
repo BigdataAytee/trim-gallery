@@ -14,12 +14,12 @@ import app.trimgallery.core.pipeline.replace.OffloadMove
 import app.trimgallery.core.pipeline.replace.OriginalLocator
 import app.trimgallery.core.pipeline.replace.UndoJournal
 import app.trimgallery.engine.UndoStore
-import java.io.File
-import kotlin.time.Clock
-import kotlin.time.Instant
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.withContext
+import java.io.File
+import kotlin.time.Clock
+import kotlin.time.Instant
 
 /**
  * Where an original goes when its replacement is committed, and how it comes back.
@@ -160,7 +160,7 @@ class UndoBinAndroid(
                 }
             }
             check(sizeOf(staged) == expected) { "the restored copy is short; leaving the parked original alone" }
-        } catch (e: Exception) {
+        } catch (@Suppress("TooGenericExceptionCaught") e: Exception) {
             runCatching { DocumentsContract.deleteDocument(resolver, staged) }
             throw e
         }
@@ -207,9 +207,11 @@ class UndoBinAndroid(
         }
     }
 
-    private fun openParked(uri: Uri) =
-        if (uri.scheme == "file") File(requireNotNull(uri.path)).inputStream()
-        else requireNotNull(resolver.openInputStream(uri)) { "could not read the parked original" }
+    private fun openParked(uri: Uri) = if (uri.scheme == "file") {
+        File(requireNotNull(uri.path)).inputStream()
+    } else {
+        requireNotNull(resolver.openInputStream(uri)) { "could not read the parked original" }
+    }
 
     private fun lengthOfParked(uri: Uri): Long =
         if (uri.scheme == "file") File(requireNotNull(uri.path)).length() else sizeOf(uri)
@@ -237,10 +239,9 @@ class UndoBinAndroid(
             if (it.moveToFirst() && !it.isNull(0)) it.getLong(0) else -1L
         } ?: -1L
 
-    private fun column(uri: Uri, name: String): String? =
-        resolver.query(uri, arrayOf(name), null, null, null)?.use {
-            if (it.moveToFirst() && !it.isNull(0)) it.getString(0) else null
-        }
+    private fun column(uri: Uri, name: String): String? = resolver.query(uri, arrayOf(name), null, null, null)?.use {
+        if (it.moveToFirst() && !it.isNull(0)) it.getString(0) else null
+    }
 
     /** Granted tree → app-private bin. */
     private inner class BinOps(private val target: File) : OffloadMove.Ops {
@@ -256,7 +257,9 @@ class UndoBinAndroid(
             return expected > 0 && target.length() == expected
         }
 
-        override suspend fun removeCopy(copy: MediaRef) { target.delete() }
+        override suspend fun removeCopy(copy: MediaRef) {
+            target.delete()
+        }
 
         override suspend fun removeSource(source: MediaRef) {
             DocumentsContract.deleteDocument(resolver, Uri.parse(source.value))

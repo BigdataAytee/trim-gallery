@@ -33,6 +33,7 @@ object LockedFolderGate {
         data object Succeeded : Event
         data class Failed(val message: String) : Event
         data object Cancelled : Event
+
         /** The app went to the background. */
         data object Backgrounded : Event
         data object Tick : Event
@@ -72,8 +73,7 @@ object LockedFolderGate {
         Event.Tick -> if (state is State.Unlocked && isExpired(state, now)) State.Locked else state
     }
 
-    fun isUnlocked(state: State, now: Instant): Boolean =
-        state is State.Unlocked && !isExpired(state, now)
+    fun isUnlocked(state: State, now: Instant): Boolean = state is State.Unlocked && !isExpired(state, now)
 
     private fun isExpired(state: State.Unlocked, now: Instant): Boolean = state.until <= now
 }

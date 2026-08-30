@@ -1,8 +1,8 @@
 package app.trimgallery.core.domain.trash
 
 import app.trimgallery.core.model.FolderMode
-import app.trimgallery.core.model.MediaRef
 import app.trimgallery.core.model.JobState
+import app.trimgallery.core.model.MediaRef
 import app.trimgallery.core.model.UndoEntry
 import app.trimgallery.core.model.UndoLocation
 import app.trimgallery.core.model.UndoState
