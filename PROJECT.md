@@ -1540,6 +1540,31 @@ With the target collision gone, `configureCMakeDebug[arm64-v8a]` passed and
   read what the system actually recorded about that object rather than reasoning forward
   from the configuration.
 
+- **x86_64 is opt-in, not part of the smoke variant.** Both `pixelSmokeAndroidTest` and
+  `connectedSmokeAndroidTest` build the same `smoke` build type, so an unconditional second
+  ABI made every physical-device run cross-compile libjxl, jpegli, libvmaf and oxipng twice
+  — the second time for an architecture that phone cannot execute. It now sits behind
+  `-Ptrimgallery.smoke.x86_64=true`, set by the CI emulator job and nowhere else. The
+  configuration-time assertion follows the same rule: arm64-v8a is required always, because
+  it is what ships and a smoke run without it is not testing the real artefact; x86_64 is
+  required only when the property asked for it, since asserting it unconditionally would
+  fail exactly the physical run this change exists to keep cheap.
+
+- **`const val` at the top of a `.kts` file is a configuration-time failure.** A Kotlin
+  script's top level is the body of an implicit class, so `const` is rejected there —
+  `Const 'val' are only allowed on top level, in named objects, or in companion objects`.
+  Because it fails script *compilation*, every job in the workflow goes red, including the
+  ones that touch nothing Android and the separate review workflow. A plain `val` is
+  correct.
+
+  The reason it reached CI is worth more than the fix: **nothing local compiles
+  `androidApp/build.gradle.kts`.** That script needs AGP, which lives on Google Maven, which
+  this environment's egress policy refuses — so the local harness stages build scripts for
+  *ktlint*, which parses them but does not type-check or compile them. A syntactically valid
+  script with a semantic error passes every check available here and fails everything in CI.
+  That is the third configuration-time fault to reach CI this way, after the ABI split and
+  the eager `tasks.named`, and the pattern is identical each time: an error in the build's
+  own configuration is invisible to a harness that only runs the build's *tasks*.
 ## AGP 9 / Compose 1.12 upgrade
 
 - **The whole version set had to move in one commit.** androidx.compose 1.12.0 declares
@@ -1756,8 +1781,9 @@ hardware there would be requiring the impossible. The smoke job's remit is there
 install, launch, and this capability report; the encode is a device test.
 
 *Procedure:* on each of the three field-test device classes, run
-`./gradlew :androidApp:connectedSmokeAndroidTest` with the device attached and confirm the
-encode test runs rather than skips, produces HEVC video with the audio track transmuxed
+`./gradlew :androidApp:connectedSmokeAndroidTest` with the device attached — arm64-v8a
+only, because the second ABI is behind `-Ptrimgallery.smoke.x86_64` which only the CI
+emulator job sets — and confirm the encode test runs rather than skips, produces HEVC video with the audio track transmuxed
 rather than re-encoded, and plays back at full duration. Record the device, chip and the
 `reportsCodecCapabilities` log line for each. A skip on physical hardware means the device
 genuinely has no hardware HEVC encoder, which is itself a finding worth recording against
