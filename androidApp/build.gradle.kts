@@ -16,8 +16,11 @@ import com.android.build.api.artifact.SingleArtifact
 val smokeX86Property = "trimgallery.smoke.x86_64"
 
 plugins {
+    // No `kotlin.android` here: AGP 9 has built-in Kotlin support and *rejects* the
+    // `org.jetbrains.kotlin.android` plugin outright ("no longer required for Kotlin
+    // support since AGP 9.0"). The Kotlin version still comes from the `kotlin` line in
+    // the catalogue, via the compiler AGP pulls in.
     alias(libs.plugins.android.application)
-    alias(libs.plugins.kotlin.android)
     alias(libs.plugins.kotlin.compose)
     alias(libs.plugins.compose.multiplatform)
 }
@@ -41,7 +44,10 @@ android {
         // set"), and it rejects it during configuration, so the conflict failed every job
         // in the build — including the ones that never touch Android. Splits exist to
         // produce one APK per ABI; with a single ABI there is nothing to split, and
-        // `abiFilters` is what every library module in this project already uses.
+        // `abiFilters` is the app module's own ABI declaration. The shared library
+        // modules no longer carry one: AGP 9's KMP library plugin has no `ndk` block.
+        // They ship no native code, so the ABI set is decided here and verified by the
+        // afterEvaluate assertion below and by tools/check-apk-libraries.sh.
         ndk { abiFilters += "arm64-v8a" }
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
@@ -200,7 +206,7 @@ dependencies {
     // is what dragged in 1.12.0 — which `checkDebugAarMetadata` rejected against AGP 8.13
     // with 29 issues. Every other module in this project already takes `compose.*` from the
     // plugin; this one is now the same, and there is one Compose version in the build.
-    implementation(compose.ui)
+    implementation(libs.compose.ui)
     implementation(libs.androidx.activity.compose)
     implementation(libs.androidx.lifecycle.runtime.compose)
 
@@ -237,7 +243,7 @@ dependencies {
     implementation(libs.coil.compose)
     implementation(libs.coil.video)
 
-    debugImplementation(compose.uiTooling)
+    debugImplementation(libs.compose.ui.tooling)
 
     testImplementation(libs.junit)
     testImplementation(libs.kotlinx.coroutines.test)

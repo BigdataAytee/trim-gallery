@@ -1565,6 +1565,119 @@ With the target collision gone, `configureCMakeDebug[arm64-v8a]` passed and
   That is the third configuration-time fault to reach CI this way, after the ABI split and
   the eager `tasks.named`, and the pattern is identical each time: an error in the build's
   own configuration is invisible to a harness that only runs the build's *tasks*.
+## AGP 9 / Compose 1.12 upgrade
+
+- **The whole version set had to move in one commit.** androidx.compose 1.12.0 declares
+  `minAgpVersion=9.1.0` and `minCompileSdk=37` in its AAR metadata, so Compose Multiplatform
+  1.12.0 cannot land without AGP 9.1, Gradle 9, compileSdk 37 and — because it was held only
+  by compileSdk 36 — coil 3.6.0. Splitting them would just fail `checkDebugAarMetadata` one
+  dependency at a time. The lifecycle pair moved too: `org.jetbrains.androidx.lifecycle`
+  2.10.0 resolves to `androidx.lifecycle` 2.10.0 (read from the Gradle module metadata on
+  Maven Central), which is what pulls androidx.compose to 1.12.0 from behind Compose
+  Multiplatform's back — so holding Compose down while that line moved achieved nothing.
+
+- **Compose 1.12 deprecated two plugin accessors.** `compose.ui` and `compose.uiTooling` are
+  now errors — "Specify dependency directly" and "Use org.jetbrains.compose.ui:ui-tooling
+  module instead". They are catalogue entries now, versioned from the same
+  `composeMultiplatform` reference so there is still exactly one Compose version in the
+  build. `compose.runtime`, `compose.foundation` and `compose.material3` were not deprecated
+  and are unchanged. `compose.ui` was used in `shared/core/ui` as well as `androidApp`, so
+  fixing only the site CI named would have failed on the next module.
+
+- **AGP 9 supplies Kotlin, and rejects the Kotlin plugin.** The first CI error class of
+  this upgrade:
+
+  ```
+  Failed to apply plugin 'org.jetbrains.kotlin.android'.
+    The 'org.jetbrains.kotlin.android' plugin is no longer required for Kotlin support
+    since AGP 9.0.
+  ```
+
+  Removed from `androidApp` and `benchmark`, from the root `apply false` list, and from
+  the catalogue, so the alias cannot be reintroduced by autocomplete. `kotlin-multiplatform`
+  is untouched — the shared modules are not Android-plugin projects, and the rejection is
+  specific to applying `kotlin.android` alongside AGP 9's built-in Kotlin.
+
+  It failed *configuration*, so it took all six checks with it — including **iOS
+  cross-compile on macOS, which died on `androidApp/build.gradle.kts`** while building for
+  `iosArm64`. That is the same lesson this file already records twice: Gradle configures
+  every project on every invocation, so a fault in one module's build script is a fault in
+  every job, whatever that job asked for. Three configuration-time faults reached CI before
+  this one (the ABI split, the eager `tasks.named`, the top-level `const val`); this is the
+  fourth, and the reason each was invisible locally is unchanged — a harness that runs the
+  build's *tasks* cannot see errors in the build's *configuration*.
+
+- **AGP 9 will not sit alongside `kotlin.multiplatform` at all.** The second error class,
+  and the one that turns this from a version bump into a build-system migration:
+
+  ```
+  The 'com.android.library' (or 'com.android.application') plugin is not compatible with
+  the 'org.jetbrains.kotlin.multiplatform' plugin since AGP 9.0.
+  Solution:
+    - [Recommended] Replace the 'com.android.library' plugin with the
+      'com.android.kotlin.multiplatform.library' plugin.
+    - Or set the Gradle property 'android.builtInKotlin=false' and 'android.newDsl=false'
+      to temporarily bypass this issue.
+  ```
+
+  All 14 shared modules apply both plugins, so this is every one of them. The saving grace
+  is that their `android` blocks are uniform and thin — namespace, compileSdk, minSdk,
+  `ndk { abiFilters }`, `compileOptions` — and only `shared/core/data` has an `androidMain`
+  source directory at all; the other 13 are pure `commonMain`.
+
+  Two things made this a decision rather than a fix. First, `com.android.kotlin.multiplatform.library`
+  has no `ndk { abiFilters }` block, so the library-module half of the two-place ABI defence
+  goes away (these modules ship no `.so`, so nothing breaks — but the belt-and-braces does).
+  Second, the bypass is not free either: `android.builtInKotlin=false` disables the built-in
+  Kotlin that the previous commit removed `kotlin.android` *for*, so taking it would mean
+  putting that plugin back. The two error classes are coupled, in opposite directions.
+
+  **Decision: take the recommended migration, not the bypass.** The bypass is a deprecation
+  runway that closes on Google's schedule, and it would have to be undone anyway; doing the
+  work once is cheaper than doing it twice with a revert in between. All 14 modules moved to
+  `kotlin { androidLibrary { … } }`: `androidTarget()` is gone (the block declares the
+  target), `namespace`/`compileSdk`/`minSdk` moved inside it, and `compileOptions` became
+  `compilations.configureEach { compilerOptions { jvmTarget = JVM_17 } }`, since the new DSL
+  has no `compileOptions`.
+
+  **What the dropped `abiFilters` cost, precisely.** Nothing programmatic depended on it:
+  the ABI set is decided by `androidApp`'s own `defaultConfig.ndk.abiFilters`, asserted in
+  that module's `afterEvaluate`, and verified against the built APK by
+  `tools/check-apk-libraries.sh` reading `DT_NEEDED`. What was lost is a claim two comments
+  made — `androidApp/build.gradle.kts` said "`abiFilters` is what every library module in
+  this project already uses" and README.md described an ABI split that had already been
+  removed in the hardening pass. Both are corrected here rather than left to rot: a comment
+  that describes a defence which no longer exists is worse than no comment, because the next
+  person budgets for protection they do not have.
+
+- **AGP 9.1 deprecates the block its own error message recommends.** Migrating to
+  `androidLibrary { }` — the name printed in the incompatibility error — produced:
+
+  ```
+  'androidLibrary' ... is deprecated. The 'androidLibrary' block is deprecated.
+  Please use 'android' instead.
+  e: shared/engine-api/build.gradle.kts:23:41: Unresolved reference 'jvmTarget'.
+  ```
+
+  The block is `kotlin { android { … } }`, not `androidLibrary`. The error text and the
+  developer.android.com page it links are a release behind the plugin they describe; the
+  compiler is the authority, not the documentation.
+
+  The second half is the more useful correction. `compilations.configureEach {
+  compilerOptions.configure { jvmTarget.set(…) } }` does not resolve on this target, and
+  rather than hunt for the shape that does, the JVM level is now `jvmToolchain(17)` at the
+  `kotlin { }` level. That covers the `jvm()` and android targets in one line, and it is the
+  idiom `androidApp` has been using all along — so it is already proven on this CI rather
+  than being a second guess. Reaching for a construct the repo already runs beats reaching
+  for the one the migration guide suggests.
+
+- **The local harness was testing the wrong Gradle.** It invokes the system `gradle`, which
+  is 8.14.3, not the wrapper — so every "local checks passed" on this branch was exercising
+  the version being upgraded away from. Re-run against a downloaded Gradle 9.7.1, the whole
+  local surface passes: shared modules, SQLDelight, ktlint, detekt, the guards over 194
+  files, and the guard self-tests. That is the half of this upgrade provable here; AGP 9.1.0,
+  compileSdk 37 and androidx.compose 1.12.0 live on Google Maven, which this environment
+  refuses, so they are CI-only.
 
 ### The guards guard themselves
 

@@ -97,8 +97,11 @@ Gradle API, and run without an Android SDK — so CI reports a violation in seco
 
 A guard that finds nothing to scan fails, rather than passing quietly.
 
-**arm64 only**, on both platforms: `ndk.abiFilters` plus an ABI split with
-`isUniversalApk = false`. The native metric libraries are built for one ABI.
+**arm64 only** in everything that ships, on both platforms. The app module declares
+`ndk.abiFilters`; the shared library modules declare nothing, because AGP 9's KMP library
+plugin has no `ndk` block and they contain no native code. The native metric libraries are
+built for one ABI, and `tools/check-apk-libraries.sh` checks the built APK rather than
+trusting the declaration.
 
 ## Building
 
