@@ -1559,6 +1559,29 @@ With the target collision gone, `configureCMakeDebug[arm64-v8a]` passed and
   and are unchanged. `compose.ui` was used in `shared/core/ui` as well as `androidApp`, so
   fixing only the site CI named would have failed on the next module.
 
+- **AGP 9 supplies Kotlin, and rejects the Kotlin plugin.** The first CI error class of
+  this upgrade:
+
+  ```
+  Failed to apply plugin 'org.jetbrains.kotlin.android'.
+    The 'org.jetbrains.kotlin.android' plugin is no longer required for Kotlin support
+    since AGP 9.0.
+  ```
+
+  Removed from `androidApp` and `benchmark`, from the root `apply false` list, and from
+  the catalogue, so the alias cannot be reintroduced by autocomplete. `kotlin-multiplatform`
+  is untouched — the shared modules are not Android-plugin projects, and the rejection is
+  specific to applying `kotlin.android` alongside AGP 9's built-in Kotlin.
+
+  It failed *configuration*, so it took all six checks with it — including **iOS
+  cross-compile on macOS, which died on `androidApp/build.gradle.kts`** while building for
+  `iosArm64`. That is the same lesson this file already records twice: Gradle configures
+  every project on every invocation, so a fault in one module's build script is a fault in
+  every job, whatever that job asked for. Three configuration-time faults reached CI before
+  this one (the ABI split, the eager `tasks.named`, the top-level `const val`); this is the
+  fourth, and the reason each was invisible locally is unchanged — a harness that runs the
+  build's *tasks* cannot see errors in the build's *configuration*.
+
 - **The local harness was testing the wrong Gradle.** It invokes the system `gradle`, which
   is 8.14.3, not the wrapper — so every "local checks passed" on this branch was exercising
   the version being upgraded away from. Re-run against a downloaded Gradle 9.7.1, the whole

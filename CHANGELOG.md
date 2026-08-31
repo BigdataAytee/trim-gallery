@@ -13,6 +13,11 @@ one dependency at a time. The lifecycle pair (`org.jetbrains.androidx.lifecycle`
 line resolves to the AndroidX one, which pulls androidx.compose to 1.12.0 from behind
 Compose Multiplatform's back, so holding Compose back while that moved achieved nothing.
 
+AGP 9 also supplies Kotlin itself and *rejects* `org.jetbrains.kotlin.android` — "no
+longer required for Kotlin support since AGP 9.0". It is gone from `androidApp`, from
+`benchmark`, from the root plugin list and from the version catalogue.
+`kotlin-multiplatform` is unaffected; the shared modules are not Android-plugin projects.
+
 Compose 1.12 turned two plugin accessors into errors — `compose.ui` ("specify dependency
 directly") and `compose.uiTooling` ("use org.jetbrains.compose.ui:ui-tooling module
 instead"). Both are version-catalogue entries now, referencing the same

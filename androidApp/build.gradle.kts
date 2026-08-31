@@ -6,8 +6,11 @@ import com.android.build.api.artifact.SingleArtifact
 // Activity. Everything else lives in shared/.
 
 plugins {
+    // No `kotlin.android` here: AGP 9 has built-in Kotlin support and *rejects* the
+    // `org.jetbrains.kotlin.android` plugin outright ("no longer required for Kotlin
+    // support since AGP 9.0"). The Kotlin version still comes from the `kotlin` line in
+    // the catalogue, via the compiler AGP pulls in.
     alias(libs.plugins.android.application)
-    alias(libs.plugins.kotlin.android)
     alias(libs.plugins.kotlin.compose)
     alias(libs.plugins.compose.multiplatform)
 }
