@@ -1827,3 +1827,68 @@ looking and where they were not.
   `UndoLocation.SYSTEM_TRASH` fell through to `FromBin`. PhotoKit has no API to restore from
   Recently Deleted, by design, so the button would have failed every time. It is now its own
   state with its own copy and an Open Photos action.
+
+## Development guardrails
+
+Three failures in this project were process failures, not code failures, and each is now
+prevented by a mechanism rather than by remembering.
+
+- **The harness was testing the wrong Gradle.** It invoked the system `gradle` (8.14.3)
+  while the wrapper pinned 9.7.1, so every "local checks passed" during the AGP 9 upgrade
+  exercised the version being upgraded away from. Both are real Gradle and both build, so
+  nothing in the output gave it away. `tools/checkall.sh` now invokes `./gradlew` and has
+  no way to invoke anything else, and `tools/wrapper-version.sh` compares
+  `./gradlew --version` against `distributionUrl` and refuses to continue if they differ.
+
+- **An uncommitted edit crossed branches.** A version bump in progress rode a
+  `git checkout` onto an unrelated ABI branch, was committed there, and was pushed; it was
+  caught only by reading the PR diff afterwards. `tools/branch.sh` gives each branch its
+  own worktree, which removes the mechanism instead of asking for care, and a `pre-commit`
+  hook keeps the primary checkout on `main` so the habit cannot quietly lapse back into
+  `git checkout -b`.
+
+- **Nothing checked that a diff stayed in its lane.** A branch declares its scope in
+  `.github/pr-scope/<branch>.txt` and `pre-push` refuses anything outside it. The
+  self-test replays the real leak — `androidApp/build.gradle.kts` plus
+  `gradle/libs.versions.toml` on a branch scoped to the former — and confirms it is
+  rejected.
+
+  `PROJECT.md`, `CHANGELOG.md` and the scope file itself are always allowed without being
+  declared. They are touched by nearly every branch here, and requiring them in every
+  scope file would turn the mechanism into boilerplate people stop reading. A guardrail
+  that is annoying enough to be routinely bypassed protects nothing.
+
+- **A guardrail with no planted violation is a guardrail nobody has seen work.** Same rule
+  as the build guards. `tools/git-hooks-selftest.sh` covers eight cases across both hooks,
+  including the ones that must *not* fire: docs-only changes, in-scope changes, and branch
+  work inside a linked worktree.
+
+## The review bot did not review anything
+
+`claude-code-review.yml` had never once completed before 2026-08-31: `ANTHROPIC_API_KEY`
+was unset, so every run died at credential validation in about twenty seconds. Once the
+secret was set it started passing on every PR.
+
+Passing is not reviewing. A throwaway PR (#4, closed unmerged) planted a software-encoder
+fallback inside `MediaCodecFactory`:
+
+```kotlin
+val hardware = available.filter(::isHardware)
+return hardware.ifEmpty { available }   // BUILD.md § 2 rule 2, violated
+```
+
+It was planted in that file deliberately: the build guard polices *where* codecs are
+created, not what is done with them, so a violation there compiles and the guard passes.
+Only a reviewer reading intent can catch it.
+
+The bot ran for 108 seconds over 18 turns and posted nothing — no review, no inline
+comments, no issue comment — and the check went green. `permission_denials_count: 1` in
+the result, and `show_full_output` is false, so whatever it concluded went to a hidden
+log.
+
+The likely cause: the workflow's prompt asks for a review but never tells the agent to
+*post* anything, and in agent mode nothing publishes the final message on its own.
+
+**Until that is fixed, a green `review` check means the job exited zero and nothing more.**
+It is not evidence that a diff was reviewed. That is worse than having no reviewer, because
+a green tick invites the trust that an absent one would not.

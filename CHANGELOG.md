@@ -1,5 +1,24 @@
 # Changelog
 
+## Development guardrails, and a reviewer that was not reviewing
+
+No product change. Three process failures turned into mechanisms, and one uncomfortable
+finding.
+
+`tools/checkall.sh` runs `./gradlew` and nothing else, refusing to start unless the
+wrapper matches `gradle-wrapper.properties` — the previous harness called the system
+`gradle`, a different version, so its green results meant nothing during the AGP 9
+upgrade. `tools/branch.sh` starts each branch in its own worktree, because a `git
+checkout` carries uncommitted edits across branches and once did. A `pre-push` hook
+refuses a diff that reaches outside the scope declared in `.github/pr-scope/<branch>.txt`,
+and its self-test replays the exact leak that motivated it.
+
+The finding: the `review` check had never completed before today (no API key), and once
+it could run, a deliberately planted software-encoder fallback — a violation of the one
+rule this project treats as non-negotiable — passed it without a word. The bot ran 18
+turns and posted nothing. A green `review` currently means the job exited zero, not that
+anything was reviewed.
+
 ## Hardening pass — CI, guard self-tests, thermal floor
 
 No new features. Three things that were claims rather than facts, made into facts.

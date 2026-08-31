@@ -1,0 +1,39 @@
+#!/usr/bin/env bash
+#
+# Keeps the primary checkout on main.
+#
+# The worktree-per-branch rule (tools/branch.sh) only helps if branch work
+# actually happens in a worktree. This makes the primary clone refuse to accept
+# commits on any other branch, so the habit cannot quietly lapse back into
+# `git checkout -b` in the main directory — which is how uncommitted work
+# crossed branches here in the first place.
+#
+# Linked worktrees are unaffected: they are where branch work belongs.
+# --no-verify bypasses this, as with any hook.
+
+set -uo pipefail
+
+# In a linked worktree, .git is a file pointing elsewhere. Only the primary
+# checkout has .git as a directory.
+[ -d "$(git rev-parse --git-dir)/worktrees" ] || true
+git_common=$(git rev-parse --git-common-dir)
+git_dir=$(git rev-parse --git-dir)
+[ "$git_common" = "$git_dir" ] || exit 0   # linked worktree: allow
+
+branch=$(git rev-parse --abbrev-ref HEAD)
+[ "$branch" = "main" ] && exit 0
+[ "$branch" = "HEAD" ] && exit 0           # detached: not a branch, not our business
+
+cat >&2 <<MSG
+
+pre-commit: the primary checkout is on '$branch', not main.
+
+Branch work belongs in its own worktree, so uncommitted edits cannot ride a
+checkout onto another branch:
+
+    tools/branch.sh $branch <scope-glob>...
+
+Then commit there. To keep this checkout on '$branch' anyway, --no-verify.
+
+MSG
+exit 1

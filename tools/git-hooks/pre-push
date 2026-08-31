@@ -1,0 +1,74 @@
+#!/usr/bin/env bash
+#
+# Refuses a push whose diff reaches outside the branch's declared scope.
+#
+# Why: during the AGP 9 work an uncommitted version bump was carried onto an
+# unrelated ABI branch by a `git checkout`, committed there, and pushed. It was
+# only caught by reading the PR diff afterwards. The branch had a clear scope —
+# three files about an ABI property — and `gradle/libs.versions.toml` was not in
+# it. A machine can see that; a person re-reading their own diff often cannot.
+#
+# A branch declares its scope in .github/pr-scope/<branch>.txt: one glob per
+# line, `#` comments ignored. No scope file means no restriction, so this cannot
+# block work that has not opted in.
+#
+# Always allowed, without being declared: the branch's own scope file, PROJECT.md
+# and CHANGELOG.md. Those three are touched by nearly every branch here (the
+# standing rule is that decisions get written down), and requiring them in every
+# scope file would turn the mechanism into boilerplate people stop reading.
+#
+# Bypass with --no-verify if you are sure. Then widen the scope file, because the
+# next push will ask again.
+
+set -uo pipefail
+
+branch=$(git rev-parse --abbrev-ref HEAD)
+root=$(git rev-parse --show-toplevel)
+scope="$root/.github/pr-scope/$branch.txt"
+
+[ -f "$scope" ] || exit 0
+
+base=$(git merge-base origin/main HEAD 2>/dev/null) || {
+    echo "pre-push: no merge-base with origin/main; not checking scope" >&2
+    exit 0
+}
+
+changed=$(git diff --name-only "$base"..HEAD)
+[ -n "$changed" ] || exit 0
+
+patterns=$(grep -v '^\s*#' "$scope" | grep -v '^\s*$')
+violations=()
+
+while IFS= read -r file; do
+    case "$file" in
+        ".github/pr-scope/$branch.txt"|PROJECT.md|CHANGELOG.md) continue ;;
+    esac
+    ok=0
+    while IFS= read -r pattern; do
+        # shellcheck disable=SC2254
+        case "$file" in $pattern) ok=1; break ;; esac
+    done <<< "$patterns"
+    [ "$ok" = "1" ] || violations+=("$file")
+done <<< "$changed"
+
+[ ${#violations[@]} -eq 0 ] && exit 0
+
+{
+    echo
+    echo "pre-push: this branch's diff reaches outside its declared scope."
+    echo
+    echo "  branch : $branch"
+    echo "  scope  : .github/pr-scope/$branch.txt"
+    echo
+    echo "  declared:"
+    while IFS= read -r pattern; do echo "    $pattern"; done <<< "$patterns"
+    echo
+    echo "  outside it:"
+    for v in "${violations[@]}"; do echo "    $v"; done
+    echo
+    echo "Either these files do not belong on this branch — the usual cause is an"
+    echo "edit carried across by a checkout — or the scope is too narrow. Fix the"
+    echo "branch, or widen $scope and say why in the commit."
+    echo
+} >&2
+exit 1

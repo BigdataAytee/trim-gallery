@@ -1,0 +1,6 @@
+# Files this branch is allowed to touch, enforced by tools/git-hooks/pre-push.
+# PROJECT.md, CHANGELOG.md and this file are always allowed.
+tools/*
+tools/git-hooks/*
+.github/pr-scope/*
+README.md

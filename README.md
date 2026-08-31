@@ -100,6 +100,30 @@ A guard that finds nothing to scan fails, rather than passing quietly.
 **arm64 only**, on both platforms: `ndk.abiFilters` plus an ABI split with
 `isUniversalApk = false`. The native metric libraries are built for one ABI.
 
+## Working on this repo
+
+```
+tools/install-hooks.sh                      # once per clone
+tools/branch.sh my-branch 'androidApp/**'   # a branch in its own worktree, with a scope
+tools/checkall.sh                           # every local check, through ./gradlew only
+```
+
+Three guardrails, each of which exists because the thing it prevents already happened:
+
+- **`tools/checkall.sh` runs `./gradlew` and nothing else**, and refuses to start unless
+  the wrapper agrees with `gradle-wrapper.properties`. An earlier harness called the
+  system `gradle`, a different version from the pinned one, so its "all checks passed"
+  was testing a Gradle the project does not use.
+- **`tools/branch.sh` puts each branch in its own worktree.** A `git checkout` carries
+  uncommitted edits with it; that is how an in-progress version bump ended up committed
+  on an unrelated branch. Separate worktrees remove the mechanism instead of relying on
+  care. A `pre-commit` hook keeps the primary checkout on `main` so the habit cannot lapse.
+- **`pre-push` refuses a diff that reaches outside the branch's declared scope**, read
+  from `.github/pr-scope/<branch>.txt`. `PROJECT.md`, `CHANGELOG.md` and the scope file
+  itself are always allowed. No scope file means no restriction.
+
+`tools/git-hooks-selftest.sh` tests all of it, including a replay of the real leak.
+
 ## Building
 
 ```
