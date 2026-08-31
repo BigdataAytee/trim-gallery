@@ -2206,3 +2206,30 @@ Two more holes from the same pass, both in the shape this branch is supposed to 
 
 The self-tests went 8 → 11 → 12 → 14 across the three rounds, and every added case came
 from a defect a reader found rather than one the author predicted.
+
+### Round four: the fix that invalidated the tool
+
+Moving `pre-push` to read the scope out of the pushed commit — itself a fix for a
+fail-open — silently broke `branch.sh`, which wrote the scope file and never committed
+it. A file on disk but not in the commit is invisible to `git show`, and a missing scope
+file means *no restriction*. So the tool whose job is to create guarded branches was
+creating unguarded ones, with a scope file sitting visibly in the worktree saying
+otherwise.
+
+That is the third time on this branch that a guardrail failed into no-guardrail while
+looking correct, and the second time a fix created the next defect. `branch.sh` now
+commits the scope file as the branch's first commit.
+
+The self-test could not see it because it asserted `[ -f ... ]` — presence on disk, which
+is exactly the property that stopped being sufficient. It now asserts
+`git cat-file -e HEAD:<scope>`, the property the hook actually depends on. **A test that
+asserts a proxy for the real property will keep passing after the real property is gone.**
+
+Also from that round: the fixture inherited the developer's global git config, so anyone
+with a global `core.hooksPath` would have had the fixture's own commits rejected by this
+repo's `pre-commit` and the case would have measured a hook against a commit that never
+happened. `GIT_CONFIG_GLOBAL=/dev/null` now isolates it.
+
+And the branch's scope file no longer claims `.github/pr-scope/**`, which had granted it
+write access to every other branch's scope file — a guardrail that can edit its siblings
+is a poor example for the branches that copy it.

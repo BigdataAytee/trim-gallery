@@ -36,8 +36,21 @@ pinned=$(sed -n -e 's/^distributionUrl=.*\/gradle-\(.*\)-bin\.zip$/\1/p' \
 
 [ -x ./gradlew ] || { echo "guardrail: ./gradlew is missing or not executable" >&2; exit 1; }
 
-actual=$(./gradlew --version 2>/dev/null | sed -n 's/^Gradle \([0-9][^ ]*\)$/\1/p' | head -1)
-[ -n "$actual" ] || { echo "guardrail: ./gradlew --version produced no version line" >&2; exit 1; }
+# Keep stderr: on a clone with no Java, or when the distribution download fails,
+# discarding it would report "produced no version line" instead of the real
+# cause. A silenced cause is the same disease as a silent mismatch, one level
+# down.
+gradle_out=$(./gradlew --version 2>&1) || {
+    echo "guardrail: ./gradlew --version failed:" >&2
+    printf '%s\n' "$gradle_out" >&2
+    exit 1
+}
+actual=$(printf '%s\n' "$gradle_out" | sed -n 's/^Gradle \([0-9][^ ]*\)$/\1/p' | head -1)
+[ -n "$actual" ] || {
+    echo "guardrail: ./gradlew --version produced no version line. Output was:" >&2
+    printf '%s\n' "$gradle_out" >&2
+    exit 1
+}
 
 if [ "$pinned" != "$actual" ]; then
     cat >&2 <<MSG

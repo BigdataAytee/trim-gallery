@@ -19,6 +19,12 @@
 #      first real task here is `help`, which does nothing except make Gradle configure
 #      every project in the build.
 #
+# Not covered here, deliberately: `assembleDebug` and the real
+# tools/check-apk-libraries.sh run against a built APK. An assemble is expensive
+# and CI does it (build.yml). The self-test below proves the checker itself
+# works; it does not prove this tree's APK is clean. Saying so beats letting
+# "every check" quietly mean "every cheap check".
+#
 # Needs Google Maven (dl.google.com) for anything that configures an Android module.
 # Where that is unreachable, this script fails loudly rather than skipping quietly —
 # a harness that silently covers less than you think is worse than no harness.
@@ -28,7 +34,7 @@ cd "$(dirname "$0")/.."
 fail=0
 
 echo "=== gradle wrapper version ==="
-version=$(tools/wrapper-version.sh) || exit 1
+version=$(bash tools/wrapper-version.sh) || exit 1
 echo "wrapper and gradle-wrapper.properties agree on Gradle $version"
 
 run() {

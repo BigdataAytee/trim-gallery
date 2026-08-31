@@ -9,6 +9,13 @@ root=$PWD
 hook="$PWD/tools/git-hooks/pre-push"
 hookdir="$PWD/tools/git-hooks"
 tmp=$(mktemp -d); trap 'rm -rf "$tmp"' EXIT
+
+# Isolate the fixtures from whoever is running them. A global `core.hooksPath`
+# (or an init.templateDir carrying hooks) would make the fixture's own commits
+# run this repo's pre-commit, which rejects a non-main branch in a primary
+# checkout — and the case would then measure a hook against a commit that never
+# happened.
+export GIT_CONFIG_GLOBAL=/dev/null GIT_CONFIG_SYSTEM=/dev/null
 pass=0; fail=0
 
 check() { # name, expected(0|1), files...
@@ -169,7 +176,11 @@ rm -rf "$tmp/b"; mkdir -p "$tmp/b"
     git remote add origin .; git update-ref refs/remotes/origin/main main
     TRIM_WORKTREES="$tmp/b/wts" bash tools/branch.sh claude/slashed 'androidApp/**' >/dev/null 2>&1
     echo $?
-    [ -f "$tmp/b/wts/claude-slashed/.github/pr-scope/claude/slashed.txt" ] && echo yes || echo no
+    # `cat-file -e HEAD:...`, not `-f` on disk: presence on disk is exactly the
+    # property that stopped being sufficient when pre-push moved to reading the
+    # scope out of the pushed commit.
+    git -C "$tmp/b/wts/claude-slashed" cat-file -e "HEAD:.github/pr-scope/claude/slashed.txt" 2>/dev/null \
+        && echo yes || echo no
 ) > "$tmp/bout"
 br_exit=$(sed -n 1p "$tmp/bout"); br_file=$(sed -n 2p "$tmp/bout")
 if [ "$br_exit" = "0" ] && [ "$br_file" = "yes" ]; then

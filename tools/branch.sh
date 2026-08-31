@@ -66,10 +66,15 @@ if [ $# -gt 0 ]; then
         echo "# the project requires rather than widening the scope."
         for glob in "$@"; do echo "$glob"; done
     } > "$scope_file"
-    # Staged, not just written: pre-push reads the scope out of the commit being
-    # pushed, so an unstaged scope file would leave the first push unguarded.
+    # Committed, not just written: pre-push reads the scope out of the commit
+    # being pushed. A file on disk but not in the commit is invisible to
+    # `git show`, and a missing scope file means *no restriction* — so a branch
+    # created by this script would push unguarded while a scope file sat visibly
+    # in its worktree saying otherwise. Committing it also makes the scope the
+    # branch's first commit, which reads well in the PR.
     git -C "$dest" add "$scope_file"
-    echo "declared scope (staged):"
+    git -C "$dest" commit -q -m "Declare the scope for $branch"
+    echo "declared scope (committed):"
     printf '  %s\n' "$@"
 fi
 
