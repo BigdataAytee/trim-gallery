@@ -26,36 +26,70 @@ this project and encode its hard rules: `codec-priority`, `safe-replace`, `ndk-b
 
 ## Status
 
-Milestones 1 through 14 of [BUILD.md section 13](BUILD.md) are built: the Media3 Transformer
-encode, XPSNR and libvmaf over the NDK, the probe/search/predictor loop, the
-verify-and-safe-replace path with undo and offload, the night scheduler with its guards,
-the triage rules and skip list, the photo pipeline (jpegli, SSIMULACRA 2, JPEG XL, oxipng),
-the gallery shell, the on-device index — hashes, duplicates, people, search and chat-media
-review — the Space screen, history with restore, Compress now, the play-to-compress tap and
-the settings store, the editor — crop, orientation, straighten, adjustments, filters and
-video trim, with the save policy that decides when an edit needs no encoder at all — and the
-AV1 path: per-encoder capabilities, the codec choice, and a search bracket that knows AV1
-reaches the same quality at two thirds of HEVC's bitrate.
+Milestones 1 through 14 of [BUILD.md section 13](BUILD.md) are built and milestone 15, the
+iOS port, is begun: the Media3 Transformer encode, XPSNR and libvmaf over the NDK, the
+probe/search/predictor loop, the verify-and-safe-replace path with undo and offload, the
+night scheduler with its guards, the triage rules and skip list, the photo pipeline (jpegli,
+SSIMULACRA 2, JPEG XL, oxipng), the gallery shell, the on-device index — hashes, duplicates,
+people, search and chat-media review — the Space screen, history with restore, Compress now,
+the play-to-compress tap and the settings store, the editor — crop, orientation, straighten,
+adjustments, filters and video trim, with the save policy that decides when an edit needs no
+encoder at all — the AV1 path: per-encoder capabilities, the codec choice, and a search
+bracket that knows AV1 reaches the same quality at two thirds of HEVC's bitrate — the v1.1
+pair of Memories and the map, clustered into home and trips over an offline basemap the user
+supplies as an MBTiles pack — there is no geocoder and never will be, so nothing here names
+a place.
+
+### What is compiled, and what proves it
+
+Six required checks in [the `Build` workflow](.github/workflows/build.yml), on every pull
+request and on every push to `main`:
+
+| Check | What it proves |
+|---|---|
+| `Build guards` | The three rules below hold across every source file and manifest in the tree, and the guards' own tests pass |
+| `Shared JVM tests` | The shared unit tests run and pass on a bare JDK — no Android SDK, no Google Maven |
+| `iOS cross-compile` | Every shared module compiles for `iosArm64` and `iosSimulatorArm64`, and every Swift file parses, on a macOS runner |
+| `Android build + lint` | detekt and ktlint over the real source sets, then `:androidApp:compileDebugKotlin` |
+| `Android APK + native` | `assembleDebug` — Compose, Koin, Media3 and the native tree built from source into an arm64 APK — then the APK library check |
+| `App launches on a device` | The app installs and runs on a Gradle-managed Pixel 6, API 34 |
+
+908 `@Test` functions in the shared modules, 72 in `build-logic`, 4 instrumented tests in
+`androidApp`. Those are counts of test functions in the source tree, not of a runtime tally;
+what CI reports is that the suites containing them pass.
+
+The APK check reads the built artefact rather than the build files: it pulls `DT_NEEDED` out
+of every packaged `.so` and fails if a library something loads is not in the APK. A missing
+library is otherwise a crash on the first night pass, not a build failure. It has its own
+self-test that plants a violation, because a check that cannot fail is not a check.
+
+The device check is the only one that proves the app *runs* rather than that it compiles: the
+emulator boots, the smoke variant installs, and `MainActivity` reaches `RESUMED` and survives
+recreation. Nothing beyond launch is exercised there.
+
+The Swift is parsed, not compiled. `swiftc -parse` catches a file whose second half sits
+inside an unclosed comment — a fault this repository has actually had, twice, in Kotlin,
+where the equivalent parser found it — but it does not resolve `import Photos`, so it cannot
+catch a wrong PhotoKit call. There is no Xcode project and no XCFramework: `iosApp/` is four
+adapters written to documented behaviour, not an application, and most of the adapter matrix
+is still unwritten.
+
+Google Maven resolves on GitHub's runners and does **not** resolve in the sandbox this
+repository is mostly written in, where `dl.google.com` is refused. That asymmetry is why
+every decision the app makes lives in platform-free Kotlin that can be tested without an SDK,
+and why the entries marked `[google]` in `gradle/libs.versions.toml` were best-known-good
+guesses until CI resolved them for real. compileSdk and targetSdk are 37, minSdk 29.
+
+All six native functions are verified against their upstream binaries, and the native tree —
+xpsnr, libvmaf, libjxl, jpegli and oxipng — now cross-compiles for arm64 in CI from the
+submodules rather than being taken on trust.
 
 Milestone 13's instrumentation is written — the field metrics, the LAUNCH.md alpha gate, the
 redacted diagnostics export and the threshold fitting — but **the field test itself has not
-been run**: it needs three device classes and a fortnight. FIELD_TEST.md is the procedure,
-and no number in this repository is presented as a field-test result.
-
-Milestone 14 adds the v1.1 pair: Memories, with the exclusions that make the feature safe to
-ship, and the map — clustering, home and trips, over an offline basemap the user supplies as
-an MBTiles pack. There is no geocoder and never will be, so nothing here names a place.
-
-Milestone 15 begins the iOS port. The shared layer's portability is now enforced by a build
-guard rather than assumed, the decisions iOS forces — four thermal states instead of a
-continuous reading, no alarm API at all — are shared with the Android ones, and four Swift
-adapters are written where the contract is subtle. **None of the Swift has been compiled**:
-there is no Mac in the build environment, and most of the adapter matrix is still unwritten.
-
-All six native functions are verified against their upstream binaries. 869 shared JVM tests
-and 59 build-guard tests pass, over Kotlin and Swift. Nothing Android, iOS or Compose has been
-compiled — Google Maven is unreachable and there is no Mac — which is why every decision the
-app makes lives in platform-free Kotlin that can be tested without either. See
+been run**: it needs three device classes and a fortnight. **Nothing here has been
+field-tested.** A green pipeline says the app builds, holds its rules and launches; it says
+nothing about what a night pass does to a real library on a real phone. FIELD_TEST.md is the
+procedure, and no number in this repository is presented as a field-test result. See
 CHANGELOG.md for what is done and what was verified, and PROJECT.md for what is knowingly
 untested.
 
@@ -71,12 +105,12 @@ shared/
   core/pipeline/         Triager and the optimise/index steps -- pure Kotlin, tested with fakes
   core/{domain,data,ui}/ Use cases, SQLDelight + DataStore, Compose Multiplatform design system
   feature/*/             gallery, search, people, space, cleanup, editor, compress, settings
-  native/                CMake + trim_native.h C ABI; submodules declared, not yet built
+  native/                CMake + trim_native.h C ABI; built from the submodules by assembleDebug
   testdata/              Golden clips per source codec
 androidApp/              MediaCodecFactory, TransformerEncoder, Koin wiring, host Activity
 iosApp/                  Present, not implemented (v1.5). See iosApp/README.md
 benchmark/               Macrobenchmark
-build-logic/             The three build guards, with 39 tests
+build-logic/             The three build guards, with 72 tests
 design/buyer-gallery/    Parked motion prototype -- does not ship
 ```
 
@@ -137,27 +171,51 @@ Three guardrails, each of which exists because the thing it prevents already hap
 
 `tools/git-hooks-selftest.sh` tests all of it, including a replay of the real leak.
 
+## Get the APK
+
+Every run of the `Android APK + native` job uploads the debug APK as an artifact called
+**`apk`**, including the run for each merge to `main`. Open
+[Actions → Build](https://github.com/BigdataAytee/trim-gallery/actions/workflows/build.yml),
+pick the most recent green run on `main`, and take `apk` from the Artifacts box at the foot
+of the run summary. It is debug-signed, arm64-only, and carries the native metric libraries.
+GitHub expires artifacts after the repository's retention period, 90 days by default.
+
+It builds, holds its rules and launches. It has not been field-tested — see Status.
+
 ## Building
 
 ```
-./gradlew guards          # the three build guards, no SDK needed
-./gradlew sharedTest      # shared JVM unit tests, no SDK needed
+tools/checkall.sh                 # everything this repository can check locally
+```
+
+Or one at a time:
+
+```
+./gradlew guards                  # the three build guards
+./gradlew sharedTest              # the shared JVM unit tests
+./gradlew -p build-logic test     # the guards' own tests
 ./gradlew :androidApp:assembleDebug
 ```
 
-The first two are what CI gates on and need only a JDK. The third needs the Android SDK
-(compileSdk 36) and JDK 17.
+The first three need only a JDK and Maven Central, which is why they are the checks that run
+anywhere. `assembleDebug` needs the Android SDK at compileSdk 37 and Google Maven; CI runs it
+on temurin 21, and the modules build against the JVM 17 toolchain Gradle provisions for them.
 
-> **Before the first build**, run `tools/verify-versions.sh`. The version catalog was
-> written in an environment that could not reach Google Maven, so every entry marked
-> `[google]` in `gradle/libs.versions.toml` still needs confirming. Entries marked
-> `[central]` were resolved for real.
-
-To run the guards' own tests, which need neither the Android SDK nor Google Maven:
+`assembleDebug` also builds `shared/native` from source, so it needs the submodules and the
+build systems CMake drives on top of its own:
 
 ```
-./gradlew -p build-logic test
+git submodule update --init --recursive
+python3 -m pip install meson ninja          # libvmaf builds with meson
+rustup target add aarch64-linux-android     # oxipng is Rust
+cargo install cargo-ndk --locked
 ```
 
-The native layer is not built yet (milestone 2). Its submodules are declared in
-`.gitmodules` but deliberately not initialised.
+`find_program(... REQUIRED)` fails configuration when any of them is missing. A cold
+cross-compile of libjxl, jpegli, brotli, lcms, Highway and libvmaf is around seven minutes.
+
+> `tools/verify-versions.sh` confirms every coordinate in `gradle/libs.versions.toml`
+> resolves, and reports newer stable versions. The entries marked `[google]` were written
+> where Google Maven was unreachable; the ones the Android jobs pull are resolved for real on
+> every CI run now, but anything no job compiles against — the `benchmark` module's, for one
+> — is still a guess.
