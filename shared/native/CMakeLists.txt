@@ -121,6 +121,13 @@ if(ANDROID OR APPLE)
     string(REGEX REPLACE ", $" "" TRIM_MESON_LINK_ARGS "${TRIM_MESON_TOOLCHAIN_ARGS}")
     set(TRIM_MESON_CROSS ${CMAKE_CURRENT_BINARY_DIR}/meson-cross.ini)
     configure_file(${CMAKE_CURRENT_SOURCE_DIR}/cmake/meson-cross.ini.in ${TRIM_MESON_CROSS} @ONLY)
+    # Echoed because this is the one part of the build whose inputs are invisible in the
+    # failure: when meson links its sanity check for the wrong machine the error is
+    # `undefined symbol: main`, which names neither the ABI nor the flags that caused it.
+    message(STATUS
+        "trim_native meson cross [${ANDROID_ABI}]: "
+        "compiler_target='${CMAKE_C_COMPILER_TARGET}' sysroot='${CMAKE_SYSROOT}' "
+        "cpu_family='${TRIM_MESON_CPU_FAMILY}' args=[${TRIM_MESON_TOOLCHAIN_ARGS}]")
     set(TRIM_MESON_CROSS_ARG --cross-file ${TRIM_MESON_CROSS})
 else()
     set(TRIM_MESON_CROSS_ARG "")

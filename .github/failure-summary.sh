@@ -18,7 +18,17 @@ set -u
 # `FAILED: `, `error: ` and `CMake Error` are the ninja/clang/CMake half. Without them a
 # native build failure summarised to nothing but AGP's ProcessException heading and the
 # ninja command line it ran, which names every target but not one diagnostic.
-pattern='^e: |FAILURE: |What went wrong|Caused by: |> Task .* FAILED|Analysis failed|VIOLATION|misconfigured|no manifests to scan|no sources to scan|^/.*\.kts?:[0-9]+:[0-9]+ |^FAILED: |error: |CMake Error|ninja: error|undefined (reference|symbol)'
+#
+# `error: ` is anchored rather than bare. A compiler writes it at the start of a line or
+# behind a `tool:` or `file:line:col:` prefix — `ld.lld: error:`, `clang++: error:`,
+# `x.cc:12:3: error:` — all of which end in a colon. An unanchored match also caught prose
+# containing the word, and the emulator's own boot log is full of it:
+#
+#     vold: keystore2 Keystore generateKey returned service specific error: -67
+#
+# Three of those were promoted to `::error::` annotations on a run whose actual failure was
+# a link error, which is the opposite of what the annotations are for.
+pattern='^e: |FAILURE: |What went wrong|Caused by: |> Task .* FAILED|Analysis failed|VIOLATION|misconfigured|no manifests to scan|no sources to scan|^/.*\.kts?:[0-9]+:[0-9]+ |^FAILED: |^error: |[^[:space:]]+: error: |CMake Error|ninja: error|undefined (reference|symbol)'
 
 for log in "$@"; do
   [ -f "$log" ] || continue
