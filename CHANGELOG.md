@@ -1,5 +1,33 @@
 # Changelog
 
+## Temporarily unhiding the reviewer's own error
+
+CI only, and meant to be reverted.
+
+The `review` check has now failed three times in a row — PR #7 twice, PR #8 once —
+with the same envelope: `is_error: true`, `num_turns: 1`, ~500 ms, `total_cost_usd: 0`,
+`modelUsage: {}`. Zero cost with empty `modelUsage` means the API rejected the request
+before any inference ran, so this is not the reviewer failing to review; it is the
+reviewer never starting. The first failure looked like quota exhaustion from a burst of
+eight invocations in forty minutes. That explanation did not survive: the next two came
+an hour later, on two different pull requests, with one invocation between them.
+
+What the log cannot say is *why*. The action prints "Running Claude Code via SDK (full
+output hidden for security)" and emits only the result envelope, and exhausted credit, a
+spend cap, a revoked key and a rate limit are indistinguishable inside it. The secret is
+set and non-empty — `ANTHROPIC_API_KEY: ***` appears in the job env, where an unset
+secret would leave the line blank — so the missing-secret cause that this workflow
+already had once is ruled out.
+
+`show_full_output: true` prints the SDK's error string. It stays only until the reason
+is in hand: with it on, every review's full output is in the job log for anyone who can
+read Actions.
+
+Also worth recording, because it constrains how this gets tested: the action refuses to
+run when this file differs from the default branch's copy, so the change cannot be
+validated on its own pull request. It has to land on main first and be exercised by a
+pull request that does not touch it.
+
 ## README brought in line with what CI now proves
 
 Documentation only. The `Status` and `Building` sections still described the environment this
