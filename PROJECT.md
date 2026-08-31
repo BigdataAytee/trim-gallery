@@ -2060,6 +2060,44 @@ prevented by a mechanism rather than by remembering.
   including the ones that must *not* fire: docs-only changes, in-scope changes, and branch
   work inside a linked worktree.
 
+## The review bot is gone (31 Aug 2026)
+
+`claude-code-review.yml` is deleted, along with the `claude-code-action` row and the
+"add it to `.github/workflows/`" instruction in STACK.md. The history above stays: it
+records three separate ways an automated reviewer can report success without having
+reviewed anything, and those lessons outlive the tool.
+
+Why it went, in the order the reasons were found:
+
+1. **It ran for weeks without reviewing.** The secret was unset, then set; passing is not
+   reviewing.
+2. **It passed a planted software encoder** — a violation of the one rule this project
+   treats as non-negotiable — in eighteen turns, silently, because nothing published its
+   findings.
+3. **It self-disabled quietly** on any pull request touching its own workflow file, and
+   reported that as a green check.
+4. **`"result": "Credit balance is too low"`, `api_error_status: 400`.** Three runs across
+   two pull requests and an hour, none of which reached the model. Found only after
+   `show_full_output: true` was added, because until then the log carried the result
+   envelope and no reason.
+
+Each of those was fixed or diagnosed, and the last one is not a code problem at all. The
+decision is to stop paying attention to a check that has never once produced a review, and
+to review in-session instead: before any pull request merges, the changes are read against
+BUILD.md, the three skills in `.claude/skills/`, and the branch's own declared scope in
+`.github/pr-scope/`, and a verdict is given to the user in the conversation.
+
+**The weakness of that arrangement, stated rather than glossed:** almost every pull request
+here is written by the same agent that would now review it, and an author reviewing their
+own work catches less than a stranger does. What is *not* weakened is everything mechanical
+— the three build guards, the merged-manifest scan, the APK library check, the emulator
+launch, ktlint and detekt all still run on every pull request and none of them care who
+wrote the diff. The reviewer was only ever the layer that reads intent, and for its whole
+life it read none.
+
+Nothing in branch protection referenced `review`: it was deliberately never a required
+check, which is why #9 and #10 could merge with it red, and why deleting it blocks nothing.
+
 ## The review bot did not review anything
 
 `claude-code-review.yml` had never once completed before 2026-08-31: `ANTHROPIC_API_KEY`
