@@ -40,6 +40,23 @@ pair of Memories and the map, clustered into home and trips over an offline base
 supplies as an MBTiles pack — there is no geocoder and never will be, so nothing here names
 a place.
 
+### What you can actually open
+
+Until 31 August the Android app drew its own name on an empty page. Every screen under
+`shared/feature` had been written and unit tested; none had ever been mounted, and the
+instrumented launch check passed against the placeholder, because reaching `RESUMED` says
+the process came up and nothing about what is on screen.
+
+So read the milestone list above as **logic, not screens**. `SpaceScreen.kt` is a state
+class in `shared/core/domain`; the editor is geometry and a save policy; search is a query
+parser and a ranker. Seven of the eight `shared/feature` modules — space, editor, settings,
+search, people, cleanup, compress — contain a `build.gradle.kts` and no source at all.
+
+What the app does today: grant a folder, and it walks it and shows what is in it in the
+gallery grid, with day/month/year zoom and the fast-scroll bar. That is the one feature
+module that has screens. There is no navigation, no database behind the grid, and the
+night pass is not wired to anything you can tap.
+
 ### What is compiled, and what proves it
 
 Six required checks in [the `Build` workflow](.github/workflows/build.yml), on every pull
@@ -52,7 +69,7 @@ request and on every push to `main`:
 | `iOS cross-compile` | Every shared module compiles for `iosArm64` and `iosSimulatorArm64`, and every Swift file parses, on a macOS runner |
 | `Android build + lint` | detekt and ktlint over the real source sets, then `:androidApp:compileDebugKotlin` |
 | `Android APK + native` | `assembleDebug` — Compose, Koin, Media3 and the native tree built from source into an arm64 APK — then the APK library check |
-| `App launches on a device` | The app installs and runs on a Gradle-managed Pixel 6, API 34 |
+| `App launches on a device` | The app installs and reaches `RESUMED` on a Gradle-managed Pixel 6, API 34 — that the process starts, not that any screen is right |
 
 908 `@Test` functions in the shared modules, 72 in `build-logic`, 4 instrumented tests in
 `androidApp`. Those are counts of test functions in the source tree, not of a runtime tally;
