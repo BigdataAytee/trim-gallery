@@ -1550,6 +1550,22 @@ With the target collision gone, `configureCMakeDebug[arm64-v8a]` passed and
   required only when the property asked for it, since asserting it unconditionally would
   fail exactly the physical run this change exists to keep cheap.
 
+- **`const val` at the top of a `.kts` file is a configuration-time failure.** A Kotlin
+  script's top level is the body of an implicit class, so `const` is rejected there —
+  `Const 'val' are only allowed on top level, in named objects, or in companion objects`.
+  Because it fails script *compilation*, every job in the workflow goes red, including the
+  ones that touch nothing Android and the separate review workflow. A plain `val` is
+  correct.
+
+  The reason it reached CI is worth more than the fix: **nothing local compiles
+  `androidApp/build.gradle.kts`.** That script needs AGP, which lives on Google Maven, which
+  this environment's egress policy refuses — so the local harness stages build scripts for
+  *ktlint*, which parses them but does not type-check or compile them. A syntactically valid
+  script with a semantic error passes every check available here and fails everything in CI.
+  That is the third configuration-time fault to reach CI this way, after the ABI split and
+  the eager `tasks.named`, and the pattern is identical each time: an error in the build's
+  own configuration is invisible to a harness that only runs the build's *tasks*.
+
 ### The guards guard themselves
 
 - **A rule declares the languages it polices, and must have a planted violation in each.**

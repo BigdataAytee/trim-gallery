@@ -8,7 +8,12 @@ import com.android.build.api.artifact.SingleArtifact
 // Set only by the CI smoke job, which runs on a hosted x86_64 emulator. Everything else —
 // a developer's build, a field tester's phone on USB — leaves it unset and gets arm64-v8a
 // alone. See the `smoke` build type below.
-const val SMOKE_X86_PROPERTY = "trimgallery.smoke.x86_64"
+//
+// `val`, not `const val`: a .kts script's top level is the body of an implicit class, and
+// `const` is only legal on a real top level or in an object. `const val` here is a script
+// compilation error, which fails *configuration* — so every job in the workflow goes red,
+// including the ones that touch nothing Android.
+val smokeX86Property = "trimgallery.smoke.x86_64"
 
 plugins {
     alias(libs.plugins.android.application)
@@ -117,7 +122,7 @@ android {
             // The property is set by the CI smoke job and nowhere else, so a developer or a
             // field tester with a device attached builds arm64-v8a alone, which is also
             // what ships.
-            if (providers.gradleProperty(SMOKE_X86_PROPERTY).orNull == "true") {
+            if (providers.gradleProperty(smokeX86Property).orNull == "true") {
                 ndk { abiFilters += "x86_64" }
             }
             // Set rather than inherited, and asserted below.
@@ -310,9 +315,9 @@ afterEvaluate {
     // The second ABI is asserted only when it was asked for. Checking it unconditionally
     // would fail every physical-device run, which is exactly the case this change exists
     // to keep cheap.
-    if (providers.gradleProperty(SMOKE_X86_PROPERTY).orNull == "true") {
+    if (providers.gradleProperty(smokeX86Property).orNull == "true") {
         check("x86_64" in abis) {
-            "$SMOKE_X86_PROPERTY is set, so the `smoke` build type must carry x86_64; got " +
+            "$smokeX86Property is set, so the `smoke` build type must carry x86_64; got " +
                 "$abis. Without it the APK cannot install on a hosted emulator, which is " +
                 "the only kind of Android device CI can virtualise."
         }
