@@ -34,7 +34,16 @@ for log in "$@"; do
   [ -f "$log" ] || continue
   echo "=== $log ==="
   {
-    grep -E "$pattern" "$log" | head -30 || true
+    # ERROR:/error: lines that name a file and a reason come first. meson's linker probe
+    # emits `ld.lld: error: undefined symbol: main` as a matter of course — it links a
+    # program with no `main` on purpose, to read the linker's version banner — and in a
+    # chronological `head -30` that noise buried the one line that said what was actually
+    # wrong (`ERROR: Program 'nasm' not found`) below the cut. Lines carrying `ERROR:` or a
+    # `not found` are hoisted; everything else keeps its order behind them.
+    {
+        grep -E "ERROR:|not found or not executable" "$log" | head -10 || true
+        grep -E "$pattern" "$log" | head -30 || true
+    } || true
     # The heading on its own says nothing: the guards and the manifest merger put the whole
     # explanation in the lines *after* "What went wrong", which no pattern above matches.
     grep -A4 "What went wrong" "$log" | grep -vE "^--$|What went wrong" | head -20 || true

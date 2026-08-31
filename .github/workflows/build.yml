@@ -315,6 +315,15 @@ jobs:
         run: |
           set -o pipefail
           python3 -m pip install --upgrade meson ninja
+          # nasm, for x86_64 only: libvmaf's SIMD is hand-written x86 assembly and its
+          # meson.build hard-requires an assembler to build it —
+          #
+          #     libvmaf/src/meson.build:65:15: ERROR: Program 'nasm' not found or not executable
+          #
+          # arm64 never needs it, because there the SIMD is NEON intrinsics that clang
+          # compiles itself. That asymmetry is why this only ever broke the smoke variant.
+          sudo apt-get update -qq && sudo apt-get install -y -qq nasm
+          nasm -v
           # Resolve the pinned toolchain and every target it declares *now*, while nothing
           # else is running. The two ABI builds invoke cargo concurrently, and if a target
           # is still missing at that point rustup installs it mid-build from two processes

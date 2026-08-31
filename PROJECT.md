@@ -1479,6 +1479,25 @@ With the target collision gone, `configureCMakeDebug[arm64-v8a]` passed and
   nothing to restore from. Read paths, preflight, encode and `saveCopy` are unaffected: this
   build can measure and can save a copy, it cannot replace.
 
+- **libvmaf's x86_64 SIMD is hand-written assembly, and needs nasm.** `libvmaf/src/
+  meson.build` hard-requires an assembler to build it; arm64 never does, because there the
+  SIMD is NEON intrinsics clang compiles itself. That asymmetry is the whole reason the
+  emulator variant broke while the shipped ABI had been green for hours, and it is worth
+  remembering generally: adding an ABI can add a *toolchain* dependency, not just a target
+  triple.
+
+- **The failure summary hid the answer for two rounds, and that is the more useful bug.**
+  meson's linker-detection probe deliberately links a program with no `main` in order to
+  read the linker's version banner, so it prints `ld.lld: error: undefined symbol: main`
+  on every successful configure. Those lines matched the summary's `error:` pattern, came
+  first chronologically, and pushed `ERROR: Program 'nasm' not found` past `head -30`. Two
+  diagnoses were made from that noise and both were wrong — the second one confidently, in
+  a commit message, on the strength of an error that referenced Android's own
+  `crtbegin_dynamic.o` rather than a host runtime, which should have been the tell. Lines
+  carrying `ERROR:` or `not found` are now hoisted above everything else. A summariser that
+  ranks by position rather than by significance will eventually rank noise above the cause,
+  and when it does it costs more than having no summariser at all.
+
 ### The guards guard themselves
 
 - **A rule declares the languages it polices, and must have a planted violation in each.**
