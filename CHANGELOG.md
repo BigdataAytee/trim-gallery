@@ -1,5 +1,36 @@
 # Changelog
 
+## A green check that means nothing, closed off
+
+The `review` check on #9 came back **green in thirteen seconds**. It had reviewed
+nothing: the action refuses to run when `claude-code-review.yml` differs from the
+default branch's copy, and it refuses by exiting zero.
+
+That is the same failure this workflow already had once and that #6 was written to
+end — a green check indistinguishable from a job that never ran — arriving by a
+different route. #6 fixed the case where the reviewer ran and had nowhere to post.
+It could not fix the case where the reviewer declines to start.
+
+The condition is now tested before the action runs, and fails the job. Not by
+matching the action's own message — a later step cannot see that output, and the
+wording is not ours to depend on — but by testing the same fact the action tests:
+whether this file is byte-identical to the default branch's copy. When it is not,
+the job stops with an annotation on the file, prints the differing hunk, and says
+what to do instead.
+
+The consequence is deliberate and permanent: **every pull request that edits this
+workflow now has a red `review`**, including the one that added the guard. The
+reviewer genuinely cannot run on such a branch. A red check that names the reason is
+worth more than a green one that means nothing, and the land-it-first-then-test-it
+dance that was previously a comment for humans to remember is now enforced.
+
+Both directions were tested before pushing: against a branch that edits the file, the
+check fails; against `main`'s own copy, it passes.
+
+Still not covered: a run that reaches the model and then posts nothing. #6 addresses
+that by instruction rather than by mechanism, and closing it properly means asserting
+the tracking comment gained a body — its own change, not this one.
+
 ## Temporarily unhiding the reviewer's own error
 
 CI only, and meant to be reverted.
