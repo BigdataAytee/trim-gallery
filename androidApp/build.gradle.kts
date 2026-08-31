@@ -5,6 +5,16 @@ import com.android.build.api.artifact.SingleArtifact
 // ARCHITECTURE.md § 3 — androidApp. Platform engines, storage, scheduler and the host
 // Activity. Everything else lives in shared/.
 
+// Set only by the CI smoke job, which runs on a hosted x86_64 emulator. Everything else —
+// a developer's build, a field tester's phone on USB — leaves it unset and gets arm64-v8a
+// alone. See the `smoke` build type below.
+//
+// `val`, not `const val`: a .kts script's top level is the body of an implicit class, and
+// `const` is only legal on a real top level or in an object. `const val` here is a script
+// compilation error, which fails *configuration* — so every job in the workflow goes red,
+// including the ones that touch nothing Android.
+val smokeX86Property = "trimgallery.smoke.x86_64"
+
 plugins {
     alias(libs.plugins.android.application)
     alias(libs.plugins.kotlin.android)
@@ -103,7 +113,18 @@ android {
         create("smoke") {
             initWith(getByName("debug"))
             matchingFallbacks += "debug"
-            ndk { abiFilters += "x86_64" }
+            // x86_64 is opt-in, and only the hosted emulator opts in.
+            //
+            // Both `pixelSmokeAndroidTest` (managed device) and `connectedSmokeAndroidTest`
+            // (a real phone on USB) build this one variant, so an unconditional second ABI
+            // made every physical run cross-compile the whole native tree twice — libjxl,
+            // jpegli, libvmaf and oxipng — for an architecture that device cannot execute.
+            // The property is set by the CI smoke job and nowhere else, so a developer or a
+            // field tester with a device attached builds arm64-v8a alone, which is also
+            // what ships.
+            if (providers.gradleProperty(smokeX86Property).orNull == "true") {
+                ndk { abiFilters += "x86_64" }
+            }
             // Set rather than inherited, and asserted below.
             //
             // `initWith` copies the debug build type's properties, and an instrumented test
@@ -287,8 +308,18 @@ afterEvaluate {
             "emulator reports it as a parse failure rather than as a build-type mistake."
     }
     val abis = android.defaultConfig.ndk.abiFilters + smoke.ndk.abiFilters
-    check(abis.containsAll(setOf("arm64-v8a", "x86_64"))) {
-        "The `smoke` build type must carry arm64-v8a and x86_64; got $abis. x86_64 is what " +
-            "lets the APK install on a hosted emulator, which no arm64 runner can virtualise."
+    check("arm64-v8a" in abis) {
+        "The `smoke` build type must carry arm64-v8a; got $abis. It is the ABI that ships, " +
+            "so a smoke run that does not include it is not testing the real artefact."
+    }
+    // The second ABI is asserted only when it was asked for. Checking it unconditionally
+    // would fail every physical-device run, which is exactly the case this change exists
+    // to keep cheap.
+    if (providers.gradleProperty(smokeX86Property).orNull == "true") {
+        check("x86_64" in abis) {
+            "$smokeX86Property is set, so the `smoke` build type must carry x86_64; got " +
+                "$abis. Without it the APK cannot install on a hosted emulator, which is " +
+                "the only kind of Android device CI can virtualise."
+        }
     }
 }
