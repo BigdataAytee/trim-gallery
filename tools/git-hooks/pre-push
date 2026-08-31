@@ -97,10 +97,21 @@ while read -r local_ref local_sha _remote_ref _remote_sha; do
         || scope_text=$(cat "$(git rev-parse --show-toplevel)/$scope_path" 2>/dev/null) \
         || continue
 
-    base=$(git merge-base origin/main "$local_sha" 2>/dev/null) || {
-        echo "pre-push: no merge-base with origin/main for $branch; not checking scope" >&2
+    # Fail closed, for the same reason the empty-scope case below does: a scope
+    # file exists, so the intent to be scoped is on record, and this is the last
+    # place to let a push through unexamined. Reachable in ordinary use — a
+    # shallow or --single-branch clone, a fork whose origin has no main, or a
+    # fresh worktree where origin/main was never fetched.
+    base=$(git merge-base origin/main "$local_sha" 2>/dev/null) || base=''
+    if [ -z "$base" ]; then
+        {
+            echo "pre-push: no merge-base between origin/main and $branch, so the"
+            echo "          scope cannot be checked. Run: git fetch origin main"
+            echo "          (or --no-verify if you know why there is no merge-base)."
+        } >&2
+        status=1
         continue
-    }
+    fi
 
     # --no-renames: with rename detection on, `git mv shared/core/pipeline/Foo.kt
     # androidApp/Foo.kt` reports only the destination, so a branch scoped to

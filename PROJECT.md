@@ -2233,3 +2233,31 @@ happened. `GIT_CONFIG_GLOBAL=/dev/null` now isolates it.
 And the branch's scope file no longer claims `.github/pr-scope/**`, which had granted it
 write access to every other branch's scope file — a guardrail that can edit its siblings
 is a poor example for the branches that copy it.
+
+### Round five, and where this stops
+
+Two findings worth acting on, both about the guardrail's own integrity rather than new
+behaviour:
+
+- **The last fail-open.** A failed `git merge-base origin/main` printed one stderr line
+  into the middle of a push and let it through — eighteen lines above a deliberate
+  fail-closed for an empty scope file, reaching the same state (a scope file exists, so
+  the intent to be scoped is on record) and resolving it the opposite way. Reachable
+  ordinarily: a shallow or `--single-branch` clone, a fork whose origin has no `main`, a
+  fresh worktree where `origin/main` was never fetched. It rejects now, naming the fetch
+  that fixes it.
+
+- **The two behaviours changed by argument were asserted by nothing.** The empty-scope
+  direction was reversed this round on the strength of a review comment. A direction that
+  nothing tests is the one that flips back the next time someone finds it inconvenient at
+  six in the evening. Both edges have cases now: 14 → 16.
+
+Five rounds, and the shape of the findings changed each time: original defects, then
+defects created by the fixes, then a portability class, then a fix that invalidated its
+own tool, then asymmetries in how failure is handled. The reviewer's own summary is the
+right note to stop on — *"none of the three is a reason to hold the branch if you would
+rather land it and file them"* — and what remains after this commit is genuinely that:
+`checkall.sh` could assemble an APK and run the real ABI check rather than only its
+self-test, `pre-push` could use the remote name git passes it rather than assuming
+`origin`, and nothing enforces scope outside a clone that ran `install-hooks.sh`. All
+three are follow-ups, not blockers, and none of them fails open.

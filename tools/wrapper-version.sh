@@ -26,8 +26,11 @@ props=gradle/wrapper/gradle-wrapper.properties
 # BSD sed does not have it, so on macOS the parse would return empty and every
 # local check would refuse to start. Fails closed, but permanently, on the
 # platform half this project's targets need.
-pinned=$(sed -n -e 's/^distributionUrl=.*\/gradle-\(.*\)-bin\.zip$/\1/p' \
-                -e 's/^distributionUrl=.*\/gradle-\(.*\)-all\.zip$/\1/p' "$props")
+# [[:space:]]*$ before the anchor: a CRLF checkout leaves a trailing \r, which
+# would otherwise yield an empty parse and block every local check for a
+# non-reason.
+pinned=$(sed -n -e 's/^distributionUrl=.*\/gradle-\(.*\)-bin\.zip[[:space:]]*$/\1/p' \
+                -e 's/^distributionUrl=.*\/gradle-\(.*\)-all\.zip[[:space:]]*$/\1/p' "$props")
 [ -n "$pinned" ] || {
     echo "guardrail: could not read a version out of distributionUrl in $props" >&2
     grep '^distributionUrl' "$props" >&2

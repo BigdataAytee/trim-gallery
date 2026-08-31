@@ -127,6 +127,45 @@ rename_check() {
         echo "  FAIL  a rename out of shared/ is caught (expected 1, got $got)"; fail=$((fail+1))
     fi
 }
+# The two behaviours this round changed. Both were decided by argument in a
+# review comment; a direction that nothing asserts is the one that flips back the
+# next time someone finds it inconvenient.
+edge_check() { # name, expected, mode
+    local name=$1 expect=$2 mode=$3
+    rm -rf "$tmp/e"; mkdir -p "$tmp/e"
+    (
+        cd "$tmp/e"
+        git init -q -b main
+        git config user.email t@t; git config user.name t
+        mkdir -p .github/pr-scope/claude androidApp
+        echo seed > seed.txt; git add -A; git commit -qm seed
+        # the no-merge-base case simply never creates origin/main
+        [ "$mode" = nobase ] || git update-ref refs/remotes/origin/main main
+        git checkout -qb claude/scoped
+        if [ "$mode" = comments ]; then
+            printf '# only a comment\n\n' > .github/pr-scope/claude/scoped.txt
+        else
+            printf 'androidApp/**\n' > .github/pr-scope/claude/scoped.txt
+        fi
+        echo x > androidApp/ok.kt
+        git add -A; git commit -qm change
+        mkdir -p .git/hooks; cp "$hookdir/pre-push" .git/hooks/; chmod +x .git/hooks/pre-push
+        printf 'refs/heads/claude/scoped %s refs/heads/claude/scoped 0000000000000000000000000000000000000000\n' \
+            "$(git rev-parse HEAD)" | bash .git/hooks/pre-push >/dev/null 2>&1
+        echo $?
+    ) > "$tmp/eout"
+    local got; got=$(cat "$tmp/eout")
+    if [ "$got" = "$expect" ]; then
+        echo "  ok    $name"; pass=$((pass+1))
+    else
+        echo "  FAIL  $name (expected $expect, got $got)"; fail=$((fail+1))
+    fi
+}
+echo
+echo "fail-closed edges:"
+edge_check "a comments-only scope file is rejected, not treated as open" 1 comments
+edge_check "a missing origin/main is rejected, not waved through"        1 nobase
+
 echo
 echo "rename detection:"
 rename_check
