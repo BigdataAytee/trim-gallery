@@ -1335,6 +1335,25 @@ With the target collision gone, `configureCMakeDebug[arm64-v8a]` passed and
   cargo-ndk exists to point at. That is the boundary of what this environment can prove,
   and it confirms the shape of the fix rather than the fix itself.
 
+- **AGP was building libjxl's and jpegli's fuzzers, tools and benchmarks.** Both
+  `add_subdirectory` calls carry `EXCLUDE_FROM_ALL`, which is meant to say "these targets
+  exist so `trim_native` can link them, do not build the rest". AGP overrides that: it
+  discovers every target in the CMake graph and names them all on the ninja command line,
+  and a named target is built whether or not it is in `all`. So android-arm64 was compiling
+  `djxl_fuzzer_runner`, `enc_fast_lossless`, `hwy_list_targets`, both brotli command line
+  tools and the rest — none of which this app links, and several of which are not written
+  to cross-compile. `defaultConfig.externalNativeBuild.cmake.targets += "trim_native"` asks
+  for the one library the APK loads and lets CMake pull in exactly its dependencies.
+
+- **The failure summary could not see a native failure.** `.github/failure-summary.sh`
+  matched Gradle- and Kotlin-shaped lines only, so a `buildCMakeDebug` failure summarised
+  to the ProcessException heading and the ninja command line — which lists every target and
+  not one diagnostic. It now also matches `FAILED: `, `error: `, `CMake Error`,
+  `ninja: error` and `undefined reference|symbol`, self-tested against a synthetic ninja log
+  that the old pattern reduced to nothing. This is the second time this pass that the cost
+  was not the bug but not being able to see it; a summary that silently omits a whole
+  toolchain is worse than no summary.
+
 ### The guards guard themselves
 
 - **A rule declares the languages it polices, and must have a planted violation in each.**

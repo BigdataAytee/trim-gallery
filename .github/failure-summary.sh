@@ -14,7 +14,11 @@ set -u
 # The last alternative is ktlint's own format — `/path/File.kt:12:5 Message` — which none
 # of the Gradle-shaped patterns match, so a style violation used to reach the annotations
 # as nothing but the name of the task that failed.
-pattern='^e: |FAILURE: |What went wrong|Caused by: |> Task .* FAILED|Analysis failed|VIOLATION|misconfigured|no manifests to scan|no sources to scan|^/.*\.kts?:[0-9]+:[0-9]+ '
+#
+# `FAILED: `, `error: ` and `CMake Error` are the ninja/clang/CMake half. Without them a
+# native build failure summarised to nothing but AGP's ProcessException heading and the
+# ninja command line it ran, which names every target but not one diagnostic.
+pattern='^e: |FAILURE: |What went wrong|Caused by: |> Task .* FAILED|Analysis failed|VIOLATION|misconfigured|no manifests to scan|no sources to scan|^/.*\.kts?:[0-9]+:[0-9]+ |^FAILED: |error: |CMake Error|ninja: error|undefined (reference|symbol)'
 
 for log in "$@"; do
   [ -f "$log" ] || continue

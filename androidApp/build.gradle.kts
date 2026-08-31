@@ -43,6 +43,13 @@ android {
                 arguments += listOf("-DANDROID_STL=c++_static")
                 cFlags += "-march=armv8-a+simd"
                 cppFlags += "-march=armv8-a+simd"
+                // Without this, AGP asks ninja for every target the CMake graph defines,
+                // which here means libjxl's and jpegli's fuzzers, benchmarks and command
+                // line tools — none of which this app links, several of which do not build
+                // for android-arm64, and all of which cost minutes. `EXCLUDE_FROM_ALL` on
+                // the two `add_subdirectory` calls does not help: AGP names the targets on
+                // the ninja command line, which overrides being outside `all`.
+                targets += "trim_native"
             }
         }
     }
