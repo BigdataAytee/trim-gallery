@@ -261,6 +261,11 @@ target_include_directories(${TRIM_TARGET_NAME}
         ${CMAKE_CURRENT_SOURCE_DIR}/libjxl
         ${CMAKE_CURRENT_SOURCE_DIR}/libjxl/lib/include
         ${CMAKE_CURRENT_BINARY_DIR}/libjxl/lib/include
+        # The repository root, not just `lib/`: jpegli's own public headers include each
+        # other by repo-relative path — `lib/jpegli/decode.h` opens with
+        # `#include "lib/jpegli/common.h"` — so `lib/` on the path resolves the first
+        # header and none of the ones it pulls in. Same shape as libjxl above.
+        ${CMAKE_CURRENT_SOURCE_DIR}/jpegli
         ${CMAKE_CURRENT_SOURCE_DIR}/jpegli/lib
         ${CMAKE_CURRENT_SOURCE_DIR}/jpegli/lib/include
         ${CMAKE_CURRENT_BINARY_DIR}/jpegli/lib/include/jpegli

@@ -1275,10 +1275,19 @@ Fixed without patching either submodule:
   Pinning jpegli's to its own `git rev-parse --short HEAD` leaves libjxl's — the `tools/`
   directory that supplies `ssimulacra2.cc` — as the only definition.
 
-Found and fixed locally, not through CI: cmake, ninja, meson and cargo are all present in
-this environment and the submodules are checked out, so `cmake -S shared/native -B …`
-reproduces the arm64 configure failure exactly. Only the NDK is missing. That is a harness
-that should have existed from milestone 7.
+Found and fixed locally, not through CI, and the harness is now `tools/build-native-host.sh`:
+cmake, ninja, meson and cargo are all present in this environment and the submodules are
+checked out, so configuring and building `shared/native` for the host reproduces the arm64
+*configure* failure exactly. Only the NDK is missing, and almost nothing that goes wrong in
+that CMake is target-specific. It should have existed from milestone 7.
+
+Running it immediately found a second fault the CI run had not reached: **jpegli's public
+headers include each other by repository-relative path.** `lib/jpegli/decode.h` opens with
+`#include "lib/jpegli/common.h"`, so `jpegli/lib` on the include path resolves the first
+header and none of the ones it pulls in. The repository root is now on the path, the same
+shape libjxl already had. With it, libvmaf, xpsnr, libjxl, jpegli, brotli and highway all
+build and `libtrim_native.a` links — the first time the native tree has been built from
+this repository at all.
 
 ### The guards guard themselves
 
