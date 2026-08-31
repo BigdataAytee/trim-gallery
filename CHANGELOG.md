@@ -1,5 +1,28 @@
 # Changelog
 
+## README brought in line with what CI now proves
+
+Documentation only. The `Status` and `Building` sections still described the environment this
+repository was written in rather than the one it is built in: "nothing Android, iOS or Compose
+has been compiled", "the native layer is not built yet", compileSdk 36, and test counts two
+milestones out of date. All of that has been false since the CI hardening pass and the AGP 9
+upgrade landed — six required checks now compile the Android half, cross-compile every shared
+module for both iOS targets, build the native tree from source, check the built APK's
+`DT_NEEDED` list and launch the app on a managed Pixel 6.
+
+Rewritten from CHANGELOG.md and main: what each of the six checks proves, the test-function
+counts as counts of test functions rather than of a runtime tally, compileSdk 37, the native
+prerequisites `assembleDebug` needs, and the fact that Google Maven resolves on GitHub's
+runners but not in the sandbox — which is the reason the platform-free Kotlin split exists,
+so it is worth stating plainly rather than as an apology.
+
+The "not field-tested" caveat stays, and is now stated twice: a green pipeline says the app
+builds, holds its rules and launches, and says nothing about a night pass on a real library.
+
+A `Get the APK` section points at the `apk` artifact. The `Android APK + native` job already
+uploaded it unconditionally — `if: always()`, no job-level gate — on every `main` run as well
+as every pull request, so no workflow change was needed and none was made.
+
 ## Development guardrails, and a reviewer that was not reviewing
 
 No product change. Three process failures turned into mechanisms, and one uncomfortable
