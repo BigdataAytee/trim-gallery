@@ -145,6 +145,24 @@ class SafStorage(
         TempFile(File(tempDir, "${newId()}.tmp").absolutePath)
     }
 
+    /**
+     * The same scratch file, with bytes already in it.
+     *
+     * The photo path (`PhotoOptimiseStep`) hands back an encoded image in memory rather
+     * than a file, because jpegli and libjxl return a buffer across the C ABI — so this is
+     * `tempFile()` and a write, not a second kind of temporary.
+     *
+     * `java.io.File`, in `cacheDir`: app-private, so it is not a write to a granted tree
+     * and does not belong to `SafeReplacerAndroid`. The boundary guard agrees — it looks
+     * for `openOutputStream`, `DocumentsContract` mutations and `DocumentFile.createFile`,
+     * every one of which reaches the user's storage; none of them is here.
+     */
+    override suspend fun writeTemp(bytes: ByteArray): TempFile = withContext(Dispatchers.IO) {
+        val file = File(tempDir, "${newId()}.tmp")
+        file.writeBytes(bytes)
+        TempFile(file.absolutePath)
+    }
+
     override suspend fun discard(file: TempFile) {
         withContext(Dispatchers.IO) {
             val path = File(file.path)

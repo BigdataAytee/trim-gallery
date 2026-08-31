@@ -11,8 +11,11 @@ import kotlinx.coroutines.withContext
 import org.mp4parser.IsoFile
 import org.mp4parser.boxes.iso14496.part12.MovieHeaderBox
 import org.mp4parser.boxes.iso14496.part12.TrackHeaderBox
+import org.mp4parser.support.Matrix
 import java.io.File
+import java.io.FileInputStream
 import java.io.FileOutputStream
+import java.util.Date
 
 /**
  * Carries the original's identity onto the replacement (BUILD.md § 2.4).
@@ -71,17 +74,10 @@ class MetadataCopierAndroid(private val context: Context) : MetadataCopier {
      * portrait video sideways.
      */
     private fun copyContainer(source: Uri, target: File) {
-        val descriptor = context.contentResolver.openFileDescriptor(source, "r") ?: return
-        val (creation, modification, matrices) = descriptor.use { fd ->
-            IsoFile(fd.fileDescriptor).use { iso ->
-                val movie = iso.getBoxes(MovieHeaderBox::class.java).firstOrNull()
-                Triple(
-                    movie?.creationTime,
-                    movie?.modificationTime,
-                    iso.getBoxes(TrackHeaderBox::class.java, true).map { it.matrix },
-                )
-            }
-        }
+        val identity = readIdentity(source) ?: return
+        val creation = identity.creation
+        val modification = identity.modification
+        val matrices = identity.matrices
         if (creation == null && matrices.isEmpty()) return
 
         // mp4parser parses in place but does not write in place: the boxes are mutated in
@@ -112,6 +108,33 @@ class MetadataCopierAndroid(private val context: Context) : MetadataCopier {
         // as well, but that column is read-only on many providers; this one never is.
         creation?.let { target.setLastModified(it.time) }
     }
+
+    /**
+     * What the original's container says about itself, read once and never written to.
+     *
+     * Through a channel, not the descriptor: mp4parser takes a String, a File or a
+     * `ReadableByteChannel`, and a SAF document has no path, so the channel is the only one
+     * of the three a content URI can produce. `FileInputStream` on the descriptor opens
+     * read-only, which is what ARCHITECTURE.md § 2.2 requires of an original.
+     */
+    private fun readIdentity(source: Uri): ContainerIdentity? {
+        val descriptor = context.contentResolver.openFileDescriptor(source, "r") ?: return null
+        return descriptor.use { fd ->
+            FileInputStream(fd.fileDescriptor).channel.use { channel ->
+                IsoFile(channel).use { iso ->
+                    val movie = iso.getBoxes(MovieHeaderBox::class.java).firstOrNull()
+                    ContainerIdentity(
+                        creation = movie?.creationTime,
+                        modification = movie?.modificationTime,
+                        matrices = iso.getBoxes(TrackHeaderBox::class.java, true).map { it.matrix },
+                    )
+                }
+            }
+        }
+    }
+
+    /** The three things carried from an MP4's headers onto the replacement's. */
+    private class ContainerIdentity(val creation: Date?, val modification: Date?, val matrices: List<Matrix>)
 
     private fun isStill(uri: Uri): Boolean = context.contentResolver.getType(uri)?.startsWith("image/") == true
 

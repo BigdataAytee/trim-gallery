@@ -103,7 +103,11 @@ class ContainerReaderAndroid(private val context: Context) : ContainerReader {
             context.contentResolver.openInputStream(uri)?.use { ExifInterface(it) }
         }.getOrNull()
 
-        val latLong = exif?.let { source -> DoubleArray(2).takeIf { source.getLatLong(it) } }
+        // `getLatLong()`, not `getLatLong(output)`. The overload that fills an array takes a
+        // `FloatArray` — a float holds about seven significant digits, and a latitude needs
+        // nine to be right to the metre, so filling one would quietly move every photo a
+        // little. The no-argument form returns doubles, and null when there is no fix.
+        val latLong = exif?.latLong
 
         return ContainerFacts(
             codec = mime?.substringAfter('/'),

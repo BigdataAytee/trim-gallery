@@ -1213,6 +1213,42 @@ Recorded by class, as each one is fixed:
   now. Not a workaround: they are the CMake file's documented inputs, and this was the
   first time anything had been asked to provide them.
 
+### The first time `androidApp` was ever compiled
+
+Five faults, in four files that had been written against documentation and never seen a
+compiler. Recorded by class, because the class is the lesson:
+
+- **An interface member nobody implemented.** `SafStorage` did not implement
+  `LibraryStorage.writeTemp`. It was added for the photo path — jpegli and libjxl return a
+  buffer across the C ABI, not a file — and the Android side was never brought along.
+  Nothing caught it because `androidApp` had never been compiled.
+
+- **A closed platform value read as if it were open.** `MediaCodecInfo.VideoCapabilities`
+  `.PerformancePoint` has no public accessor for its width, height or frame rate; its whole
+  interface is `covers()`. `performancePointsOf` read all three. Rewritten to *ask* rather
+  than read: it walks a ladder of the shapes this app ever encodes, builds the platform
+  point for each, and keeps the ones an advertised point covers. The answer still comes
+  from the device — it is now the question the API will answer. A shape missing from the
+  ladder is a capability never claimed, which is the safe direction: `canSustain` then
+  falls back to the width, height and rate bounds.
+
+- **A Guava return type in a Media3 signature.** `EncoderSelector.selectEncoderInfos`
+  returns `ImmutableList<MediaCodecInfo>`, and a filtered `List` does not satisfy it.
+  `ImmutableList.copyOf` — Guava is not an addition to STACK.md, it arrives with
+  media3-transformer and is part of the interface being implemented.
+
+- **A constructor that does not exist.** `IsoFile(FileDescriptor)`: mp4parser takes a
+  `String`, a `File` or a `ReadableByteChannel`, and a SAF document has no path, so the
+  channel is the only one of the three a content URI can produce. Confirmed with `javap`
+  against isoparser 1.9.56 from Maven Central rather than guessed — the same trick that
+  works for every dependency not behind Google Maven. One unresolved constructor produced
+  twenty-two errors, because every type downstream of it became unknown.
+
+- **Float where the data needs double.** `ExifInterface.getLatLong(output)` fills a
+  `FloatArray`; a float holds about seven significant digits and a latitude needs nine to be
+  right to the metre. The no-argument `getLatLong()` returns doubles. Filling the float
+  array would have compiled and moved every photo a little.
+
 ### The guards guard themselves
 
 - **A rule declares the languages it polices, and must have a planted violation in each.**

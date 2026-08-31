@@ -14,6 +14,7 @@ import app.trimgallery.engine.EncodeSpec
 import app.trimgallery.engine.EncoderCaps
 import app.trimgallery.engine.HwEncoder
 import app.trimgallery.engine.PerformancePoint
+import com.google.common.collect.ImmutableList
 
 /**
  * **The only place in the app that touches `MediaCodecList` or creates a codec.**
@@ -69,11 +70,25 @@ class MediaCodecFactory(private val context: Context) : CodecFactory {
      * "no limit": an empty list means the encoder did not say, and `EncoderCaps.canSustain`
      * then falls back to the width, height and rate bounds rather than treating silence as
      * permission.
+     *
+     * Asked, not read. The platform's `PerformancePoint` has no public accessor for its
+     * width, height or frame rate — it is a closed value whose whole interface is
+     * `covers()`. So this walks a ladder of the shapes this app ever encodes, constructs
+     * the platform point for each, and keeps the ones some advertised point covers. The
+     * answer comes from the device either way; the difference is that this asks the
+     * question the API is willing to answer.
      */
     private fun performancePointsOf(video: MediaCodecInfo.VideoCapabilities): List<PerformancePoint> {
         if (Build.VERSION.SDK_INT < Build.VERSION_CODES.Q) return emptyList()
-        return video.supportedPerformancePoints.orEmpty().map {
-            PerformancePoint(width = it.width, height = it.height, fps = it.maxFrameRate)
+        val advertised = video.supportedPerformancePoints.orEmpty()
+        if (advertised.isEmpty()) return emptyList()
+        return PROBE_POINTS.filter { candidate ->
+            val probe = MediaCodecInfo.VideoCapabilities.PerformancePoint(
+                candidate.width,
+                candidate.height,
+                candidate.fps,
+            )
+            advertised.any { it.covers(probe) }
         }
     }
 
@@ -93,7 +108,10 @@ class MediaCodecFactory(private val context: Context) : CodecFactory {
      * than encoded in software.
      */
     fun hardwareOnlySelector(): EncoderSelector = EncoderSelector { mimeType ->
-        EncoderSelector.DEFAULT.selectEncoderInfos(mimeType).filter(::isHardware)
+        // `ImmutableList`, because that is what Media3 declares this method to return.
+        // Guava is not a new dependency — it arrives with media3-transformer and is part of
+        // the signature being implemented here.
+        ImmutableList.copyOf(EncoderSelector.DEFAULT.selectEncoderInfos(mimeType).filter(::isHardware))
     }
 
     private fun hardwareEncodersFor(mimeType: String): List<MediaCodecInfo> =
@@ -114,6 +132,29 @@ class MediaCodecFactory(private val context: Context) : CodecFactory {
 
     companion object {
         private val SOFTWARE_NAME_PREFIXES = listOf("OMX.google.", "c2.android.")
+
+        /**
+         * The shapes `performancePointsOf` asks the encoder about.
+         *
+         * Every size and rate a phone camera produces that this app would ever be asked to
+         * re-encode, largest first. Not an arbitrary ladder: a point missing from here is a
+         * capability the app will never claim, which is the safe direction to be wrong in —
+         * `EncoderCaps.canSustain` then falls back to the width, height and rate bounds.
+         */
+        private val PROBE_POINTS = listOf(
+            PerformancePoint(width = 7680, height = 4320, fps = 30),
+            PerformancePoint(width = 3840, height = 2160, fps = 120),
+            PerformancePoint(width = 3840, height = 2160, fps = 60),
+            PerformancePoint(width = 3840, height = 2160, fps = 30),
+            PerformancePoint(width = 1920, height = 1080, fps = 240),
+            PerformancePoint(width = 1920, height = 1080, fps = 120),
+            PerformancePoint(width = 1920, height = 1080, fps = 60),
+            PerformancePoint(width = 1920, height = 1080, fps = 30),
+            PerformancePoint(width = 1280, height = 720, fps = 240),
+            PerformancePoint(width = 1280, height = 720, fps = 120),
+            PerformancePoint(width = 1280, height = 720, fps = 60),
+            PerformancePoint(width = 1280, height = 720, fps = 30),
+        )
 
         /**
          * `MediaFormat.KEY_PRIORITY = 1` — best effort, i.e. background.
