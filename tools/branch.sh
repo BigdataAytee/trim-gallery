@@ -1,0 +1,109 @@
+#!/usr/bin/env bash
+#
+# Starts a branch in its own worktree, cut from a freshly fetched origin/main.
+#
+# Why not `git checkout -b`: a checkout moves one working tree between branches,
+# and carries any uncommitted edit with it. That happened here — a version bump
+# in progress rode a checkout onto an unrelated ABI branch and was committed
+# there. Nothing about `git checkout -b` warns you; the edits simply follow.
+#
+# A worktree per branch removes the mechanism rather than asking people to
+# remember. Each branch has its own directory and its own uncommitted state, and
+# there is no operation that moves work between them by accident.
+#
+# Usage: tools/branch.sh <branch-name> [scope-glob ...]
+#
+# Any globs given are written to .github/pr-scope/<branch>.txt, which the
+# pre-push hook enforces. Declaring the scope when the branch is created is the
+# point: it is the moment you actually know what the branch is for.
+
+set -euo pipefail
+cd "$(dirname "$0")/.."
+root=$(git rev-parse --show-toplevel)
+
+[ $# -ge 1 ] || { echo "usage: tools/branch.sh <branch-name> [scope-glob ...]" >&2; exit 2; }
+branch=$1; shift
+
+trees="${TRIM_WORKTREES:-$(dirname "$root")/trim-gallery-worktrees}"
+dest="$trees/${branch//\//-}"
+[ -e "$dest" ] && {
+    {
+        echo "already exists: $dest"
+        echo "To start over:  git worktree remove \"$dest\" && git branch -D \"$branch\""
+    } >&2
+    exit 1
+}
+
+echo "fetching origin/main"
+fetched=0
+for attempt in 1 2 3 4; do
+    if git fetch origin main; then fetched=1; break; fi
+    [ "$attempt" = 4 ] && break          # no point sleeping after the last try
+    echo "  fetch failed, retrying in $((2 ** attempt))s"; sleep $((2 ** attempt))
+done
+# Without this the loop just ends and the worktree is cut from a stale local
+# origin/main, while the header promises a freshly fetched one. Four "retrying"
+# lines followed by an apparently successful worktree is the quiet partial
+# success this tooling exists to prevent.
+[ "$fetched" = 1 ] || { echo "could not fetch origin/main; not cutting a branch from a stale ref" >&2; exit 1; }
+
+mkdir -p "$trees"
+git worktree add -b "$branch" "$dest" origin/main
+
+if [ $# -gt 0 ]; then
+    # `dirname`, not a fixed `.github/pr-scope`: a branch name contains slashes
+    # (claude/dev-guardrails), so the scope file is nested and its parent must be
+    # created too. Without this the redirect below fails, `set -e` aborts *after*
+    # the worktree already exists, and the branch is left with no scope file at
+    # all — which pre-push reads as "no restriction". Failing into no-guardrail
+    # was the worst part; caught in review of this very branch.
+    scope_file="$dest/.github/pr-scope/$branch.txt"
+    mkdir -p "$(dirname "$scope_file")"
+    {
+        echo "# Files this branch is allowed to touch, enforced by tools/git-hooks/pre-push."
+        echo "# PROJECT.md, CHANGELOG.md and this file are always allowed."
+        echo "#"
+        echo "# \`*\` matches within one path segment; \`**\` crosses slashes. A pattern must"
+        echo "# reach a file: androidApp/**, not androidApp."
+        echo "#"
+        echo "# If this branch adds a platform implementation, ARCHITECTURE.md § 2.7 requires"
+        echo "# a JVM fake under shared/ to ship with it — so include that path here too."
+        echo "# Otherwise pre-push rejects the fake, and the easy way out is dropping a file"
+        echo "# the project requires rather than widening the scope."
+        for glob in "$@"; do echo "$glob"; done
+    } > "$scope_file"
+    # Committed, not just written: pre-push reads the scope out of the commit
+    # being pushed. A file on disk but not in the commit is invisible to
+    # `git show`, and a missing scope file means *no restriction* — so a branch
+    # created by this script would push unguarded while a scope file sat visibly
+    # in its worktree saying otherwise. Committing it also makes the scope the
+    # branch's first commit, which reads well in the PR.
+    git -C "$dest" add "$scope_file"
+    # Guarded, because this runs under `set -e` thirty lines after the worktree
+    # was created: `git commit` fails on ordinary setups (commit.gpgsign with a
+    # locked key, or no user.email on a fresh machine), and an unguarded exit
+    # would leave a created worktree on a created branch with the "cd" line never
+    # printed — and line 29 then refuses to re-run the same command. The scope
+    # file is left staged, so a later `git commit -am` still sweeps it in.
+    git -C "$dest" commit -q -m "Declare the scope for $branch" || {
+        {
+            echo "could not commit the scope file in $dest."
+            echo "It is staged, so commit it before pushing — pre-push reads the scope"
+            echo "out of the pushed commit, and finding none means no restriction."
+        } >&2
+        exit 1
+    }
+    echo "declared scope (committed):"
+    printf '  %s\n' "$@"
+fi
+
+[ $# -gt 0 ] || {
+    echo
+    echo "note: no scope globs given, so no scope file was written and pre-push will"
+    echo "      impose no restriction on this branch. Re-run with globs, or add"
+    echo "      .github/pr-scope/$branch.txt by hand, to opt in."
+}
+
+echo
+echo "worktree: $dest"
+echo "cd $dest"

@@ -1,5 +1,37 @@
 # Changelog
 
+## Development guardrails, and a reviewer that was not reviewing
+
+No product change. Three process failures turned into mechanisms, and one uncomfortable
+finding.
+
+`tools/checkall.sh` runs `./gradlew` and nothing else, refusing to start unless the
+wrapper matches `gradle-wrapper.properties` — the previous harness called the system
+`gradle`, a different version, so its green results meant nothing during the AGP 9
+upgrade. `tools/branch.sh` starts each branch in its own worktree, because a `git
+checkout` carries uncommitted edits across branches and once did. A `pre-push` hook
+refuses a diff that reaches outside the scope declared in `.github/pr-scope/<branch>.txt`,
+and its self-test replays the exact leak that motivated it.
+
+Then the fixed reviewer read this branch and found a bug in it: `branch.sh` created only
+`.github/pr-scope`, not the nested directory a slashed branch name needs, so it aborted
+after making the worktree and left the branch with no scope file — failing into
+no-guardrail. Three more real gaps came with it: scope globs matched across slashes,
+`pre-push` inspected `HEAD` instead of the refs being pushed, and nothing ran the
+self-tests. All four were fixed — and a second review found that two of the fixes did not work. The
+scope file was read from the working tree rather than the pushed commit, so pushing a
+branch from another worktree still went unchecked; and the bounded stdin read used
+`timeout`, which does not exist on macOS, so every Mac would have silently run the
+unfixed hook. Both failed open. Both are fixed, along with two bash-3.2 and BSD-grep
+portability faults, and the self-test now covers the case that hid them: pushing a branch
+that is not the one checked out.
+
+The finding: the `review` check had never completed before today (no API key), and once
+it could run, a deliberately planted software-encoder fallback — a violation of the one
+rule this project treats as non-negotiable — passed it without a word. The bot ran 18
+turns and posted nothing. A green `review` currently means the job exited zero, not that
+anything was reviewed.
+
 ## The review check now posts its findings
 
 `claude-code-review.yml` ran in agent mode with `track_progress` off and a prompt that

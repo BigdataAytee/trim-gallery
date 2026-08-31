@@ -2024,3 +2024,240 @@ Worth recording because it also validates the earlier finding rather than underm
 PR #4's review ran fully — 18 turns, 108 seconds — precisely because its workflow file
 *was* identical to main's. That test was sound, and its result stands: the reviewer read
 a planted software-encoder fallback and said nothing.
+
+## Development guardrails
+
+Three failures in this project were process failures, not code failures, and each is now
+prevented by a mechanism rather than by remembering.
+
+- **The harness was testing the wrong Gradle.** It invoked the system `gradle` (8.14.3)
+  while the wrapper pinned 9.7.1, so every "local checks passed" during the AGP 9 upgrade
+  exercised the version being upgraded away from. Both are real Gradle and both build, so
+  nothing in the output gave it away. `tools/checkall.sh` now invokes `./gradlew` and has
+  no way to invoke anything else, and `tools/wrapper-version.sh` compares
+  `./gradlew --version` against `distributionUrl` and refuses to continue if they differ.
+
+- **An uncommitted edit crossed branches.** A version bump in progress rode a
+  `git checkout` onto an unrelated ABI branch, was committed there, and was pushed; it was
+  caught only by reading the PR diff afterwards. `tools/branch.sh` gives each branch its
+  own worktree, which removes the mechanism instead of asking for care, and a `pre-commit`
+  hook keeps the primary checkout on `main` so the habit cannot quietly lapse back into
+  `git checkout -b`.
+
+- **Nothing checked that a diff stayed in its lane.** A branch declares its scope in
+  `.github/pr-scope/<branch>.txt` and `pre-push` refuses anything outside it. The
+  self-test replays the real leak — `androidApp/build.gradle.kts` plus
+  `gradle/libs.versions.toml` on a branch scoped to the former — and confirms it is
+  rejected.
+
+  `PROJECT.md`, `CHANGELOG.md` and the scope file itself are always allowed without being
+  declared. They are touched by nearly every branch here, and requiring them in every
+  scope file would turn the mechanism into boilerplate people stop reading. A guardrail
+  that is annoying enough to be routinely bypassed protects nothing.
+
+- **A guardrail with no planted violation is a guardrail nobody has seen work.** Same rule
+  as the build guards. `tools/git-hooks-selftest.sh` covers sixteen cases across both hooks and `branch.sh`,
+  including the ones that must *not* fire: docs-only changes, in-scope changes, and branch
+  work inside a linked worktree.
+
+## The review bot did not review anything
+
+`claude-code-review.yml` had never once completed before 2026-08-31: `ANTHROPIC_API_KEY`
+was unset, so every run died at credential validation in about twenty seconds. Once the
+secret was set it started passing on every PR.
+
+Passing is not reviewing. A throwaway PR (#4, closed unmerged) planted a software-encoder
+fallback inside `MediaCodecFactory`:
+
+```kotlin
+val hardware = available.filter(::isHardware)
+return hardware.ifEmpty { available }   // BUILD.md § 2 rule 2, violated
+```
+
+It was planted in that file deliberately: the build guard polices *where* codecs are
+created, not what is done with them, so a violation there compiles and the guard passes.
+Only a reviewer reading intent can catch it.
+
+The bot ran for 108 seconds over 18 turns and posted nothing — no review, no inline
+comments, no issue comment — and the check went green. `permission_denials_count: 1` in
+the result, and `show_full_output` is false, so whatever it concluded went to a hidden
+log.
+
+The likely cause: the workflow's prompt asks for a review but never tells the agent to
+*post* anything, and in agent mode nothing publishes the final message on its own.
+
+**Until that is fixed, a green `review` check means the job exited zero and nothing more.**
+It is not evidence that a diff was reviewed. That is worse than having no reviewer, because
+a green tick invites the trust that an absent one would not.
+
+*Superseded on 2026-08-31 by #6.* Runs after that commit do post: the first one read this
+branch and filed six findings, one of them a real bug. The caution above applies to runs
+**before** #6; it is kept rather than deleted because the failure it describes is the kind
+that returns quietly, and one posting run is not yet a track record.
+
+### What the fixed reviewer caught, on its first real run
+
+The review workflow's first run after #6 landed was against the guardrails branch itself,
+and it found a bug that the branch's own eight self-tests did not:
+
+`tools/branch.sh` wrote its scope file to `.github/pr-scope/$branch.txt` after creating
+only `.github/pr-scope`. Every branch name in this repository contains a slash, so the
+redirect targeted `.github/pr-scope/claude/<name>.txt` in a directory that did not exist.
+Under `set -euo pipefail` the script aborted — *after* `git worktree add` had already
+succeeded. The result was a created worktree, on a new branch, with no scope file, which
+`pre-push` reads as "no restriction". It failed into no-guardrail, silently, from then on.
+
+It was invisible to the self-tests because the fixture used the flat branch name `scoped`
+while the repository's convention is `claude/<name>`. A test fixture that does not look
+like production is a test of something else. The fixture is now slashed, and there is a
+case that runs `branch.sh` end to end and asserts the scope file exists.
+
+It also went unnoticed by the author because both scope files on this branch were created
+by hand with `mkdir -p` before `branch.sh` was ever asked to do it — so the PR's claim
+that "the tooling has been used to build itself" was half true, and the half that was
+false was the half under test. Corrected in the PR body.
+
+Three further findings from the same review, all confirmed and fixed:
+
+- **Scope globs matched recursively.** `case "$file" in $pattern` lets `*` match `/`, so
+  `shared/*` would have authorised `shared/core/pipeline/**` — the boundary this project
+  guards hardest. Patterns now compile to a regex where `*` stays inside a segment and
+  `**` crosses, which is what a reader brings gitignore intuitions to.
+- **`pre-push` checked `HEAD`, not the push.** Git passes the refs being pushed on stdin;
+  the hook ignored them, so `git push origin other-branch` was checked against whatever
+  was checked out — and if that was `main`, with no scope file, the push went unexamined.
+  It now loops over the refs on stdin, and falls back to HEAD only for manual dry runs.
+- **The self-tests were not run by anything.** `checkall.sh` claimed to be every local
+  check while never invoking `tools/git-hooks-selftest.sh` or
+  `tools/check-apk-libraries-selftest.sh`. Both now run in it, which is the difference
+  between eight passing cases and a screenshot of eight passing cases.
+
+The lesson is the one this file keeps recording from a new angle: the guards were written
+by the same person who wrote the thing they guard, and shared its blind spot. An
+independent reader found in one pass what the author's own tests were built not to see.
+
+### The second review, on the fixes themselves
+
+The reviewer read the fix commit and found that two of the four fixes did not work, both
+failing open, and both invisible to the self-tests.
+
+- **The scope file was read from the wrong tree.** `pre-push` correctly derived the branch
+  from the pushed ref, then looked its scope file up in the *current working tree*. Under
+  the worktree-per-branch workflow this branch mandates, pushing `other-branch` while
+  standing in another worktree finds no scope file, and a missing scope file means "no
+  restriction". The exact fail-open the previous fix was written to close was still open,
+  one step further in — and harder to see, because the branch name in the message was
+  finally correct. The scope now comes out of the pushed commit (`git show
+  $sha:.github/pr-scope/$branch.txt`), which also stops an uncommitted `rm` of the scope
+  file from disabling the check for a commit that still contains it.
+
+- **`timeout` is not on macOS.** The bounded stdin read used `timeout 2 cat`, with stderr
+  discarded and `|| true` after it. On a Mac that is: command not found → silenced →
+  swallowed → empty `refs` → fall back to HEAD. Every Mac would have run the pre-fix hook,
+  silently, on a project with an iOS app and a macOS CI job. It is a `read -r -t 2`
+  builtin loop now.
+
+- **`${#violations[@]}` on an empty array under `set -u`** is an error before bash 4.4,
+  which is what macOS ships — so the first fully in-scope push would have been *rejected*
+  with no message. `${violations[*]:-}` is safe on 3.2. Likewise `\s` in grep is a GNU
+  extension that BSD grep reads as a literal `s`, so an indented comment in a scope file
+  would have survived into the pattern list and matched nothing, making every file a
+  violation. `[[:space:]]` everywhere.
+
+**Why the self-tests could not see any of it.** Every case pushed the branch that was
+already checked out, so the HEAD fallback and the stdin path returned the same answer.
+The test asserted the outcome without distinguishing the mechanism that produced it.
+There is now a case that commits a branch, returns to `main`, and pushes the branch that
+is *not* HEAD — which fails on the old code and passes on the new.
+
+That is the second time on this branch that the tests were shaped by the same assumption
+as the code. The first was a fixture using a flat branch name where the convention is
+slashed. Both were found by a reader who had not written either.
+
+### Third round: three GNU-only constructs in a repo that ships an iOS target
+
+The reviewer's third pass found the pattern rather than just the instances. Each round I
+had reached for whatever worked on this Linux container, and each time it was a GNU
+extension that fails differently — and mostly silently — on the macOS half of this
+project:
+
+| Construct | On macOS |
+|---|---|
+| `timeout 2 cat` | absent; stderr discarded and `\|\| true` swallow it, so the hook falls back to HEAD |
+| `grep '^\s*#'` | `\s` is literal `s`, so an indented comment survives into the pattern list |
+| `sed 's/...\(bin\|all\)...'` | BRE alternation is GNU-only; the parse returns empty and *every* local check refuses to start |
+
+The last one I introduced myself, in the commit that fixed the reviewer's previous
+complaint about that same regex. Fixing a portability-adjacent bug by writing a
+less portable expression is worth recording as its own failure mode.
+
+Two more holes from the same pass, both in the shape this branch is supposed to be about:
+
+- **Rename detection hid a boundary crossing.** `git diff --name-only` reports only the
+  destination of a rename, so `git mv shared/core/pipeline/Foo.kt androidApp/Foo.kt` on a
+  branch scoped to `androidApp/**` passed — while deleting a file in the directory
+  ARCHITECTURE.md guards hardest. `--no-renames` shows both paths. Verified by
+  construction before fixing, and there is a case for it now.
+- **`checkall.sh` could never pass without an ELF toolchain.**
+  `check-apk-libraries-selftest.sh` exits 2 for "I cannot run here", distinct from 1 for a
+  real violation, and the harness collapsed both into failure. On a Mac the green state
+  was unreachable — and an unreachable green is how a harness gets ignored, which is the
+  disease this file replaced.
+
+The self-tests went 8 → 11 → 12 → 14 across the three rounds, and every added case came
+from a defect a reader found rather than one the author predicted.
+
+### Round four: the fix that invalidated the tool
+
+Moving `pre-push` to read the scope out of the pushed commit — itself a fix for a
+fail-open — silently broke `branch.sh`, which wrote the scope file and never committed
+it. A file on disk but not in the commit is invisible to `git show`, and a missing scope
+file means *no restriction*. So the tool whose job is to create guarded branches was
+creating unguarded ones, with a scope file sitting visibly in the worktree saying
+otherwise.
+
+That is the third time on this branch that a guardrail failed into no-guardrail while
+looking correct, and the second time a fix created the next defect. `branch.sh` now
+commits the scope file as the branch's first commit.
+
+The self-test could not see it because it asserted `[ -f ... ]` — presence on disk, which
+is exactly the property that stopped being sufficient. It now asserts
+`git cat-file -e HEAD:<scope>`, the property the hook actually depends on. **A test that
+asserts a proxy for the real property will keep passing after the real property is gone.**
+
+Also from that round: the fixture inherited the developer's global git config, so anyone
+with a global `core.hooksPath` would have had the fixture's own commits rejected by this
+repo's `pre-commit` and the case would have measured a hook against a commit that never
+happened. `GIT_CONFIG_GLOBAL=/dev/null` now isolates it.
+
+And the branch's scope file no longer claims `.github/pr-scope/**`, which had granted it
+write access to every other branch's scope file — a guardrail that can edit its siblings
+is a poor example for the branches that copy it.
+
+### Round five, and where this stops
+
+Two findings worth acting on, both about the guardrail's own integrity rather than new
+behaviour:
+
+- **The last fail-open.** A failed `git merge-base origin/main` printed one stderr line
+  into the middle of a push and let it through — eighteen lines above a deliberate
+  fail-closed for an empty scope file, reaching the same state (a scope file exists, so
+  the intent to be scoped is on record) and resolving it the opposite way. Reachable
+  ordinarily: a shallow or `--single-branch` clone, a fork whose origin has no `main`, a
+  fresh worktree where `origin/main` was never fetched. It rejects now, naming the fetch
+  that fixes it.
+
+- **The two behaviours changed by argument were asserted by nothing.** The empty-scope
+  direction was reversed this round on the strength of a review comment. A direction that
+  nothing tests is the one that flips back the next time someone finds it inconvenient at
+  six in the evening. Both edges have cases now: 14 → 16.
+
+Five rounds, and the shape of the findings changed each time: original defects, then
+defects created by the fixes, then a portability class, then a fix that invalidated its
+own tool, then asymmetries in how failure is handled. The reviewer's own summary is the
+right note to stop on — *"none of the three is a reason to hold the branch if you would
+rather land it and file them"* — and what remains after this commit is genuinely that:
+`checkall.sh` could assemble an APK and run the real ABI check rather than only its
+self-test, `pre-push` could use the remote name git passes it rather than assuming
+`origin`, and nothing enforces scope outside a clone that ran `install-hooks.sh`. All
+three are follow-ups, not blockers, and none of them fails open.
