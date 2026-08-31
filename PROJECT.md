@@ -2056,7 +2056,7 @@ prevented by a mechanism rather than by remembering.
   that is annoying enough to be routinely bypassed protects nothing.
 
 - **A guardrail with no planted violation is a guardrail nobody has seen work.** Same rule
-  as the build guards. `tools/git-hooks-selftest.sh` covers eight cases across both hooks,
+  as the build guards. `tools/git-hooks-selftest.sh` covers sixteen cases across both hooks and `branch.sh`,
   including the ones that must *not* fire: docs-only changes, in-scope changes, and branch
   work inside a linked worktree.
 

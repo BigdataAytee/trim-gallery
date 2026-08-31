@@ -26,7 +26,13 @@ branch=$1; shift
 
 trees="${TRIM_WORKTREES:-$(dirname "$root")/trim-gallery-worktrees}"
 dest="$trees/${branch//\//-}"
-[ -e "$dest" ] && { echo "already exists: $dest" >&2; exit 1; }
+[ -e "$dest" ] && {
+    {
+        echo "already exists: $dest"
+        echo "To start over:  git worktree remove \"$dest\" && git branch -D \"$branch\""
+    } >&2
+    exit 1
+}
 
 echo "fetching origin/main"
 fetched=0
@@ -73,7 +79,20 @@ if [ $# -gt 0 ]; then
     # in its worktree saying otherwise. Committing it also makes the scope the
     # branch's first commit, which reads well in the PR.
     git -C "$dest" add "$scope_file"
-    git -C "$dest" commit -q -m "Declare the scope for $branch"
+    # Guarded, because this runs under `set -e` thirty lines after the worktree
+    # was created: `git commit` fails on ordinary setups (commit.gpgsign with a
+    # locked key, or no user.email on a fresh machine), and an unguarded exit
+    # would leave a created worktree on a created branch with the "cd" line never
+    # printed — and line 29 then refuses to re-run the same command. The scope
+    # file is left staged, so a later `git commit -am` still sweeps it in.
+    git -C "$dest" commit -q -m "Declare the scope for $branch" || {
+        {
+            echo "could not commit the scope file in $dest."
+            echo "It is staged, so commit it before pushing — pre-push reads the scope"
+            echo "out of the pushed commit, and finding none means no restriction."
+        } >&2
+        exit 1
+    }
     echo "declared scope (committed):"
     printf '  %s\n' "$@"
 fi
