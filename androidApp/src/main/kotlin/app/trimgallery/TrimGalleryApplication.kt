@@ -3,6 +3,9 @@ package app.trimgallery
 import android.app.Application
 import app.trimgallery.di.androidEngineModule
 import app.trimgallery.engine.android.ForegroundWatcher
+import coil3.ImageLoader
+import coil3.SingletonImageLoader
+import coil3.video.VideoFrameDecoder
 import org.koin.android.ext.koin.androidContext
 import org.koin.core.context.startKoin
 
@@ -25,6 +28,20 @@ class TrimGalleryApplication : Application() {
         startKoin {
             androidContext(this@TrimGalleryApplication)
             modules(androidEngineModule)
+        }
+
+        // Coil's singleton loader, with the video decoder registered so a video tile shows
+        // a frame instead of a blank square (STACK.md names both artifacts).
+        //
+        // No network component is added and none is on the classpath: `coil-network-*` is
+        // not a dependency, so the loader can only ever resolve the local content URI it is
+        // handed. That is not a nicety — BUILD.md rule 8 says the app has no network
+        // access, the manifest removes INTERNET from the *merged* result, and an image
+        // loader that could fetch would be the obvious way for that to stop being true.
+        SingletonImageLoader.setSafe { context ->
+            ImageLoader.Builder(context)
+                .components { add(VideoFrameDecoder.Factory()) }
+                .build()
         }
     }
 }

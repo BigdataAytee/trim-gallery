@@ -26,6 +26,7 @@ import app.trimgallery.engine.Replacer
 import app.trimgallery.engine.SettingsStore
 import app.trimgallery.engine.UndoStore
 import app.trimgallery.engine.android.ContainerReaderAndroid
+import app.trimgallery.engine.android.GrantedFolders
 import app.trimgallery.engine.android.MediaCodecFactory
 import app.trimgallery.engine.android.MetadataCopierAndroid
 import app.trimgallery.engine.android.MlKitIndexer
@@ -70,6 +71,11 @@ val androidEngineModule = module {
     single { Uuid7() }
 
     single<LibraryStorage> { SafStorage(androidContext(), newId = { get<Uuid7>().next(System.currentTimeMillis()) }) }
+
+    // The SAF grants themselves, read from the platform rather than from our tables: a
+    // row that says we may read a folder is worth nothing if the user revoked the grant
+    // in Settings, and `getPersistedUriPermissions` is what actually decides.
+    single { GrantedFolders(androidContext()) }
     single<OutputProbe> { OutputProbeAndroid() }
     single<MetadataCopier> { MetadataCopierAndroid(androidContext()) }
 

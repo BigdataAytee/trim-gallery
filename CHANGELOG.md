@@ -28,6 +28,37 @@ untouched: build guards, merged-manifest scan, APK library check, emulator launc
 and detekt all still run, and none of them care who wrote the code.
 
 `review` was never a required check, so nothing is blocked by its absence.
+## The app had no screens
+
+Installed the debug APK on a phone and it showed the words "Trim Gallery" centred on a
+black page. Nothing was broken: that is what `MainActivity` drew. Every screen under
+`shared/feature` had been written, unit tested and never mounted, and
+`MainActivityLaunchTest` passed the whole time — reaching RESUMED proves the process came
+up, not that anything is on screen. A placeholder reaches RESUMED.
+
+Worse than the missing wiring: seven of the eight `shared/feature` modules contain only a
+`build.gradle.kts`. Space, editor, settings, search, people, cleanup and compress have no
+source. Their milestones are real but they are *logic* — `SpaceScreen.kt` is a state class
+in `core/domain`, the editor is geometry and a save policy, search is a parser and a
+ranker — and the screens were never written. `androidApp` depends on all eight modules,
+which is why nothing ever complained.
+
+`GalleryHost` now mounts the module that does have screens. Pick a folder with the system
+picker, and the grid fills with what is in it: sticky date headers, pinch zoom between
+day/month/year, the fast-scroll bar, thumbnails through Coil with `coil-video` registered
+so a video tile shows a frame. The decisions it forced — the platform's persisted URI
+permissions as the record of what is granted rather than our own tables, `FolderMode.KEEP`
+until a settings screen can ask, read+write permission taken at grant time because SAF
+will not widen it later, `mtime` as the date when EXIF has not been read yet — are in
+PROJECT.md.
+
+README's Status section said the gallery shell, the Space screen and the editor were
+built. That was true of the logic and false of anything a user could open, and it has been
+corrected rather than softened: the section now says plainly that seven feature modules are
+empty and what the one working screen does.
+
+Still not there: navigation, a database behind the grid, and any way to start the night
+pass by tapping something.
 
 ## A green check that means nothing, closed off
 
