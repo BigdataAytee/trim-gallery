@@ -1,5 +1,30 @@
 # Changelog
 
+## A permanent link to the newest build
+
+Every green run on `main` now republishes the debug APK to a rolling pre-release tagged
+`latest`, so there is one URL that always serves the newest build:
+
+    https://github.com/BigdataAytee/trim-gallery/releases/latest
+
+The Actions artifact stays, and is still the way to get the APK from a *particular* commit.
+It is just a poor way to hand someone a build: it needs a GitHub account, it arrives as a
+zip, and it is deleted with the repository's retention period. A release asset has none of
+those properties and does not expire, and `--clobber` replaces it in place so the download
+link itself never changes.
+
+A separate `release` job rather than another step in `apk`, for one reason: publishing
+needs `contents: write`, and `apk` runs on every pull request. Keeping the write scope in a
+job gated on `main` means a pull request's token never carries it. `needs: apk` makes the
+precondition exact — a failed assemble or a failed DT_NEEDED check never satisfies `needs`,
+so nothing unverified is published.
+
+`gh`, preinstalled on the runner, rather than a third-party release action: this step
+carries a credential, and one less action to trust is worth a few lines of shell. The tag is
+force-moved before publishing, because `gh release edit` cannot repoint a tag and a release
+that claims an old commit while serving a new APK is the kind of small lie that costs an
+afternoon later.
+
 ## The review check is removed
 
 `claude-code-review.yml` is deleted, with the `claude-code-action` row and the
