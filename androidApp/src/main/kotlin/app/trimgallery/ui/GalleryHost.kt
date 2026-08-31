@@ -28,7 +28,9 @@ import app.trimgallery.core.ui.theme.TrimTheme
 import app.trimgallery.engine.LibraryStorage
 import app.trimgallery.engine.android.GrantedFolders
 import app.trimgallery.feature.gallery.GalleryScreen
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.catch
+import kotlinx.coroutines.withContext
 import kotlinx.datetime.TimeZone
 import kotlinx.datetime.todayIn
 import org.koin.compose.koinInject
@@ -72,17 +74,24 @@ fun GalleryHost(
         scanning = true
         failure = null
         val found = mutableListOf<MediaItem>()
+        var nextPublish = FIRST_BATCH
         storage.scan(grants)
             .catch { failure = it.message ?: it::class.simpleName }
             .collect { item ->
                 found += item
-                // Published in batches while the walk continues. A granted DCIM folder can
-                // hold tens of thousands of files and `SafStorage.scan` is a Flow precisely
-                // so the caller need not wait for the end of it; re-sorting on every single
-                // arrival would make the scan quadratic and the UI stutter.
-                if (found.size % SCAN_BATCH == 0) items = found.newestFirst()
+                // Published while the walk continues, at a doubling interval. `SafStorage.scan`
+                // is a Flow precisely so the caller need not wait for the end of a folder that
+                // can hold tens of thousands of files — but each publish sorts everything found
+                // so far, so publishing at a fixed interval would sort the whole list N/interval
+                // times and get slower exactly as the library gets bigger. Doubling makes that a
+                // handful of sorts however large the folder is, while keeping early feedback
+                // fast: 200 items, then 400, 800, and so on to a ceiling so updates never stop.
+                if (found.size >= nextPublish) {
+                    items = found.sortedNewestFirst()
+                    nextPublish = (nextPublish * 2).coerceAtMost(found.size + MAX_BATCH)
+                }
             }
-        items = found.newestFirst()
+        items = found.sortedNewestFirst()
         scanning = false
     }
 
@@ -115,9 +124,17 @@ fun GalleryHost(
  * ordered grid is a great deal more useful than one undifferentiated block, and the real
  * date replaces it as soon as the item is indexed. Recorded in PROJECT.md.
  */
-private fun List<MediaItem>.newestFirst(): List<MediaItem> = map { item ->
-    if (item.takenAt != null) item else item.copy(takenAt = Instant.fromEpochMilliseconds(item.mtime))
-}.sortedByDescending { it.takenAt }
+private suspend fun List<MediaItem>.sortedNewestFirst(): List<MediaItem> =
+    // Off the main thread. This runs inside the collector, which is resumed on the main
+    // dispatcher because that is where Compose state has to be written — and a copy plus a
+    // sort of a hundred thousand items there is a visibly frozen frame, on exactly the
+    // libraries this app exists for. The list cannot change underneath it: the collector is
+    // suspended for the duration, so nothing is appending while this runs.
+    withContext(Dispatchers.Default) {
+        map { item ->
+            if (item.takenAt != null) item else item.copy(takenAt = Instant.fromEpochMilliseconds(item.mtime))
+        }.sortedByDescending { it.takenAt }
+    }
 
 @Composable
 private fun NoFolderYet(modifier: Modifier = Modifier, onChoose: () -> Unit) {
@@ -185,6 +202,9 @@ private fun ScanState(scanning: Boolean, failure: String?, onChoose: () -> Unit)
     }
 }
 
-/** How many items to publish at a time while a scan is still walking. */
-private const val SCAN_BATCH = 200
+/** How many items to find before the grid first fills in, while a scan is still walking. */
+private const val FIRST_BATCH = 200
+
+/** The ceiling on the doubling interval, so a very large folder keeps showing progress. */
+private const val MAX_BATCH = 5_000
 private const val BUTTON_V_DP = 12
