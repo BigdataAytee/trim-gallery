@@ -1626,6 +1626,29 @@ point of having it.
 re-derive. *Procedure:* replace an asset that is in Favourites, Recently Added and Videos;
 confirm the replacement appears in all three without being added to any.
 
+**The milestone 1 encode itself — physical devices only.**
+`Milestone1EncodeTest.encodesToHevcWithAudioPassthroughAndPlaysBackInFull` requires a
+hardware HEVC encoder, and there is no configuration in which CI can supply one: a hosted
+emulator has no hardware codec, and BUILD.md § 2 rule 2 forbids the software fallback that
+would make it run. So the test is gated on `assumeTrue(caps.hevc.hardware)` and **skips on
+every CI run, by design**. That skip is the rule being observed, not a hole — the day it
+stops skipping in CI, something has been weakened.
+
+What the emulator does cover is `reportsCodecCapabilities`, which always runs: it exercises
+the real `MediaCodecList` walk, the hardware filter and the performance-point probe on an
+Android runtime, and logs what the device offered. It asserts only self-consistency — an
+encoder reporting no hardware must not also advertise a ceiling — because requiring
+hardware there would be requiring the impossible. The smoke job's remit is therefore
+install, launch, and this capability report; the encode is a device test.
+
+*Procedure:* on each of the three field-test device classes, run
+`./gradlew :androidApp:connectedSmokeAndroidTest` with the device attached and confirm the
+encode test runs rather than skips, produces HEVC video with the audio track transmuxed
+rather than re-encoded, and plays back at full duration. Record the device, chip and the
+`reportsCodecCapabilities` log line for each. A skip on physical hardware means the device
+genuinely has no hardware HEVC encoder, which is itself a finding worth recording against
+that chip.
+
 **Encoder quirks.** Real-time multiples per chip, whether AV1 sustains its advertised
 points, and the XPSNR↔VMAF calibration per bucket. All of it is FIELD_TEST.md, which is the
 procedure; none of it can be inferred from a desk.

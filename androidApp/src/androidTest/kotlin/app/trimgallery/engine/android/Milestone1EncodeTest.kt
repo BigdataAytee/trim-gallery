@@ -3,6 +3,7 @@ package app.trimgallery.engine.android
 import android.media.MediaExtractor
 import android.media.MediaFormat
 import android.net.Uri
+import android.util.Log
 import androidx.media3.common.MediaItem
 import androidx.media3.common.Player
 import androidx.media3.common.util.UnstableApi
@@ -58,19 +59,63 @@ class Milestone1EncodeTest {
         output.delete()
     }
 
+    /**
+     * What this device can actually do, reported rather than asserted.
+     *
+     * This is the part of the smoke job that is meaningful on an emulator. It proves the
+     * capability query itself runs on a real Android runtime — `MediaCodecList`, the
+     * hardware filter, the performance-point probe — which is the code every encode
+     * decision depends on and which no JVM test can reach. What it must not do is require
+     * a hardware encoder: an emulator has none, and the correct behaviour there is an
+     * honest report of zero, not a failure.
+     *
+     * The numbers go to logcat so a CI run leaves a record of what the device offered.
+     */
+    @Test
+    fun reportsCodecCapabilities() {
+        val caps = MediaCodecFactory(context).capabilities()
+        for ((name, e) in listOf("HEVC" to caps.hevc, "AV1" to caps.av1)) {
+            Log.i(
+                TAG,
+                "$name: hardware=${e.hardware} max=${e.maxWidth}x${e.maxHeight}@${e.maxFps} " +
+                    "cq=${e.cqSupported} performancePoints=${e.performancePoints.size}",
+            )
+        }
+        // The only assertion: the query returned without throwing and is self-consistent.
+        // A device with no hardware encoder must report no ceiling either, rather than
+        // advertising limits nothing can meet.
+        for (e in listOf(caps.hevc, caps.av1)) {
+            if (!e.hardware) {
+                assertEquals("a non-hardware encoder must not advertise a ceiling", 0, e.maxWidth)
+            }
+        }
+    }
+
     @Test
     fun encodesToHevcWithAudioPassthroughAndPlaysBackInFull() = runBlocking {
         val factory = MediaCodecFactory(context)
         val caps = factory.capabilities()
 
-        // BUILD.md § 2.2: with no hardware HEVC encoder the correct behaviour is to skip
-        // the file, not to encode it in software. That is a pass, not a failure.
+        // BUILD.md § 2 rule 2: with no hardware HEVC encoder the correct behaviour is to
+        // skip the file, never to encode it in software. So this test skips too — a skip
+        // here is the rule being observed, not a gap in coverage.
+        //
+        // The CI emulator always lands here, by design: an ATD image has no hardware
+        // encoder, and adding a software fallback to make this green would invert the one
+        // rule the whole app is built around. The smoke job's purpose is install, launch
+        // and the capability report below; the encode itself is a physical-device test and
+        // is listed as one in PROJECT.md's device-required section.
         //
         // `caps.hevc.hardware`, not `caps.hardwareHevc`: milestone 12 split `CodecCaps`
         // into one `EncoderCaps` per codec, because AV1's ceiling is commonly lower than
         // HEVC's on the same chip and a single flag hid that. This file kept the old flat
         // name for four milestones without anyone noticing, because nothing compiled it.
-        assumeTrue("device has no hardware HEVC encoder", caps.hevc.hardware)
+        assumeTrue(
+            "SKIPPED: no hardware HEVC encoder on this device. Expected on an emulator — " +
+                "BUILD.md § 2 rule 2 forbids a software fallback, so the encode path is " +
+                "verified on physical hardware only (see PROJECT.md, device-required).",
+            caps.hevc.hardware,
+        )
 
         val spec = EncodeSpec(
             codec = VideoCodec.HEVC,
@@ -163,6 +208,7 @@ class Milestone1EncodeTest {
         .maxOf { it.getLong(MediaFormat.KEY_DURATION) }
 
     private companion object {
+        const val TAG = "TrimGalleryCaps"
         const val GOLDEN = "golden-h264-640x360-3s.mp4"
         const val SOURCE_WIDTH = 640
         const val SOURCE_HEIGHT = 360
