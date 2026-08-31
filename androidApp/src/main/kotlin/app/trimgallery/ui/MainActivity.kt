@@ -4,11 +4,7 @@ import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
-import androidx.compose.foundation.background
-import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.text.BasicText
-import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import app.trimgallery.core.ui.theme.TrimTheme
 
@@ -20,7 +16,7 @@ import app.trimgallery.core.ui.theme.TrimTheme
  * share sheets, permission dialogs, document pickers, biometrics — and to feed the
  * design system the platform's accessibility settings.
  *
- * The gallery grid and viewer are milestone 8.
+ * The gallery grid and viewer are milestone 8; `GalleryHost` mounts them.
  */
 class MainActivity : ComponentActivity() {
 
@@ -33,16 +29,7 @@ class MainActivity : ComponentActivity() {
                 dark = true,
                 reduceMotion = isReduceMotionEnabled(),
             ) {
-                val colors = TrimTheme.colors
-                Box(
-                    modifier = Modifier.fillMaxSize().background(colors.page),
-                    contentAlignment = Alignment.Center,
-                ) {
-                    BasicText(
-                        text = "Trim Gallery",
-                        style = TrimTheme.typography.title.copy(color = colors.text),
-                    )
-                }
+                GalleryHost(modifier = Modifier.fillMaxSize())
             }
         }
     }

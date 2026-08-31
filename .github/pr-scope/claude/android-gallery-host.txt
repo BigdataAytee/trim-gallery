@@ -10,3 +10,4 @@
 # the project requires rather than widening the scope.
 androidApp/**
 gradle/libs.versions.toml
+README.md

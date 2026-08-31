@@ -2261,3 +2261,51 @@ rather land it and file them"* — and what remains after this commit is genuine
 self-test, `pre-push` could use the remote name git passes it rather than assuming
 `origin`, and nothing enforces scope outside a clone that ran `install-hooks.sh`. All
 three are follow-ups, not blockers, and none of them fails open.
+
+## The Android host — mounting the gallery (31 Aug 2026)
+
+Found by installing the APK and looking at it. `MainActivity` drew the app's name centred
+on an empty page and nothing else; every screen under `shared/feature` had been written,
+unit tested and never mounted. `MainActivityLaunchTest` passed throughout, because
+reaching RESUMED says the process came up, not that anything is on screen. Seven of the
+eight `shared/feature` modules contain only a `build.gradle.kts` — the milestone work for
+Space, the editor, settings, search, people, cleanup and compress is *logic*, in
+`shared/core/{model,domain,pipeline}`, and the screens for it do not exist.
+
+Decisions taken while wiring the one module that does have screens:
+
+**The platform owns the grant list, not our database.** `GrantedFolders` reads
+`ContentResolver.getPersistedUriPermissions()`. That is what actually decides whether a
+scan succeeds: it survives reboot and a cleared database, and the user can revoke a grant
+in system Settings without telling us. A row of ours that disagrees with it is a scan that
+fails at the first cursor. The database will hold what hangs off a grant — its folder
+mode, when it was last scanned — once a settings screen exists to change them.
+
+**Every grant is `FolderMode.KEEP` until the user is asked.** OFFLOAD moves originals and
+FREE expires them after N days. Both are destructive, both are choices BUILD.md § 6 gives
+the user, and no screen exists yet to ask. Defaulting to the one mode that never removes
+anything is the only defensible choice while the question cannot be put.
+
+**Read *and* write persisted permission is taken at grant time.** The write half is unused
+until `SafeReplacerAndroid` commits a replacement, but a SAF permission cannot be widened
+later without asking again — and discovering that on the night of the first replace would
+strand a verified encode with nowhere to put it.
+
+**The grid falls back to `mtime` when `takenAt` is null.** `SafStorage.scan` reads one
+cursor per folder and no file headers, by design: an EXIF read per file turns a second
+into a minute on a large library, and `ContainerReaderAndroid` does it later for the few
+files the diff found new or changed. So on a first run every item is undated and the whole
+library would land in one "Undated" section. The file's modification time is an
+approximation — a photo copied from another device carries the copy's date — but an
+approximately ordered grid beats one undifferentiated block, and the real date replaces it
+as soon as the item is indexed.
+
+**Coil's singleton loader is configured with `coil-video` and nothing else.** Both
+artifacts are named in STACK.md and were already dependencies. No `coil-network-*` is on
+the classpath, so the loader can only resolve the local content URI it is handed — which
+matters, because an image loader that could fetch is the obvious way for BUILD.md rule 8
+to quietly stop being true.
+
+What this host still is not: no database, no night pass, no navigation, no viewer beyond
+what `GalleryScreen` itself contains. It grants a folder, walks it, and shows what is in
+it.
