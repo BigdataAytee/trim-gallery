@@ -17,37 +17,39 @@
 
 [versions]
 # --- Build tooling ---
-composeMultiplatform = "1.12.0"   # [central] JetBrains: "the latest Compose Multiplatform is
-                                  # always compatible with the latest version of Kotlin", and the
-                                  # Compose compiler plugin ships with Kotlin, so these two are
-                                  # deliberately not pinned to each other.
+composeMultiplatform = "1.11.1"   # [central] see below. JetBrains: "the latest Compose
+                                  # Multiplatform is always compatible with the latest version of
+                                  # Kotlin", and the Compose compiler plugin ships with Kotlin, so
+                                  # these two versions are deliberately not pinned to each other.
                                   #
-                                  # 1.12.0 maps to androidx.compose 1.12.0, which declares
-                                  # minAgpVersion 9.1.0 and minCompileSdk 37 in its AAR metadata.
-                                  # That is why this line could not move alone, and why agp,
-                                  # compileSdk, targetSdk, the Gradle wrapper, coil and the two
-                                  # lifecycle lines below all move in this same commit. Splitting
-                                  # them would just fail `checkDebugAarMetadata` one dependency at a
-                                  # time.
-agp = "9.1.0"                     # [google] com.android.tools.build:gradle. The floor set by
-                                  # androidx.compose 1.12.0's minAgpVersion, read out of the
-                                  # published AAR metadata rather than from release notes.
+                                  # Held one line back from 1.12.0, which maps to androidx.compose
+                                  # 1.12.0, which declares minAgpVersion 9.1.0 and minCompileSdk 37.
+                                  # 1.11.1 maps to androidx.compose 1.11.2 (checked artifact by
+                                  # artifact in the Gradle module metadata on Maven Central), which
+                                  # stays on the AGP 8.13 / compileSdk 36 line the rest of this
+                                  # build is verified against.
+                                  #
+                                  # Not held back because of detekt. That was the first guess and it
+                                  # was wrong: detekt 1.23.8 and ktlint-gradle 14.2.0 were both run
+                                  # against Gradle 9.7.1 here and both work — detekt analysed and
+                                  # reported, ktlint linted and reported. The real cost of taking
+                                  # Compose 1.12 is AGP 9 + Gradle 9 + compileSdk 37 in one step,
+                                  # every piece of which lives on Google Maven, which this
+                                  # environment cannot reach; that upgrade is a CI-only experiment
+                                  # and belongs in its own change, not in a green-the-build pass.
+agp = "8.13.0"                    # [google] com.android.tools.build:gradle
 kotlin = "2.4.10"                 # [central] latest stable; Compose Multiplatform tracks latest Kotlin
 detekt = "1.23.8"                 # [central]
 ktlint-gradle = "14.2.0"          # [central] plugins.gradle.org
 
 # --- SDK levels (BUILD.md: minSdk 29) ---
-compileSdk = "37"                 # [google] androidx.compose 1.12.0 and coil3 3.6.0 both
-                                  # declare minCompileSdk=37.
+compileSdk = "36"                 # [google]
 minSdk = "29"
-targetSdk = "37"                  # [google] moved with compileSdk; behaviour changes for 37
-                                  # are reviewed as CI surfaces them.
+targetSdk = "36"                  # [google]
 
 # --- AndroidX / Compose ---
 activityCompose = "1.11.0"        # [google]
-lifecycle = "2.10.0"              # [google] matches what lifecycleMp 2.10.0 resolves to on
-                                  # Android, so the two lines agree rather than one silently
-                                  # upgrading the other.
+lifecycle = "2.9.4"               # [google]
 media3 = "1.9.0"                  # [google] androidx.media3:*
 work = "2.10.5"                   # [google]
 datastore = "1.1.7"               # [google]
@@ -62,23 +64,24 @@ sqldelight = "2.3.2"              # [central] replaces Room: Room KMP has no Kot
 koin = "4.2.2"                    # [central] replaces Hilt: Hilt is JVM/Android only, no Kotlin/Native
 kotlinx-datetime = "0.8.0"        # [central]
 kotlinx-serialization = "1.11.0"  # [central]
-lifecycleMp = "2.10.0"            # [central] org.jetbrains.androidx.lifecycle. Its release
-                                  # variant depends on androidx.lifecycle:lifecycle-viewmodel-compose
-                                  # 2.10.0 (read from the Gradle module metadata on Maven Central),
-                                  # which is the `lifecycle` line above — the two agree deliberately.
+lifecycleMp = "2.9.6"             # [central] org.jetbrains.androidx.lifecycle. Exactly what
+                                  # Compose Multiplatform 1.11.1 depends on itself, and its Android
+                                  # variant maps to androidx.lifecycle 2.9.4 — the `lifecycle`
+                                  # version above, so the two lines agree instead of one silently
+                                  # upgrading the other.
                                   #
-                                  # This is the line that made the upgrade unavoidable rather than
-                                  # optional: 2.10.0 pulls the androidx.compose line to 1.12.0 from
-                                  # behind Compose Multiplatform's back, so holding Compose down
-                                  # without holding this down achieved nothing.
+                                  # 2.10.0 maps to androidx.lifecycle 2.10.0, which pulls the whole
+                                  # androidx.compose line up to 1.12.0 and reintroduces the AGP 9.1
+                                  # requirement from behind Compose Multiplatform's back. Stepping
+                                  # Compose down without stepping this down leaves it at 1.12.0.
 navigationMp = "2.9.2"            # [central] org.jetbrains.androidx.navigation
 
 # --- Third party (STACK.md) ---
 coroutines = "1.11.0"             # [central]
-coil = "3.6.0"                    # [central] Held at 3.5.0 while this build compiled against
-                                  # SDK 36, because every coil3 Android artifact at 3.6.0 declares
-                                  # minCompileSdk=37 (read out of the published .aar). compileSdk is
-                                  # 37 now, so the hold is spent.
+coil = "3.5.0"                    # [central] Not 3.6.0: every coil3 Android artifact at
+                                  # 3.6.0 declares minCompileSdk=37, and this build compiles against
+                                  # 36. 3.5.0 declares 36 (read out of the published .aar, not
+                                  # guessed). Move together with compileSdk, not before it.
 telephoto = "0.19.0"              # [central]
 lottie = "6.7.1"                  # [central]
 accompanist = "0.37.3"            # [google]
