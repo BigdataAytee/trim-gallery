@@ -1354,6 +1354,33 @@ With the target collision gone, `configureCMakeDebug[arm64-v8a]` passed and
   was not the bug but not being able to see it; a summary that silently omits a whole
   toolchain is worse than no summary.
 
+- **A library libjxl does not define unless you ask for its tools.** `ssim2_score.cc` loads
+  pixels through `lib/extras/codec.h`, which lives in the `jxl_extras-internal` target — and
+  libjxl includes `lib/jxl_extras.cmake` only `if(JPEGXL_ENABLE_TOOLS OR BUILD_TESTING)`,
+  both of which this build had set OFF. CMake does not object to a link name it has never
+  heard of: it passes it through as `-ljxl_extras-internal`, so the whole tree cross-compiles
+  and the failure lands on the last edge of 225, at the link. `JPEGXL_ENABLE_TOOLS` is now
+  ON, which is what the comment above it had claimed all along — the code had drifted from
+  its own stated intent. It defines libjxl's tool targets without building them, because the
+  Android build now names `trim_native` on the ninja command line.
+
+- **A tools source used through its header but never compiled.** `jpegxl::tools::
+  NoMemoryManager()` is declared in `tools/no_memory_manager.h`, which both
+  `ssimulacra2.cc` and our `ssim2_score.cc` include, and defined in
+  `tools/no_memory_manager.cc`, which belongs to a tools library this build does not link.
+  Five undefined references at the final link. Compiled into `trim_native` beside
+  `ssimulacra2.cc`, which was already there for exactly the same reason.
+
+- **The host harness proved compilation and called it a build.** Both link errors above
+  could have been caught locally in seconds and were not, because on the host `trim_native`
+  is a STATIC library and `tools/build-native-host.sh` built only that target. Archiving
+  never resolves a symbol or looks for a dependency, so "it builds" meant no more than
+  "every file compiled". `test_metrics` is the one target in this tree that links
+  `trim_native` into an executable, so the harness now configures with
+  `-DTRIM_NATIVE_TESTS=ON` and builds it. It caught the `NoMemoryManager` error on its first
+  run, before CI ever saw it. The general lesson is worth more than either bug: a local
+  harness has to reach the same *kind* of step as the real build, not just the same files.
+
 ### The guards guard themselves
 
 - **A rule declares the languages it polices, and must have a planted violation in each.**

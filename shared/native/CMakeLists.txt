@@ -134,7 +134,15 @@ set(JPEGXL_ENABLE_JNI OFF CACHE BOOL "" FORCE)
 set(JPEGXL_ENABLE_PLUGINS OFF CACHE BOOL "" FORCE)
 set(JPEGXL_ENABLE_VIEWERS OFF CACHE BOOL "" FORCE)
 set(JPEGXL_ENABLE_DEVTOOLS OFF CACHE BOOL "" FORCE)
-set(JPEGXL_ENABLE_TOOLS OFF CACHE BOOL "" FORCE)
+# ON, and the comment above is why: `lib/jxl_extras.cmake` — which defines
+# `jxl_extras-internal`, the target carrying `lib/extras/codec.h` that `ssim2_score.cc`
+# loads pixels through — is included by libjxl only `if(JPEGXL_ENABLE_TOOLS OR
+# BUILD_TESTING)`. With it OFF the target simply does not exist, and CMake passes the
+# unknown name straight to the linker as `-ljxl_extras-internal`, which fails at the very
+# last edge of the build with "unable to find library". Turning it on defines libjxl's tool
+# targets; it does not build them, because the Android build names `trim_native` on the
+# ninja command line and CMake only builds that target's dependencies.
+set(JPEGXL_ENABLE_TOOLS ON CACHE BOOL "" FORCE)
 set(JPEGXL_ENABLE_SKCMS ON CACHE BOOL "" FORCE)
 set(BUILD_TESTING OFF CACHE BOOL "" FORCE)
 add_subdirectory(libjxl EXCLUDE_FROM_ALL)
@@ -266,6 +274,12 @@ set(TRIM_SOURCES
     # SSIMULACRA 2 itself. Upstream ships it as a tool source rather than in the library,
     # so it is compiled here from the submodule rather than copied into src/.
     libjxl/tools/ssimulacra2.cc
+    # `jpegxl::tools::NoMemoryManager()`, which both ssimulacra2.cc and our ssim2_score.cc
+    # call through `tools/no_memory_manager.h`. The header only declares it; the definition
+    # is a tools source like ssimulacra2.cc, and belongs to a tools *library* this build
+    # does not link. Including the header and not the source links cleanly right up to the
+    # final executable and then fails with five undefined references.
+    libjxl/tools/no_memory_manager.cc
 )
 
 set(TRIM_NATIVE_LIBS

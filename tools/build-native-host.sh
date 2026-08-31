@@ -29,9 +29,17 @@ if [ ! -f "$root/shared/native/libjxl/CMakeLists.txt" ]; then
     exit 1
 fi
 
-cmake -S "$root/shared/native" -B "$build" -GNinja -DCMAKE_BUILD_TYPE=Release
-cmake --build "$build" --target trim_native "-j$(nproc 2>/dev/null || echo 4)"
+# `TRIM_NATIVE_TESTS=ON` is not about running the tests here — it is about `test_metrics`,
+# which is the only target in this tree that *links* trim_native into an executable. On the
+# host trim_native is a STATIC library, and archiving never resolves a symbol or looks for a
+# dependency, so building it alone proved only that every file compiled. That is exactly how
+# `-ljxl_extras-internal` — a target libjxl does not define unless JPEGXL_ENABLE_TOOLS is on
+# — reached CI and failed at edge 225 of 225, after a full cross-compile. Linking here makes
+# the same mistake fail locally in seconds.
+cmake -S "$root/shared/native" -B "$build" -GNinja -DCMAKE_BUILD_TYPE=Release \
+    -DTRIM_NATIVE_TESTS=ON
+cmake --build "$build" --target trim_native test_metrics "-j$(nproc 2>/dev/null || echo 4)"
 
 echo
-echo "OK — shared/native configures and builds for the host."
+echo "OK — shared/native configures, builds and links for the host."
 echo "This does not prove the arm64 or iOS build: no NDK here, and no Mac."
