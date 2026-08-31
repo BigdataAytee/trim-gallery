@@ -40,6 +40,11 @@ set -uo pipefail
 # Conventional glob matching: ** crosses slashes, * and ? do not.
 matches_glob() {
     local file=$1 pattern=$2 rx='' i c
+    # A leading `**/` matches at the root too, as gitignore does: `**/Foo.kt`
+    # should find a top-level Foo.kt, not only a nested one.
+    case "$pattern" in
+        '**/'*) matches_glob "$file" "${pattern#**/}" && return 0 ;;
+    esac
     for (( i=0; i<${#pattern}; i++ )); do
         c=${pattern:i:1}
         case "$c" in
@@ -86,17 +91,30 @@ while read -r local_ref local_sha _remote_ref _remote_sha; do
     # entirely — so the lookup would miss and the push would go unexamined. It
     # also means an uncommitted `rm` of the scope file cannot disable the check
     # for a commit that still contains it.
-    scope_text=$(git show "$local_sha:$scope_path" 2>/dev/null) || continue
+    # From the commit first. The worktree copy is the fallback for a branch whose
+    # very first push carries a scope file that is staged but not yet committed.
+    scope_text=$(git show "$local_sha:$scope_path" 2>/dev/null) \
+        || scope_text=$(cat "$(git rev-parse --show-toplevel)/$scope_path" 2>/dev/null) \
+        || continue
 
     base=$(git merge-base origin/main "$local_sha" 2>/dev/null) || {
         echo "pre-push: no merge-base with origin/main for $branch; not checking scope" >&2
         continue
     }
 
-    changed=$(git diff --name-only "$base".."$local_sha")
+    # --no-renames: with rename detection on, `git mv shared/core/pipeline/Foo.kt
+    # androidApp/Foo.kt` reports only the destination, so a branch scoped to
+    # androidApp/** would pass while deleting a file in the directory
+    # ARCHITECTURE.md guards hardest. Both paths must be seen.
+    changed=$(git diff --no-renames --name-only "$base".."$local_sha")
     [ -n "$changed" ] || continue
 
-    patterns=$(printf '%s\n' "$scope_text" | grep -v '^[[:space:]]*#' | grep -v '^[[:space:]]*$')
+    # sed strips surrounding whitespace: a trailing space would otherwise become
+    # part of the regex, matching nothing, leaving the branch narrower than its
+    # scope file reads.
+    patterns=$(printf '%s\n' "$scope_text" \
+        | sed 's/^[[:space:]]*//; s/[[:space:]]*$//' \
+        | grep -v '^#' | grep -v '^$')
     if [ -z "$patterns" ]; then
         echo "pre-push: $scope_path declares no patterns." >&2
         echo "          A scope file that permits nothing is probably a mistake:" >&2

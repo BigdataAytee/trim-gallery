@@ -68,10 +68,20 @@ fi
 
 # `bash "$f"`, not `./"$f"`: the executable bit is exactly what install-hooks.sh
 # resets because it is not to be trusted on every clone. Same call as build.yml.
+# Exit 2 is these scripts' "I cannot run here" (check-apk-libraries-selftest.sh
+# needs cc/zip/unzip/readelf, and its Mach-O output on macOS has no DT_NEEDED to
+# read). Collapsing that into failure would make the harness's green state
+# unreachable on a Mac — and an unreachable green is how a harness gets ignored,
+# which is the disease this file replaced.
 for selftest in tools/git-hooks-selftest.sh tools/check-apk-libraries-selftest.sh; do
     echo
     echo "=== $selftest ==="
-    if bash "$selftest"; then echo "-- $selftest OK"; else echo "-- $selftest FAILED"; fail=1; fi
+    bash "$selftest"; rc=$?
+    case $rc in
+        0) echo "-- $selftest OK" ;;
+        2) echo "-- $selftest SKIPPED (toolchain not available here; CI runs it)" ;;
+        *) echo "-- $selftest FAILED"; fail=1 ;;
+    esac
 done
 
 echo

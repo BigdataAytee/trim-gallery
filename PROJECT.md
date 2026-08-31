@@ -2173,3 +2173,36 @@ is *not* HEAD — which fails on the old code and passes on the new.
 That is the second time on this branch that the tests were shaped by the same assumption
 as the code. The first was a fixture using a flat branch name where the convention is
 slashed. Both were found by a reader who had not written either.
+
+### Third round: three GNU-only constructs in a repo that ships an iOS target
+
+The reviewer's third pass found the pattern rather than just the instances. Each round I
+had reached for whatever worked on this Linux container, and each time it was a GNU
+extension that fails differently — and mostly silently — on the macOS half of this
+project:
+
+| Construct | On macOS |
+|---|---|
+| `timeout 2 cat` | absent; stderr discarded and `\|\| true` swallow it, so the hook falls back to HEAD |
+| `grep '^\s*#'` | `\s` is literal `s`, so an indented comment survives into the pattern list |
+| `sed 's/...\(bin\|all\)...'` | BRE alternation is GNU-only; the parse returns empty and *every* local check refuses to start |
+
+The last one I introduced myself, in the commit that fixed the reviewer's previous
+complaint about that same regex. Fixing a portability-adjacent bug by writing a
+less portable expression is worth recording as its own failure mode.
+
+Two more holes from the same pass, both in the shape this branch is supposed to be about:
+
+- **Rename detection hid a boundary crossing.** `git diff --name-only` reports only the
+  destination of a rename, so `git mv shared/core/pipeline/Foo.kt androidApp/Foo.kt` on a
+  branch scoped to `androidApp/**` passed — while deleting a file in the directory
+  ARCHITECTURE.md guards hardest. `--no-renames` shows both paths. Verified by
+  construction before fixing, and there is a case for it now.
+- **`checkall.sh` could never pass without an ELF toolchain.**
+  `check-apk-libraries-selftest.sh` exits 2 for "I cannot run here", distinct from 1 for a
+  real violation, and the harness collapsed both into failure. On a Mac the green state
+  was unreachable — and an unreachable green is how a harness gets ignored, which is the
+  disease this file replaced.
+
+The self-tests went 8 → 11 → 12 → 14 across the three rounds, and every added case came
+from a defect a reader found rather than one the author predicted.

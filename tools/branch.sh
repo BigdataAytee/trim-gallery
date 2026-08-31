@@ -66,7 +66,10 @@ if [ $# -gt 0 ]; then
         echo "# the project requires rather than widening the scope."
         for glob in "$@"; do echo "$glob"; done
     } > "$scope_file"
-    echo "declared scope:"
+    # Staged, not just written: pre-push reads the scope out of the commit being
+    # pushed, so an unstaged scope file would leave the first push unguarded.
+    git -C "$dest" add "$scope_file"
+    echo "declared scope (staged):"
     printf '  %s\n' "$@"
 fi
 

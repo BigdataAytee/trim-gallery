@@ -23,7 +23,7 @@ check() { # name, expected(0|1), files...
         git update-ref refs/remotes/origin/main main
         git checkout -qb claude/scoped
         mkdir -p .github/pr-scope/claude
-        printf 'androidApp/**\ntools/*.sh\n' > .github/pr-scope/claude/scoped.txt
+        printf 'androidApp/**  \ntools/*.sh\n' > .github/pr-scope/claude/scoped.txt
         for f in "$@"; do mkdir -p "$(dirname "$f")"; echo x >> "$f"; done
         git add -A; git commit -qm change
         cp "$hook" .git/hooks/pre-push
@@ -55,6 +55,8 @@ check "* does not cross a slash (tools/*.sh vs tools/sub/x.sh)" 1 \
       tools/sub/x.sh
 check "** does cross a slash (androidApp/**)"          0 \
       androidApp/a/b/c/Deep.kt
+check "a trailing space on a pattern still matches"    0 \
+      androidApp/Trailing.kt
 
 
 commit_check() { # name, expected, branch, where(primary|worktree)
@@ -89,6 +91,39 @@ commit_check() { # name, expected, branch, where(primary|worktree)
 # branch that is already checked out, so the HEAD fallback and the stdin path
 # give the same answer — which is exactly why a broken stdin path (no timeout(1)
 # on macOS) and a scope file read from the wrong worktree both went unnoticed.
+# A `git mv` out of shared/ reports only the destination unless --no-renames is
+# used, so a branch scoped to androidApp/** would pass while deleting a file in
+# the directory ARCHITECTURE.md guards hardest.
+rename_check() {
+    rm -rf "$tmp/r2"; mkdir -p "$tmp/r2"
+    (
+        cd "$tmp/r2"
+        git init -q -b main
+        git config user.email t@t; git config user.name t
+        mkdir -p shared/core/pipeline .github/pr-scope/claude androidApp
+        echo x > shared/core/pipeline/Foo.kt
+        printf 'androidApp/**\n' > .github/pr-scope/claude/scoped.txt
+        git add -A; git commit -qm seed; git update-ref refs/remotes/origin/main main
+        git checkout -qb claude/scoped
+        git mv shared/core/pipeline/Foo.kt androidApp/Foo.kt
+        git commit -qm move
+        mkdir -p .git/hooks; cp "$hookdir/pre-push" .git/hooks/; chmod +x .git/hooks/pre-push
+        printf 'refs/heads/claude/scoped %s refs/heads/claude/scoped %s\n' \
+            "$(git rev-parse HEAD)" "$(git rev-parse main)" \
+            | bash .git/hooks/pre-push >/dev/null 2>&1
+        echo $?
+    ) > "$tmp/r2out"
+    local got; got=$(cat "$tmp/r2out")
+    if [ "$got" = "1" ]; then
+        echo "  ok    a rename out of shared/ is caught, not hidden by rename detection"; pass=$((pass+1))
+    else
+        echo "  FAIL  a rename out of shared/ is caught (expected 1, got $got)"; fail=$((fail+1))
+    fi
+}
+echo
+echo "rename detection:"
+rename_check
+
 echo
 echo "pushing a branch that is not checked out:"
 rm -rf "$tmp/x"; mkdir -p "$tmp/x"

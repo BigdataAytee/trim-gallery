@@ -22,7 +22,12 @@ props=gradle/wrapper/gradle-wrapper.properties
 # candidates and milestones (gradle-9.8-rc-1-bin.zip) parse too. Matching only
 # digits-and-dots would fail closed on the day someone pins an RC to chase an AGP
 # preview — which this project's history says will happen.
-pinned=$(sed -n 's/^distributionUrl=.*\/gradle-\(.*\)-\(bin\|all\)\.zip$/\1/p' "$props")
+# Two expressions rather than \(bin\|all\): BRE alternation is a GNU extension and
+# BSD sed does not have it, so on macOS the parse would return empty and every
+# local check would refuse to start. Fails closed, but permanently, on the
+# platform half this project's targets need.
+pinned=$(sed -n -e 's/^distributionUrl=.*\/gradle-\(.*\)-bin\.zip$/\1/p' \
+                -e 's/^distributionUrl=.*\/gradle-\(.*\)-all\.zip$/\1/p' "$props")
 [ -n "$pinned" ] || {
     echo "guardrail: could not read a version out of distributionUrl in $props" >&2
     grep '^distributionUrl' "$props" >&2
