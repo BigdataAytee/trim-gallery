@@ -1540,6 +1540,33 @@ With the target collision gone, `configureCMakeDebug[arm64-v8a]` passed and
   read what the system actually recorded about that object rather than reasoning forward
   from the configuration.
 
+## AGP 9 / Compose 1.12 upgrade
+
+- **The whole version set had to move in one commit.** androidx.compose 1.12.0 declares
+  `minAgpVersion=9.1.0` and `minCompileSdk=37` in its AAR metadata, so Compose Multiplatform
+  1.12.0 cannot land without AGP 9.1, Gradle 9, compileSdk 37 and — because it was held only
+  by compileSdk 36 — coil 3.6.0. Splitting them would just fail `checkDebugAarMetadata` one
+  dependency at a time. The lifecycle pair moved too: `org.jetbrains.androidx.lifecycle`
+  2.10.0 resolves to `androidx.lifecycle` 2.10.0 (read from the Gradle module metadata on
+  Maven Central), which is what pulls androidx.compose to 1.12.0 from behind Compose
+  Multiplatform's back — so holding Compose down while that line moved achieved nothing.
+
+- **Compose 1.12 deprecated two plugin accessors.** `compose.ui` and `compose.uiTooling` are
+  now errors — "Specify dependency directly" and "Use org.jetbrains.compose.ui:ui-tooling
+  module instead". They are catalogue entries now, versioned from the same
+  `composeMultiplatform` reference so there is still exactly one Compose version in the
+  build. `compose.runtime`, `compose.foundation` and `compose.material3` were not deprecated
+  and are unchanged. `compose.ui` was used in `shared/core/ui` as well as `androidApp`, so
+  fixing only the site CI named would have failed on the next module.
+
+- **The local harness was testing the wrong Gradle.** It invokes the system `gradle`, which
+  is 8.14.3, not the wrapper — so every "local checks passed" on this branch was exercising
+  the version being upgraded away from. Re-run against a downloaded Gradle 9.7.1, the whole
+  local surface passes: shared modules, SQLDelight, ktlint, detekt, the guards over 194
+  files, and the guard self-tests. That is the half of this upgrade provable here; AGP 9.1.0,
+  compileSdk 37 and androidx.compose 1.12.0 live on Google Maven, which this environment
+  refuses, so they are CI-only.
+
 ### The guards guard themselves
 
 - **A rule declares the languages it polices, and must have a planted violation in each.**

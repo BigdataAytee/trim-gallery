@@ -1,5 +1,25 @@
 # Changelog
 
+## AGP 9 / Compose Multiplatform 1.12
+
+A version bump with no behaviour change, done as one commit because the pieces cannot
+move apart.
+
+androidx.compose 1.12.0 declares `minAgpVersion=9.1.0` and `minCompileSdk=37` in its AAR
+metadata. That makes Compose Multiplatform 1.12.0, AGP 9.1.0, Gradle 9.7.1, compileSdk and
+targetSdk 37, and coil 3.6.0 a single set — split them and `checkDebugAarMetadata` fails
+one dependency at a time. The lifecycle pair (`org.jetbrains.androidx.lifecycle` and
+`androidx.lifecycle`, both 2.10.0) is in the set for a subtler reason: the multiplatform
+line resolves to the AndroidX one, which pulls androidx.compose to 1.12.0 from behind
+Compose Multiplatform's back, so holding Compose back while that moved achieved nothing.
+
+Compose 1.12 turned two plugin accessors into errors — `compose.ui` ("specify dependency
+directly") and `compose.uiTooling` ("use org.jetbrains.compose.ui:ui-tooling module
+instead"). Both are version-catalogue entries now, referencing the same
+`composeMultiplatform` version so the build still has exactly one Compose version in it.
+`compose.runtime`, `compose.foundation` and `compose.material3` were not deprecated and are
+untouched.
+
 ## Hardening pass — CI, guard self-tests, thermal floor
 
 No new features. Three things that were claims rather than facts, made into facts.

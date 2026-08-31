@@ -179,7 +179,7 @@ dependencies {
     // is what dragged in 1.12.0 — which `checkDebugAarMetadata` rejected against AGP 8.13
     // with 29 issues. Every other module in this project already takes `compose.*` from the
     // plugin; this one is now the same, and there is one Compose version in the build.
-    implementation(compose.ui)
+    implementation(libs.compose.ui)
     implementation(libs.androidx.activity.compose)
     implementation(libs.androidx.lifecycle.runtime.compose)
 
@@ -216,7 +216,7 @@ dependencies {
     implementation(libs.coil.compose)
     implementation(libs.coil.video)
 
-    debugImplementation(compose.uiTooling)
+    debugImplementation(libs.compose.ui.tooling)
 
     testImplementation(libs.junit)
     testImplementation(libs.kotlinx.coroutines.test)

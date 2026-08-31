@@ -25,7 +25,7 @@ kotlin {
                 api(compose.runtime)
                 api(compose.foundation)
                 api(compose.animation)
-                api(compose.ui)
+                api(libs.compose.ui)
                 implementation(libs.lifecycle.viewmodel.compose.mp)
                 implementation(libs.navigation.compose.mp)
                 api(projects.shared.core.model)
