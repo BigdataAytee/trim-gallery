@@ -41,8 +41,10 @@ android {
         externalNativeBuild {
             cmake {
                 arguments += listOf("-DANDROID_STL=c++_static")
-                cFlags += "-march=armv8-a+simd"
-                cppFlags += "-march=armv8-a+simd"
+                // The SIMD flag is NOT set here any more. Gradle applies cFlags to every
+                // ABI, so `-march=armv8-a+simd` reached the x86_64 compiler the moment the
+                // smoke variant added that ABI, and clang rejects an ARM architecture name
+                // outright. CMake knows which ABI it is configuring; it sets the flag now.
                 // Without this, AGP asks ninja for every target the CMake graph defines,
                 // which here means libjxl's and jpegli's fuzzers, benchmarks and command
                 // line tools — none of which this app links, several of which do not build
@@ -64,14 +66,13 @@ android {
     testOptions {
         managedDevices {
             localDevices {
-                create("smokePixel") {
+                create("pixel") {
                     device = "Pixel 6"
                     apiLevel = 34
-                    // arm64-v8a, and it has to be: `abiFilters` above ships one ABI, so an
-                    // x86_64 system image cannot install this APK at all. That pins the
-                    // smoke test to an arm64 host — an Apple-silicon macOS runner in CI —
-                    // which is the price of testing the artefact users actually get rather
-                    // than a second one built only to be testable.
+                    // ATD: no Play services, no store, and a much smaller image — this test
+                    // starts an activity, it does not need a Google account. Paired with the
+                    // `smoke` build type above, the image is x86_64 and runs under KVM at
+                    // native speed rather than being emulated instruction by instruction.
                     systemImageSource = "aosp-atd"
                 }
             }
@@ -79,6 +80,21 @@ android {
     }
 
     buildTypes {
+        // Debug and release ship arm64-v8a alone, from `defaultConfig.ndk.abiFilters`.
+        //
+        // `smoke` exists so the app can be launched on an emulator in CI and nothing else.
+        // No GitHub-hosted runner can virtualise an arm64 Android image — macOS runners are
+        // themselves VMs and refuse with `HVF error: HV_UNSUPPORTED` — so the only way to
+        // prove the app starts is an x86_64 emulator, which needs an x86_64 build of the
+        // native libraries. `abiFilters` unions with defaultConfig's, so this variant is
+        // arm64-v8a + x86_64 and every other variant is unchanged. It is never published:
+        // `release` is what ships, and it has one ABI.
+        create("smoke") {
+            initWith(getByName("debug"))
+            matchingFallbacks += "debug"
+            ndk { abiFilters += "x86_64" }
+        }
+
         release {
             isMinifyEnabled = true
             isShrinkResources = true

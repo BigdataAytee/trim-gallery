@@ -1423,21 +1423,24 @@ With the target collision gone, `configureCMakeDebug[arm64-v8a]` passed and
   deliberately not a UI test — what is on screen belongs in tests that can afford to be
   wrong about layout.
 
-- **No GitHub-hosted runner can run the smoke test, and the reason is structural.** The
-  reasoning was: the APK ships arm64-v8a alone, so the emulator must be arm64, so the host
-  must be Apple silicon, so `macos-14`. The step that was wrong is the last one — GitHub's
-  macOS runners are themselves virtual machines and do not expose nested virtualisation, so
-  Hypervisor.framework refuses with `HVF error: HV_UNSUPPORTED` and the device never boots.
-  Every GitHub-hosted runner that *can* boot an emulator (ubuntu with KVM, the Intel macOS
-  images) is x86_64, and this APK will not install on those.
-  So the real choice is between adding x86_64 to debug builds — cross-compiling every
-  native library twice in order to launch an ABI nobody ships — and providing an arm64 host
-  that can virtualise. That is a question about what the project pays for, not something to
-  decide inside a workflow file, so the job is `workflow_dispatch`-only until it is
-  answered. The test and the managed-device definition are correct and unchanged: on an
-  Apple-silicon machine `./gradlew :androidApp:smokePixelDebugAndroidTest` runs them today.
-  Recorded rather than deleted, because the gap it covers — nothing here proves the app
-  starts — is real and still open.
+- **The smoke test runs on x86_64 under KVM, and that is a deliberate exception to the one
+  shipped ABI.** The first attempt reasoned: the APK is arm64-v8a, so the emulator must be
+  arm64, so the host must be Apple silicon, so `macos-14`. The last step is wrong — GitHub's
+  macOS runners are themselves virtual machines with no nested virtualisation, so
+  Hypervisor.framework refuses (`HVF error: HV_UNSUPPORTED`) and the device never boots. No
+  hosted runner can virtualise arm64 Android; every one that can boot an emulator is x86_64.
+  So a `smoke` build type adds x86_64 to arm64-v8a, and only that build type: `release`
+  still carries a single `abiFilters` entry, so shipping x86_64 would take a deliberate
+  build-file change. The native tree now describes both ABIs properly — the `-march` flag
+  moved out of Gradle (which applies `cFlags` to every ABI and would have handed an ARM
+  architecture name to the x86_64 compiler) and into CMake, which knows which ABI it is
+  configuring, and the meson cross file's `cpu_family`, `cpu` and arch argument are
+  substituted per ABI instead of being hardcoded to aarch64. The extra cross-compile is
+  cached. Nothing on x86_64 is measured and no number from it is a finding: the variant
+  exists to prove the app starts, which nothing else here does.
+
+- **The macOS smoke job is gone rather than kept on manual dispatch.** It could not run at
+  all, so it offered nothing the Linux job does not.
 
 - **The native jobs have a 90-minute cap and a cache.** A cold arm64 cross-compile of
   libjxl, jpegli, brotli, lcms and Highway is about seven minutes, so 90 is far above the
@@ -1446,6 +1449,27 @@ With the target collision gone, `configureCMakeDebug[arm64-v8a]` passed and
   cache does not, and is keyed on the CMake inputs plus the exact submodule commits — a
   submodule bump or a CMakeLists edit misses and rebuilds, because serving a stale object
   for a changed source is worse than not caching.
+
+- **Free undo retention is 30 days, not 7.** MONETIZATION.md gave the free tier 7 while
+  BUILD.md § 6 promised a 30-day default, and the code resolved it by clamping — so a free
+  user saw the 30 they had been promised and got 7. "Free space" mode's whole premise is
+  that originals are recoverable for the window the user was shown; a paywall that shortens
+  it deletes photographs three weeks before they expect it, and deleting someone's only copy
+  is not a conversion moment. Free is now 30 — the § 6 promise, kept — and Pro's value is
+  the extension to 90, which takes nothing away. Both documents and the free-tier tests say
+  the same thing now, including a new test that Pro is the only tier that can go past the
+  free ceiling.
+
+- **iOS replace is behind `FeatureFlags.IOS_REPLACE_ENABLED`, off.** `SafeReplacerIos.commit`
+  refuses before opening a change block, and a shared test fails the build if the constant is
+  flipped — so the only way to enable it is to open that test, read why it was off, and run
+  the PhotoKit change-block atomicity procedure now written out in full in the
+  device-required list above. The flag is not hiding unfinished code: the sequence is written
+  and its rollback is tested against a fake that throws at every step. What is untested is
+  whether PhotoKit itself rolls back rather than half-applying, which no test that avoids a
+  real photo library can establish, and whose failure mode is the original deleted with
+  nothing to restore from. Read paths, preflight, encode and `saveCopy` are unaffected: this
+  build can measure and can save a copy, it cannot replace.
 
 ### The guards guard themselves
 
@@ -1490,6 +1514,27 @@ count transitions per minute. If serious↔fair swings exceed roughly one a minu
 `ThermalState.FAIR` to `HELD_FAIR` — the constant is already there and tested. The 60 s
 pause floor should already reduce the *pauses* to one a minute regardless; this measures
 whether the underlying signal justifies the stronger fix.
+
+**PhotoKit change-block atomicity — the gate on `FeatureFlags.IOS_REPLACE_ENABLED`.**
+`SafeReplacerIos.commit` refuses before opening a change block while that flag is off, and a
+shared test fails the build if it is flipped, so this procedure is the only thing that turns
+iOS replace on. Run it, record the result here, then remove the flag and its test together.
+
+*Procedure, in full:*
+1. On a device, with a throwaway library, replace an asset that belongs to a user album.
+   Confirm the replacement carries creationDate, location, favorite and album membership.
+2. Force a failure *inside* the block, after the delete request and before it returns — add
+   the asset to a collection made read-only from another app, or to a shared album the
+   account cannot write. Confirm in Photos that **the original is still present and no new
+   asset was created**. This is the assumption everything rests on; if the original is gone,
+   stop and do not enable the flag.
+3. Repeat with the asset in the Hidden album, and again with one in a smart album.
+4. Kill the app mid-block (background it and force-quit during the write) and confirm the
+   same: either both changes applied or neither did.
+5. Record the device, iOS version and outcome of each step below. A pass on one iOS version
+   is not a pass on the next major one — this is worth re-running per release.
+
+*Result: not yet run.*
 
 **PhotoKit change-block semantics.** That a failure re-applying album membership really does
 roll back the delete in the same block. The shared tests assert what the sequence does when

@@ -41,8 +41,17 @@ object Entitlements {
     /** MONETIZATION.md: *"Compress now — 5 per day"*. */
     const val FREE_COMPRESS_NOW_PER_DAY = 5
 
-    /** Undo retention: 7 days free, up to 90 on Pro. */
-    const val FREE_RETENTION_DAYS = 7
+    /**
+     * Undo retention: 30 days free, up to 90 on Pro.
+     *
+     * The free tier was 7, which put MONETIZATION.md against BUILD.md § 6's 30-day default
+     * and made the app's most dangerous promise the one it broke: "Free space" mode tells a
+     * user their originals are recoverable, and a paywall that quietly shortens that window
+     * deletes photos three weeks before they expect it. Deleting someone's only copy is not
+     * a conversion moment. 30 free matches what § 6 already told the user; Pro's value is
+     * the extension to 90, which takes nothing away.
+     */
+    const val FREE_RETENTION_DAYS = 30
     const val PRO_MAX_RETENTION_DAYS = 90
 
     /** MONETIZATION.md § Conversion moments: *"never nag more than once per week"*. */

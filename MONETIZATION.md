@@ -16,7 +16,14 @@ No ads, no accounts, no network. Billing via Play Billing (App Store later), whi
 | Offload originals to SD/USB | – | ✓ |
 | Careful verify, Compact mode | – | ✓ |
 | Reversible JPEG XL mode | – | ✓ |
-| Undo retention | 7 days | up to 90 days |
+| Undo retention | 30 days | up to 90 days |
+
+**Retention is not a paywall.** The free tier keeps originals for the 30 days BUILD.md § 6
+promises; Pro extends the ceiling to 90. An earlier draft gave free users 7, which put this
+document against § 6 and made the app's most dangerous promise the one it broke — "Free
+space" mode tells a user their originals are recoverable, and a paywall that quietly
+shortens that window deletes photos three weeks before they expect it. Deleting someone's
+only copy is not a conversion moment.
 
 Price: regional, roughly USD 9.99–14.99 one-time (lower in price-sensitive regions via Play's regional pricing). Launch discount 40% for the first 30 days.
 

@@ -30,17 +30,24 @@ class SettingsPolicyTest {
      * BUILD.md § 6 gives the "Free space" folder mode a default of 30 days; MONETIZATION.md
      * gives the free tier 7. Both are true and they meet here: the *setting's* default is
      * 30, and a free user's copy of it is 7 until they buy Pro (recorded in PROJECT.md).
-     * The consequence the UI has to respect is that it must show the sanitised number, not
-     * the stored one, or it will promise a free user 30 days of originals it deletes at 7.
+     * The consequence the UI has to respect is that it must show the sanitised number rather
+     * than the stored one — otherwise a lapsed Pro user who set 90 days sees 90 and gets 30.
+     * The shipped default now survives sanitising on either tier, which is the point: the
+     * free tier's 30 days is BUILD.md § 6's promise, not a reduced version of it.
      */
     @Test
-    fun `the shipped retention default is clamped for a free user`() {
+    fun `the shipped retention default survives sanitising on both tiers`() {
         assertEquals(30, Settings().undoRetentionDays)
-        assertEquals(
-            Entitlements.FREE_RETENTION_DAYS,
-            SettingsPolicy.sanitise(Settings(), Tier.FREE).undoRetentionDays,
-        )
+        assertEquals(Entitlements.FREE_RETENTION_DAYS, Settings().undoRetentionDays)
+        assertEquals(30, SettingsPolicy.sanitise(Settings(), Tier.FREE).undoRetentionDays)
         assertEquals(30, SettingsPolicy.sanitise(Settings(), Tier.PRO).undoRetentionDays)
+    }
+
+    /** What Pro actually buys is the extension past the free ceiling, not the default. */
+    @Test
+    fun `only Pro can extend retention past the free ceiling`() {
+        assertEquals(30, SettingsPolicy.sanitise(Settings(undoRetentionDays = 90), Tier.FREE).undoRetentionDays)
+        assertEquals(90, SettingsPolicy.sanitise(Settings(undoRetentionDays = 90), Tier.PRO).undoRetentionDays)
     }
 
     @Test

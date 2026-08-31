@@ -10,16 +10,21 @@ pkg-config = 'pkg-config'
 
 [host_machine]
 system = '@TRIM_MESON_SYSTEM@'
-cpu_family = 'aarch64'
-cpu = 'aarch64'
+cpu_family = '@TRIM_MESON_CPU_FAMILY@'
+cpu = '@TRIM_MESON_CPU@'
 endian = 'little'
 
 [built-in options]
+# cpu_family, cpu and the -march/-msse argument are substituted per ABI: this file used to
+# hardcode aarch64, which was fine while arm64-v8a was the only ABI and silently wrong the
+# moment x86_64 was added for the emulator — meson would have described an aarch64 host to
+# a compiler being handed an x86_64 target.
+#
 # The two lists below open with the target and sysroot CMake resolved, substituted in by
 # configure_file. They are on the link line as well as the compile line because meson's
 # sanity check links an executable, and a driver told to compile for arm64 but not to link
 # for it reaches for the host's C runtime.
-c_args = [@TRIM_MESON_TOOLCHAIN_ARGS@'-march=armv8-a+simd', '-O3']
+c_args = [@TRIM_MESON_TOOLCHAIN_ARGS@@TRIM_MESON_ARCH_ARG@'-O3']
 c_link_args = [@TRIM_MESON_LINK_ARGS@]
 # And the same again for C++, which is not optional here even though libvmaf is a C
 # library: it bundles libsvm, and `svm.cpp` is the one C++ file in the tree. meson applies
@@ -28,5 +33,5 @@ c_link_args = [@TRIM_MESON_LINK_ARGS@]
 # into libvmaf.a without complaint and surfaced two minutes later, at the very end of the
 # arm64 link, as
 #     ld.lld: error: vmaf-build/src/libvmaf.a(svm.cpp.o) is incompatible with aarch64linux
-cpp_args = [@TRIM_MESON_TOOLCHAIN_ARGS@'-march=armv8-a+simd', '-O3']
+cpp_args = [@TRIM_MESON_TOOLCHAIN_ARGS@@TRIM_MESON_ARCH_ARG@'-O3']
 cpp_link_args = [@TRIM_MESON_LINK_ARGS@]

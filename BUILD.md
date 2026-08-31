@@ -69,7 +69,7 @@ Storage              Room DB (media index, jobs, undo, settings) · SAF folder g
 
 - **Keep originals** — undo bin never expires; space is freed only when the user empties it.
 - **Offload originals** — originals move to SD card / USB drive when present; local space freed immediately. Default when external storage exists.
-- **Free space** — originals kept in undo bin for N days (default 30), then deleted. Default otherwise. Show the warning once.
+- **Free space** — originals kept in undo bin for N days (default 30), then deleted. Default otherwise. Show the warning once. The 30 days is the floor, not a Pro feature: every tier gets it, and Pro extends the ceiling to 90 (MONETIZATION.md). A paywall must never shorten a retention window a user has already been shown — that deletes originals they were told they still had.
 
 ## 7. Indexing (same night pass)
 

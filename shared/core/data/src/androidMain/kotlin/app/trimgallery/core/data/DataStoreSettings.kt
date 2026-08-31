@@ -32,7 +32,7 @@ private val Context.settingsDataStore: DataStore<Preferences> by preferencesData
  * On the way in, because a value that cannot be honoured must never be persisted — a
  * stop-by time of "25:00" that is dropped at read time looks to the user like a setting
  * that does not work. On the way *out*, because entitlements change after the write: a Pro
- * user who set Compact and 90-day retention and then lapses must get Standard and 7 days
+ * user who set Compact and 90-day retention and then lapses must get Standard and 30 days
  * from the very next read, without anything having to remember to re-save their settings.
  *
  * Unknown or corrupt stored values fall back to the documented default rather than

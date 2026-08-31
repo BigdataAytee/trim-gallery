@@ -20,7 +20,7 @@ import app.trimgallery.core.model.Settings
  *   "no stop time" and the user's phone worked all night. Validating on the way in makes
  *   the read side's fallback unreachable rather than load-bearing.
  * - **Losing Pro clamps settings, it does not break them.** [sanitise] runs on every read,
- *   so a lapsed user gets Standard quality and 7-day retention rather than an app that
+ *   so a lapsed user gets Standard quality and 30-day retention rather than an app that
  *   silently keeps using entitlements they no longer have — or, worse, one that refuses to
  *   start because a stored value is now illegal.
  */

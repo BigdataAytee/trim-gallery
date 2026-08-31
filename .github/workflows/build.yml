@@ -5,7 +5,6 @@ name: Build
 on:
   push:
   pull_request:
-  # The emulator smoke test is dispatch-only; see the `smoke` job for why.
   workflow_dispatch:
 
 # `head_ref` on a pull_request, `ref_name` on a push — both are the bare branch name, so
@@ -282,27 +281,7 @@ jobs:
 
   smoke:
     name: App launches on a device
-    runs-on: macos-14
-    # Dispatch-only, and not because the test is flaky — because no GitHub-hosted runner
-    # can run it today.
-    #
-    # The APK ships arm64-v8a alone, so the emulator has to be arm64, which means an
-    # Apple-silicon host. GitHub's macos-14 runners are themselves virtual machines and
-    # do not expose nested virtualisation, so Hypervisor.framework refuses:
-    #
-    #     HVF error: HV_UNSUPPORTED
-    #     > Task :androidApp:smokePixelSetup FAILED
-    #
-    # The runners that *can* boot an emulator — ubuntu with KVM, or the Intel macOS
-    # images — are x86_64, and this APK will not install on them. So the choice is between
-    # adding x86_64 to debug builds (cross-compiling every native library twice, to launch
-    # an ABI nobody ships) and waiting for an arm64 runner that can virtualise. That is a
-    # decision about what the project pays for, not one to settle inside a workflow file.
-    #
-    # Everything below is correct and stays wired up: `gh workflow run` on a self-hosted
-    # arm64 host, or `./gradlew :androidApp:smokePixelDebugAndroidTest` on an Apple-silicon
-    # machine, runs it today.
-    if: github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
     timeout-minutes: 90
     steps:
       - uses: actions/checkout@v4
@@ -315,36 +294,49 @@ jobs:
       - uses: android-actions/setup-android@v3
       - uses: gradle/actions/setup-gradle@v4
 
-      # Same prerequisites as the Linux native job, resolved for macOS. Homebrew already
-      # has meson and ninja; the Rust target and cargo-ndk are the same two lines.
+      # Without this the emulator falls back to software rendering and instruction-level
+      # emulation, and a launch that takes seconds takes minutes — long enough that the
+      # test looks broken rather than slow. GitHub's Linux runners expose /dev/kvm but not
+      # to the runner user; the udev rule hands it over.
+      - name: Enable KVM
+        run: |
+          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' \
+            | sudo tee /etc/udev/rules.d/99-kvm4all.rules
+          sudo udevadm control --reload-rules
+          sudo udevadm trigger --name-match=kvm
+          ls -l /dev/kvm
+
       - name: Native build prerequisites
         run: |
           set -o pipefail
-          brew install meson ninja
-          rustup target add aarch64-linux-android
+          python3 -m pip install --upgrade meson ninja
+          # Both ABIs: the smoke variant builds arm64-v8a and x86_64, and oxipng is Rust,
+          # so cargo needs the Android target for each.
+          rustup target add aarch64-linux-android x86_64-linux-android
           cargo install cargo-ndk --locked
 
+      # Keyed the same way as the arm64 job but with its own prefix, because this variant
+      # builds two ABIs and would otherwise fight the other job over one cache entry.
       - name: Cache the native build tree
         uses: actions/cache@v4
         with:
           path: |
             androidApp/.cxx
             shared/native/oxipng/target
-          key: native-arm64-${{ runner.os }}-${{ hashFiles('shared/native/CMakeLists.txt', 'shared/native/cmake/**', 'androidApp/build.gradle.kts', '.gitmodules') }}-${{ hashFiles('.git/modules/**/HEAD') }}
+          key: native-smoke-${{ runner.os }}-${{ hashFiles('shared/native/CMakeLists.txt', 'shared/native/cmake/**', 'androidApp/build.gradle.kts', '.gitmodules') }}-${{ hashFiles('.git/modules/**/HEAD') }}
           restore-keys: |
-            native-arm64-${{ runner.os }}-${{ hashFiles('shared/native/CMakeLists.txt', 'shared/native/cmake/**', 'androidApp/build.gradle.kts', '.gitmodules') }}-
+            native-smoke-${{ runner.os }}-${{ hashFiles('shared/native/CMakeLists.txt', 'shared/native/cmake/**', 'androidApp/build.gradle.kts', '.gitmodules') }}-
 
-      # Boots the managed device, installs the APK and runs the two tests in
-      # MainActivityLaunchTest: the activity reaches RESUMED, and survives recreation.
-      # That is the whole point — it is the only check in this repository that proves the
-      # app starts rather than that it compiles.
+      # Boots the managed device, installs the smoke APK and runs MainActivityLaunchTest:
+      # the activity reaches RESUMED, and survives recreation. The only check in this
+      # repository that proves the app runs rather than that it compiles.
       #
       # `--info` because when an emulator test fails the useful line is almost always in
       # Gradle's device log rather than in the test report.
       - name: Launch the app on a Gradle-managed device
         run: |
           set -o pipefail
-          ./gradlew :androidApp:smokePixelDebugAndroidTest \
+          ./gradlew :androidApp:pixelSmokeAndroidTest \
             --console=plain --info 2>&1 | tee /tmp/smoke.log
 
       - uses: actions/upload-artifact@v4

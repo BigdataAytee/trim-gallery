@@ -55,6 +55,23 @@ import shared
     /// a library that re-sorts to "just now" after a night's work is the most visible damage
     /// this app could do without losing a byte.
     public func commit(replacement: TempFile, under: MediaRef) async throws -> Committed {
+        // Before anything else, and before any change block is opened.
+        //
+        // Everything below assumes `performChanges` is atomic — that a failure re-applying an
+        // album also undoes the delete of the original. That is what PhotoKit documents, and
+        // it is the assumption the whole § 7 contract rests on here, since there is no rename
+        // to be atomic on. It has not been confirmed against a real photo library, and if it
+        // is wrong the failure mode is the original deleted, the replacement absent, and
+        // nothing to restore from.
+        //
+        // `FeatureFlags.IOS_REPLACE_ENABLED` is the shared switch, off by default, with a
+        // test that fails if it is flipped without the hardware procedure being run. Read
+        // paths, preflight, encode and `saveCopy` are unaffected: this build can measure and
+        // it can save a new copy, it just cannot replace an original.
+        guard FeatureFlags.shared.IOS_REPLACE_ENABLED else {
+            throw ReplaceError.replaceDisabledPendingDeviceVerification
+        }
+
         guard let original = asset(for: under) else {
             throw ReplaceError.originalMissing
         }
@@ -263,5 +280,10 @@ import shared
         /// The preflight refused. Should be unreachable: triage skips such an asset long
         /// before a plan exists, and this is the belt to that braces.
         case wouldLoseState
+
+        /// `FeatureFlags.IOS_REPLACE_ENABLED` is off. Not a failure of this file: the code
+        /// is finished, the evidence is not. See the flag's documentation and the PhotoKit
+        /// change-block atomicity procedure in PROJECT.md's device-required list.
+        case replaceDisabledPendingDeviceVerification
     }
 }

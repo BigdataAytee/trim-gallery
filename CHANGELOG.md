@@ -166,13 +166,32 @@ native libraries at all was being parsed as two filenames and passing.
 
 `MainActivityLaunchTest` launches `MainActivity` on a Gradle-managed device and asserts it
 reaches RESUMED and survives recreation — the check this repository has never had, that the
-app runs rather than compiles. It does not run in CI, and that is a platform limit rather
-than a choice: the APK ships arm64-v8a alone, so the emulator must be arm64, so the host
-must be Apple silicon — and GitHub's macOS runners are virtual machines without nested
-virtualisation, so the emulator cannot start (`HVF error: HV_UNSUPPORTED`). Every hosted
-runner that can boot an emulator is x86_64, which this APK will not install on. The job is
-`workflow_dispatch`-only until that is resolved; the test runs today on any Apple-silicon
-machine.
+app runs rather than compiles. It runs on an x86_64 emulator under KVM on a Linux runner,
+which took a `smoke` build type carrying arm64-v8a + x86_64: no hosted runner can virtualise
+arm64 Android (macOS runners are themselves VMs and refuse with `HVF error: HV_UNSUPPORTED`),
+and every runner that can boot an emulator is x86_64. `release` still ships one ABI, so
+publishing x86_64 would take a deliberate build-file change.
+
+Making that build work meant describing both ABIs honestly. `-march=armv8-a+simd` moved out
+of Gradle, which applies `cFlags` to every ABI and would have handed an ARM architecture name
+to the x86_64 compiler, and into CMake, which knows the ABI it is configuring; the meson
+cross file's `cpu_family`, `cpu` and arch argument are substituted per ABI rather than
+hardcoded to aarch64. The second cross-compile is cached.
+
+### Two promises made safe
+
+**Free undo retention is 30 days, not 7.** MONETIZATION.md gave free users 7 while BUILD.md
+§ 6 promised a 30-day default, and the code resolved that by clamping — so a free user was
+shown 30 and got 7. "Free space" mode's premise is that originals are recoverable for the
+window the user was shown; shortening it behind a paywall deletes photographs three weeks
+early. Free is now 30, Pro extends to 90, and both documents and the tests agree.
+
+**iOS replace is behind a flag, off.** `SafeReplacerIos.commit` refuses before opening a
+change block, and a shared test fails the build if the constant is flipped — so enabling it
+requires reading why it was off and running the PhotoKit change-block atomicity procedure,
+now written out step by step in PROJECT.md's device-required list. The sequence's rollback is
+tested; PhotoKit's is not, and cannot be without a real photo library. Read paths, preflight,
+encode and `saveCopy` are unaffected.
 
 Both native jobs now cap at 90 minutes and cache `androidApp/.cxx` and oxipng's `target/`,
 keyed on the CMake inputs and the exact submodule commits.

@@ -17,15 +17,40 @@ set(CMAKE_C_STANDARD 11)
 set(CMAKE_C_STANDARD_REQUIRED ON)
 set(CMAKE_POSITION_INDEPENDENT_CODE ON)
 
-# --- one ABI per platform ----------------------------------------------------
+# --- ABIs --------------------------------------------------------------------
 #
-# The metrics are the bottleneck (PROJECT.md § Speed), so NEON is not optional; and a
-# second ABI would ship code that cannot run these libraries anyway.
+# arm64-v8a is the only ABI this app ships: the metrics are the bottleneck
+# (PROJECT.md § Speed), so NEON is not optional, and a second shipped ABI would carry code
+# no target device runs.
+#
+# x86_64 is allowed for exactly one reason and is not a relaxation of that rule: no
+# GitHub-hosted runner can virtualise an arm64 Android emulator, so proving the app starts
+# at all means an x86_64 emulator, which means an x86_64 build of these libraries. It is
+# reachable only from the `smoke` build type, which is never published — `release` keeps a
+# single `abiFilters` entry, so a shipped APK that contains x86_64 is a build-file change
+# somebody has to make on purpose. Any other ABI is still a hard error.
 if(ANDROID)
-    if(NOT ANDROID_ABI STREQUAL "arm64-v8a")
-        message(FATAL_ERROR "Trim Gallery builds arm64-v8a only; got ${ANDROID_ABI}")
+    if(ANDROID_ABI STREQUAL "arm64-v8a")
+        add_compile_options(-march=armv8-a+simd)
+        set(TRIM_MESON_CPU_FAMILY aarch64)
+        set(TRIM_MESON_CPU aarch64)
+        set(TRIM_MESON_ARCH_ARG "'-march=armv8-a+simd', ")
+        set(TRIM_RUST_TARGET_TRIPLE aarch64-linux-android)
+        set(TRIM_CARGO_NDK_ABI arm64-v8a)
+    elseif(ANDROID_ABI STREQUAL "x86_64")
+        # SSE4.2 is the floor every x86_64 Android emulator image provides, and it is what
+        # libjxl and Highway expect to dispatch from. This build exists to run, not to be
+        # fast: nothing here is measured on x86_64 and no number from it is a finding.
+        add_compile_options(-msse4.2)
+        set(TRIM_MESON_CPU_FAMILY x86_64)
+        set(TRIM_MESON_CPU x86_64)
+        set(TRIM_MESON_ARCH_ARG "'-msse4.2', ")
+        set(TRIM_RUST_TARGET_TRIPLE x86_64-linux-android)
+        set(TRIM_CARGO_NDK_ABI x86_64)
+    else()
+        message(FATAL_ERROR
+            "Trim Gallery builds arm64-v8a (shipped) and x86_64 (emulator only); got ${ANDROID_ABI}")
     endif()
-    add_compile_options(-march=armv8-a+simd)
     set(TRIM_MESON_SYSTEM android)
     set(TRIM_TARGET_NAME trim_native)
 elseif(APPLE)
@@ -33,6 +58,9 @@ elseif(APPLE)
         message(FATAL_ERROR "Trim Gallery builds ios-arm64 only; got ${CMAKE_OSX_ARCHITECTURES}")
     endif()
     set(TRIM_MESON_SYSTEM darwin)
+    set(TRIM_MESON_CPU_FAMILY aarch64)
+    set(TRIM_MESON_CPU aarch64)
+    set(TRIM_MESON_ARCH_ARG "'-march=armv8-a+simd', ")
     set(TRIM_TARGET_NAME trim_native)
 else()
     # A host build exists only to verify the metrics against their upstream reference
@@ -229,7 +257,7 @@ add_subdirectory(jpegli EXCLUDE_FROM_ALL)
 find_program(CARGO_EXECUTABLE cargo REQUIRED)
 
 if(ANDROID)
-    set(TRIM_RUST_TARGET aarch64-linux-android)
+    set(TRIM_RUST_TARGET ${TRIM_RUST_TARGET_TRIPLE})
     # No `-o`. That flag turns on cargo-ndk's artifact collection, which copies **cdylibs**
     # into a jniLibs layout and fails outright when there are none:
     #
@@ -241,7 +269,7 @@ if(ANDROID)
     # collecting. Without `-o`, cargo-ndk does the one job needed here: set the linker, ar
     # and sysroot for the Android target and run cargo. The `.a` is read straight out of
     # `target/aarch64-linux-android/release/`.
-    set(TRIM_CARGO_COMMAND ${CARGO_EXECUTABLE} ndk -t arm64-v8a build --release)
+    set(TRIM_CARGO_COMMAND ${CARGO_EXECUTABLE} ndk -t ${TRIM_CARGO_NDK_ABI} build --release)
 elseif(APPLE)
     set(TRIM_RUST_TARGET aarch64-apple-ios)
     set(TRIM_CARGO_COMMAND ${CARGO_EXECUTABLE} build --release --target ${TRIM_RUST_TARGET})

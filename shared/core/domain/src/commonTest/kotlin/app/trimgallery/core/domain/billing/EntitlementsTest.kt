@@ -79,8 +79,11 @@ class EntitlementsTest {
 
     @Test
     fun `retention is clamped to the tier rather than rejected`() {
-        // A lapsed Pro user gets 7 days, not an error.
-        assertEquals(7, Entitlements.retentionDays(Tier.FREE, requested = 30))
+        // A lapsed Pro user drops to the free ceiling, not to an error — and the free
+        // ceiling is the 30 days BUILD.md § 6 already promised, so lapsing shortens the
+        // window from 90 to 30 rather than deleting originals a user still expects to have.
+        assertEquals(30, Entitlements.retentionDays(Tier.FREE, requested = 90))
+        assertEquals(30, Entitlements.retentionDays(Tier.FREE, requested = 30))
         assertEquals(7, Entitlements.retentionDays(Tier.FREE, requested = 7))
         assertEquals(3, Entitlements.retentionDays(Tier.FREE, requested = 3))
         assertEquals(90, Entitlements.retentionDays(Tier.PRO, requested = 365))
