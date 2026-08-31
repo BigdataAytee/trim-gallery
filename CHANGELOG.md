@@ -28,6 +28,7 @@ untouched: build guards, merged-manifest scan, APK library check, emulator launc
 and detekt all still run, and none of them care who wrote the code.
 
 `review` was never a required check, so nothing is blocked by its absence.
+
 ## The app had no screens
 
 Installed the debug APK on a phone and it showed the words "Trim Gallery" centred on a
