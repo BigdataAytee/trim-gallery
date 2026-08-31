@@ -302,6 +302,78 @@ jobs:
         if: failure()
         run: bash .github/failure-summary.sh /tmp/assemble.log
 
+  # Publishes the APK the `apk` job just built to a rolling pre-release tagged `latest`,
+  # so there is one permanent URL for "the newest build" that needs no sign-in, no zip
+  # extraction and does not expire:
+  #
+  #     https://github.com/BigdataAytee/trim-gallery/releases/latest
+  #
+  # An Actions artifact needs a GitHub account to download, arrives as a zip, and is
+  # deleted after the repository's retention period. A release asset has none of those
+  # properties, which matters when the thing being handed round is a build for someone to
+  # put on a phone.
+  #
+  # A separate job rather than another step in `apk`, for one reason: this needs
+  # `contents: write` to publish, and `apk` runs on every pull request. Keeping the write
+  # scope in a job that only ever runs on `main` means a pull request's token never carries
+  # it. `needs: apk` also makes the dependency exact — nothing is published unless the
+  # assemble *and* the DT_NEEDED check passed, because a failed `apk` job never satisfies
+  # `needs`.
+  release:
+    name: Publish the latest APK
+    needs: apk
+    # `main` only, and never for a pull request. `push` is already main-only, but
+    # `workflow_dispatch` can be aimed at any ref, so the ref is checked rather than assumed.
+    if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/download-artifact@v4
+        with:
+          name: apk
+          path: apk
+
+      # `gh`, which is preinstalled on the runner, rather than a third-party release
+      # action: publishing is a credential-bearing step and this repository already keeps
+      # its dependency list short on purpose (STACK.md). One less action to trust.
+      - name: Publish to the rolling `latest` pre-release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          src=$(ls apk/*.apk | head -1)
+          # A fixed asset name, because the download URL contains it: renaming the file per
+          # build would change the link every time and defeat the point of a stable one.
+          cp "$src" trim-gallery-debug.apk
+
+          # Move the tag first. `gh release edit` cannot repoint a tag, so without this the
+          # release would keep claiming to be the commit it was first cut from while
+          # serving a newer APK — the kind of small lie that wastes an afternoon later.
+          git tag -f latest "$GITHUB_SHA"
+          git push -f origin refs/tags/latest
+
+          notes="Debug build of \`main\` at \`${GITHUB_SHA:0:7}\`, published $(date -u +'%Y-%m-%d %H:%M UTC') by [run ${GITHUB_RUN_ID}](${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}).
+
+          arm64-v8a only and debug-signed, so it will not install on an emulator — it needs a real phone. It carries the native metric libraries and has passed the DT_NEEDED check, the build guards and the emulator launch.
+
+          **It has not been field-tested.** A green pipeline says the app builds, holds its rules and launches; it says nothing about what a night pass does to a real library. See FIELD_TEST.md."
+
+          if gh release view latest >/dev/null 2>&1; then
+            # --clobber: replace the asset in place, so the download URL is unchanged.
+            gh release upload latest trim-gallery-debug.apk --clobber
+            gh release edit latest --notes "$notes" --prerelease
+          else
+            gh release create latest trim-gallery-debug.apk \
+              --prerelease \
+              --title "Latest debug build" \
+              --notes "$notes"
+          fi
+
+          echo "Published: ${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/releases/latest"
+
   smoke:
     name: App launches on a device
     runs-on: ubuntu-latest

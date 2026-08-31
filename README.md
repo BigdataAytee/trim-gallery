@@ -190,12 +190,19 @@ Three guardrails, each of which exists because the thing it prevents already hap
 
 ## Get the APK
 
-Every run of the `Android APK + native` job uploads the debug APK as an artifact called
-**`apk`**, including the run for each merge to `main`. Open
-[Actions → Build](https://github.com/BigdataAytee/trim-gallery/actions/workflows/build.yml),
-pick the most recent green run on `main`, and take `apk` from the Artifacts box at the foot
-of the run summary. It is debug-signed, arm64-only, and carries the native metric libraries.
-GitHub expires artifacts after the repository's retention period, 90 days by default.
+**https://github.com/BigdataAytee/trim-gallery/releases/latest** — one tap, no sign-in, no
+zip. Every green run on `main` republishes `trim-gallery-debug.apk` there, to a rolling
+pre-release tagged `latest`, so that URL is always the newest build and the download link
+never changes.
+
+The same APK is also an Actions artifact called `apk` on each run, which is the copy to
+reach for when you want the one from a *particular* commit rather than the newest — though
+it needs a GitHub account, arrives zipped, and expires with the repository's retention
+period. The release does not expire.
+
+It is debug-signed and arm64-only, so it will not install on an emulator; it needs a real
+phone. It carries the native metric libraries, and nothing is published unless `assemble`
+and the APK library check both passed.
 
 It builds, holds its rules and launches. It has not been field-tested — see Status.
 

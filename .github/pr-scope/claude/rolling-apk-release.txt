@@ -9,3 +9,4 @@
 # Otherwise pre-push rejects the fake, and the easy way out is dropping a file
 # the project requires rather than widening the scope.
 .github/**
+README.md
