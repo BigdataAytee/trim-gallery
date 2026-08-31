@@ -1540,6 +1540,16 @@ With the target collision gone, `configureCMakeDebug[arm64-v8a]` passed and
   read what the system actually recorded about that object rather than reasoning forward
   from the configuration.
 
+- **x86_64 is opt-in, not part of the smoke variant.** Both `pixelSmokeAndroidTest` and
+  `connectedSmokeAndroidTest` build the same `smoke` build type, so an unconditional second
+  ABI made every physical-device run cross-compile libjxl, jpegli, libvmaf and oxipng twice
+  — the second time for an architecture that phone cannot execute. It now sits behind
+  `-Ptrimgallery.smoke.x86_64=true`, set by the CI emulator job and nowhere else. The
+  configuration-time assertion follows the same rule: arm64-v8a is required always, because
+  it is what ships and a smoke run without it is not testing the real artefact; x86_64 is
+  required only when the property asked for it, since asserting it unconditionally would
+  fail exactly the physical run this change exists to keep cheap.
+
 ### The guards guard themselves
 
 - **A rule declares the languages it polices, and must have a planted violation in each.**
@@ -1642,8 +1652,9 @@ hardware there would be requiring the impossible. The smoke job's remit is there
 install, launch, and this capability report; the encode is a device test.
 
 *Procedure:* on each of the three field-test device classes, run
-`./gradlew :androidApp:connectedSmokeAndroidTest` with the device attached and confirm the
-encode test runs rather than skips, produces HEVC video with the audio track transmuxed
+`./gradlew :androidApp:connectedSmokeAndroidTest` with the device attached — arm64-v8a
+only, because the second ABI is behind `-Ptrimgallery.smoke.x86_64` which only the CI
+emulator job sets — and confirm the encode test runs rather than skips, produces HEVC video with the audio track transmuxed
 rather than re-encoded, and plays back at full duration. Record the device, chip and the
 `reportsCodecCapabilities` log line for each. A skip on physical hardware means the device
 genuinely has no hardware HEVC encoder, which is itself a finding worth recording against

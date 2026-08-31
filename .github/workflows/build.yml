@@ -359,8 +359,11 @@ jobs:
           path: |
             androidApp/.cxx
             shared/native/oxipng/target
-          # arm64-v8a + x86_64 — the smoke variant builds both, so it must never share a
-          # cache entry with the arm64-only job above. See that job's note.
+          # arm64-v8a + x86_64 — this job passes `-Ptrimgallery.smoke.x86_64=true`, so it
+          # builds both and must never share a cache entry with the arm64-only job above.
+          # A smoke run *without* that property builds arm64 alone and would be a different
+          # tree again; nothing in CI does that today, and if something starts to, it needs
+          # its own key rather than this one. See that job's note.
           key: native-abi_arm64-v8a_x86_64-${{ runner.os }}-${{ hashFiles('shared/native/CMakeLists.txt', 'shared/native/cmake/**', 'androidApp/build.gradle.kts', '.gitmodules') }}-${{ hashFiles('.git/modules/**/HEAD') }}
           restore-keys: |
             native-abi_arm64-v8a_x86_64-${{ runner.os }}-${{ hashFiles('shared/native/CMakeLists.txt', 'shared/native/cmake/**', 'androidApp/build.gradle.kts', '.gitmodules') }}-
@@ -374,7 +377,12 @@ jobs:
       - name: Launch the app on a Gradle-managed device
         run: |
           set -o pipefail
+          # -P…smoke.x86_64: opt this run into the second ABI. The property is set here and
+          # nowhere else, so `connectedSmokeAndroidTest` on a real phone builds arm64-v8a
+          # alone rather than cross-compiling the whole native tree twice for an
+          # architecture that device cannot execute.
           ./gradlew :androidApp:pixelSmokeAndroidTest \
+            -Ptrimgallery.smoke.x86_64=true \
             --console=plain --info 2>&1 | tee /tmp/smoke.log
 
       # meson's own log records the exact sanity-check command and its output, which is the
