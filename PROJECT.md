@@ -1827,3 +1827,34 @@ looking and where they were not.
   `UndoLocation.SYSTEM_TRASH` fell through to `FromBin`. PhotoKit has no API to restore from
   Recently Deleted, by design, so the button would have failed every time. It is now its own
   state with its own copy and an Open Photos action.
+
+## Why the review workflow posted nothing
+
+The `review` check passed on three pull requests without reviewing any of them. Two
+separate faults, one after the other.
+
+First, `ANTHROPIC_API_KEY` was never set, so every run since the workflow was added died
+at credential validation in about twenty seconds. That one was loud — a red check on
+every PR — and was fixed by setting the secret.
+
+The second was silent, and worse. With the key in place the job ran a real review — 18
+turns, 108 seconds — and posted nothing, so the check went green. A planted
+software-encoder fallback (PR #4, closed unmerged) passed it without a word.
+
+The cause was the workflow, not the model. In agent mode the action runs the prompt and
+nothing publishes the result: `track_progress` was false, so no tracking comment existed
+for the agent to write into, and the prompt asked for a review without ever saying to
+post one. `show_full_output` is false, so whatever it concluded went to a hidden log.
+`permission_denials_count: 1` in the result suggests it tried something and was refused.
+
+The fix is `track_progress: true` plus an explicit, unconditional instruction to post —
+including when there is nothing to report. The prompt now also tells the reviewer to
+judge behaviour rather than location, because the build guards already cover location and
+the gap between them is exactly where the planted violation lived: inside
+`MediaCodecFactory`, where constructing a codec is legal and a software fallback is not.
+
+**The general lesson, which is the third time this project has met it.** A check that can
+only pass is not a check. The build guards have planted-violation self-tests for this
+reason; the hooks in `tools/git-hooks` have them; this reviewer had nothing, and spent
+weeks green while doing nothing. Before trusting any new check, make it fail on purpose
+once.

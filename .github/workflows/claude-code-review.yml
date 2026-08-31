@@ -1,5 +1,23 @@
 # Automated review of every pull request against BUILD.md, PROJECT.md and STACK.md.
 # Set up per STACK.md, "Anthropic open-source".
+#
+# This workflow ran for weeks without reviewing anything. First the secret was
+# missing, so every run died at credential validation in about twenty seconds.
+# Once that was fixed it started passing — and still posted nothing: a planted
+# software-encoder fallback (PR #4, closed unmerged) went through 18 turns of
+# review and produced a green check with no comment.
+#
+# The cause was here, not in the model. In agent mode the action runs the prompt
+# and nothing publishes the result: `track_progress` was false, so there was no
+# comment for the agent to write into, and the prompt never told it to post. The
+# findings went to a hidden log, `show_full_output` being false.
+#
+# So two things below are load-bearing and should not be removed casually:
+#   1. track_progress: true — creates the tracking comment the agent writes into.
+#   2. the "Posting your findings" section of the prompt — an explicit, mandatory
+#      instruction to post, including when there is nothing to report. A review
+#      that stays silent is indistinguishable from a review that never ran, which
+#      is the failure this workflow already had once.
 name: Claude review
 
 on:
@@ -22,6 +40,9 @@ jobs:
       - uses: anthropics/claude-code-action@v1
         with:
           anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
+          # Creates a PR comment the agent owns and updates. Without it there is
+          # nowhere for the review to go.
+          track_progress: true
           prompt: |
             Review this pull request against the project's own specifications, which
             are in the repository: BUILD.md (the spec), PROJECT.md (decisions already
@@ -46,3 +67,30 @@ jobs:
                 engine-api interface
               - a platform implementation shipped without a fake for the JVM tests
                 (ARCHITECTURE.md section 2.7)
+
+            Judge what the code does, not where it sits. The build guards already
+            check location — that a codec is only constructed inside a CodecFactory,
+            that library writes only happen inside a Replacer. They cannot check
+            intent. A software fallback written *inside* MediaCodecFactory passes
+            every guard in this repo and still breaks the rule the project cares
+            most about. That is exactly the kind of thing you are here for, so read
+            what each changed line would do at runtime on a device that lacks the
+            hardware the code hopes for.
+
+            ## Posting your findings
+
+            You MUST post a comment on this pull request before you finish. Use the
+            tracking comment created for you (the `mcp__github_comment__update_claude_comment`
+            tool). This is not optional and it is not conditional on finding
+            problems:
+
+              - If you found violations, list them. For each one give the file and
+                line, the specific rule it breaks (quote the document or skill), and
+                what it would do at runtime. Order them worst first.
+              - If you found none, say so explicitly — "No violations found against
+                BUILD.md, STACK.md, ARCHITECTURE.md or the three skills" — and name
+                the things you specifically checked for on this diff.
+
+            Ending without posting is a failed review, however good your analysis
+            was. A silent pass is indistinguishable from a job that never ran, and
+            this workflow has already spent weeks in exactly that state.

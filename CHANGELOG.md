@@ -1,5 +1,19 @@
 # Changelog
 
+## The review check now posts its findings
+
+`claude-code-review.yml` ran in agent mode with `track_progress` off and a prompt that
+asked for a review but never said to post one, so the action had nowhere to publish the
+result and no instruction to try. The job passed, silently, having reviewed nothing that
+anyone could see — including a deliberately planted software-encoder fallback.
+
+`track_progress: true` gives the agent a tracking comment to write into, and the prompt
+now requires a comment on every run, findings or not, on the grounds that a silent pass
+is indistinguishable from a job that never ran. The prompt also asks the reviewer to
+judge what changed code *does* rather than where it sits, since the build guards already
+enforce location and the planted violation lived inside the one file where creating a
+codec is legal.
+
 ## Hardening pass — CI, guard self-tests, thermal floor
 
 No new features. Three things that were claims rather than facts, made into facts.
