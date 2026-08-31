@@ -1393,6 +1393,17 @@ With the target collision gone, `configureCMakeDebug[arm64-v8a]` passed and
   in the dependency, and "it is a C library" is a claim about the API, not about what the
   build compiles.
 
+- **The APK's library set is asserted, not assumed.** `libtrim_native.so` links libjxl,
+  libjxl_cms and the three brotli libraries as *shared* objects, so all six have to be
+  packaged or `System.loadLibrary` fails the first time a night pass touches a photo — a
+  crash on a device, from a build that went green. This could not be checked from the
+  development environment (the artifact store is behind the same egress policy as Google
+  Maven), which is the argument for checking it in CI rather than once by hand: the native
+  job now lists `lib/arm64-v8a/*.so` out of the APK and fails if any of the six is absent.
+  Whether AGP packages a CMake target's shared dependencies alongside the target was the
+  open question; the check answers it on every push instead of relying on the answer
+  staying true.
+
 ### The guards guard themselves
 
 - **A rule declares the languages it polices, and must have a planted violation in each.**

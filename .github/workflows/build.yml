@@ -232,6 +232,29 @@ jobs:
           set -o pipefail
           ./gradlew :androidApp:assembleDebug --console=plain 2>&1 | tee /tmp/assemble.log
 
+      # An APK that builds and is missing a library it loads is a crash on first use, not a
+      # build failure — so the packaged `.so` set is asserted rather than assumed.
+      # `libtrim_native.so` links libjxl, libjxl_cms and the three brotli libraries as
+      # shared objects, and every one of them has to be in the APK for System.loadLibrary
+      # to succeed on a device.
+      - name: The APK carries every library it loads
+        run: |
+          set -o pipefail
+          apk=$(ls androidApp/build/outputs/apk/debug/*.apk | head -1)
+          echo "APK: $apk"
+          unzip -l "$apk" | grep -E 'lib/arm64-v8a/.*\.so' || true
+          missing=0
+          for lib in libtrim_native.so libjxl.so libjxl_cms.so \
+                     libbrotlidec.so libbrotlienc.so libbrotlicommon.so; do
+            if unzip -l "$apk" | grep -q "lib/arm64-v8a/$lib"; then
+              echo "  ok      $lib"
+            else
+              echo "::error::$lib is linked into libtrim_native.so but is not in the APK"
+              missing=1
+            fi
+          done
+          exit $missing
+
       - uses: actions/upload-artifact@v4
         if: always()
         with:

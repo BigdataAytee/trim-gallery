@@ -115,6 +115,40 @@ detekt 1.23.8 and ktlint-gradle 14.2.0 were then run against Gradle 9.7.1 and bo
 The upgrade is still deferred, for a duller reason — AGP, the SDK platform and androidx all
 live on Google Maven, which this environment cannot reach, so it can only be tried in CI.
 
+### The native build, which had never run anywhere
+
+`shared/native` cross-compiles for android-arm64 in CI, and the APK now contains a
+`libtrim_native.so`. Five failures stood between the first attempt and that, each hidden
+behind the one before it, and none of them findable without a real NDK:
+
+- **cargo-ndk was missing, then wanted the wrong artefact.** The CMake shells out to
+  `cargo ndk`; the runner had no such subcommand. Installed — then `-o` asked for a cdylib,
+  which `trim_oxipng` deliberately is not: it is a `staticlib`, archived into
+  `libtrim_native.so`. Dropped `-o`.
+- **AGP was building libjxl's and jpegli's fuzzers, benchmarks and command-line tools.**
+  `EXCLUDE_FROM_ALL` does not stop it: AGP names every target in the graph on the ninja
+  command line, and a named target is built whether or not it is in `all`. Scoped to
+  `targets += "trim_native"`.
+- **`-ljxl_extras-internal`, a target CMake had never heard of.** libjxl defines it only
+  when `JPEGXL_ENABLE_TOOLS` or `BUILD_TESTING` is on; this build had both off, and CMake
+  passes an unknown link name straight through to the linker. `ssim2_score.cc` loads pixels
+  through `lib/extras/codec.h`, so it is genuinely needed — and the comment above the line
+  had said so all along while the code said otherwise.
+- **`NoMemoryManager()` used through its header and never compiled.** Same shape as
+  `ssimulacra2.cc`, which was already compiled in for the same reason.
+- **libvmaf's one C++ file built for the host.** The meson cross file carried `--target`
+  and `--sysroot` in `c_args` and `c_link_args` only. libvmaf bundles libsvm, meson applies
+  `c_args` to C alone, and `svm.cpp.o` archived cleanly into `libvmaf.a` before failing the
+  arm64 link with `incompatible with aarch64linux`. `cpp_args` and `cpp_link_args` now match.
+
+Two tooling changes came out of it, and both belong to the pass more than the bugs do.
+`.github/failure-summary.sh` now matches ninja, clang and CMake diagnostics: a native
+failure used to summarise to AGP's exception heading and a list of target names, with no
+diagnostic anywhere in the annotations. And `tools/build-native-host.sh` builds
+`test_metrics`, the one target that *links* `trim_native` into an executable — on the host
+it is a static library, so building it alone proved only that every file compiled. That
+change caught one of the five locally, in seconds, before CI saw it.
+
 ### Guard self-tests
 
 Every other guard test checks a case somebody thought of. `GuardSelfTest` checks something
