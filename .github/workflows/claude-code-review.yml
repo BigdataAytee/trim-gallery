@@ -13,11 +13,21 @@
 # findings went to a hidden log, `show_full_output` being false.
 #
 # So two things below are load-bearing and should not be removed casually:
-#   1. track_progress: true — creates the tracking comment the agent writes into.
+#   1. track_progress: true — documented as "Force tag mode with tracking
+#      comments. Only works with specific PR/issue events." Forcing tag mode is
+#      the point, not a side effect: it is what creates the comment the agent
+#      writes into. Expect the log to say "Auto-detected mode: tag".
 #   2. the "Posting your findings" section of the prompt — an explicit, mandatory
 #      instruction to post, including when there is nothing to report. A review
 #      that stays silent is indistinguishable from a review that never ran, which
 #      is the failure this workflow already had once.
+#
+# Note for whoever changes this next: the action refuses to run when this file
+# differs from the copy on the default branch ("Workflow validation failed ...
+# must ... have identical content to the version on the repository's default
+# branch"). So a change to this workflow cannot be tested on its own PR — the
+# reviewer self-disables there. It can only be validated after it lands on main,
+# by opening a PR that does not touch this file.
 name: Claude review
 
 on:
@@ -79,10 +89,10 @@ jobs:
 
             ## Posting your findings
 
-            You MUST post a comment on this pull request before you finish. Use the
-            tracking comment created for you (the `mcp__github_comment__update_claude_comment`
-            tool). This is not optional and it is not conditional on finding
-            problems:
+            You MUST post a comment on this pull request before you finish, using
+            the comment tool available to you — this run has a tracking comment
+            created for it, so update that. This is not optional and it is not
+            conditional on finding problems:
 
               - If you found violations, list them. For each one give the file and
                 line, the specific rule it breaks (quote the document or skill), and

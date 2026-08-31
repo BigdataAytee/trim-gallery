@@ -1858,3 +1858,29 @@ only pass is not a check. The build guards have planted-violation self-tests for
 reason; the hooks in `tools/git-hooks` have them; this reviewer had nothing, and spent
 weeks green while doing nothing. Before trusting any new check, make it fail on purpose
 once.
+
+### The review workflow cannot be tested on its own pull request
+
+`claude-code-action` refuses to run when the workflow file differs from the copy on the
+default branch:
+
+```
+Skipping action due to workflow validation: Workflow validation failed. The workflow
+file must exist and have identical content to the version on the repository's default
+branch.
+```
+
+That is a sensible security property — it stops a pull request from rewriting the
+reviewer that is about to review it — and it means the usual trick of relying on
+`pull_request` workflows running from the merge commit does not apply here. Both #6 (the
+fix) and #7 (the fix plus a planted violation) had their `review` job exit in about
+eleven seconds without reviewing anything.
+
+So a change to this workflow can only be validated **after** it lands on `main`, by
+opening a pull request that does not itself touch the file. The calibration PR has to be
+re-run at that point, not before.
+
+Worth recording because it also validates the earlier finding rather than undermining it:
+PR #4's review ran fully — 18 turns, 108 seconds — precisely because its workflow file
+*was* identical to main's. That test was sound, and its result stands: the reviewer read
+a planted software-encoder fallback and said nothing.
