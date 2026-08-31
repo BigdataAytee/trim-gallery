@@ -113,7 +113,6 @@ native/
 |---|---|---|
 | anthropics/skills | Official skills library; copy the skill format and any relevant skills (e.g. frontend design) into `.claude/skills/` | https://github.com/anthropics/skills |
 | anthropics/claude-code | Claude Code docs, examples, issue tracker | https://github.com/anthropics/claude-code |
-| anthropics/claude-code-action | GitHub Action to run Claude Code on PRs / CI reviews | https://github.com/anthropics/claude-code-action |
 | anthropics/claude-cookbooks | Patterns and examples | https://github.com/anthropics/claude-cookbooks |
 
 Setup step for Claude Code (paths verified by cloning on 30 Aug 2026):
@@ -125,4 +124,7 @@ cp -r /tmp/anthropic-skills/skills/skill-creator  .claude/skills/skill-creator
 cp -r /tmp/anthropic-skills/skills/webapp-testing .claude/skills/webapp-testing
 cp    /tmp/anthropic-skills/template/SKILL.md     .claude/skills/TEMPLATE.md
 ```
-Then create `ndk-build`, `codec-priority` and `safe-replace` under `.claude/skills/` using TEMPLATE.md (or the skill-creator skill). Add `claude-code-action` to `.github/workflows/` so every PR gets an automated review against BUILD.md.
+Then create `ndk-build`, `codec-priority` and `safe-replace` under `.claude/skills/` using TEMPLATE.md (or the skill-creator skill).
+
+There is deliberately no automated review action in `.github/workflows/`. One was added and
+removed; PROJECT.md records why, and what replaced it.

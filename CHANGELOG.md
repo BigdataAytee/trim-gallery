@@ -25,6 +25,35 @@ force-moved before publishing, because `gh release edit` cannot repoint a tag an
 that claims an old commit while serving a new APK is the kind of small lie that costs an
 afternoon later.
 
+## The review check is removed
+
+`claude-code-review.yml` is deleted, with the `claude-code-action` row and the
+add-it-to-your-workflows instruction in STACK.md. The entries below stay as they are: they
+are the record of three distinct ways a green check can mean nothing, and that is worth
+keeping whether or not the tool is.
+
+The last diagnosis is the one that settles it. With `show_full_output: true` finally
+printing what the action had been swallowing, the run on #11 said:
+
+```json
+"api_error_status": 400,
+"terminal_reason": "api_error",
+"result": "Credit balance is too low"
+```
+
+Not a rate limit, not a revoked key, and not quota burned by a rapid push cycle — which is
+what I said the first time and was wrong about. The account has no credit, so no run since
+has reached the model.
+
+In its place: every pull request is read in-session before it merges, against BUILD.md, the
+three skills, and the branch's declared scope in `.github/pr-scope/`, and the verdict goes
+to the user in the conversation. That is weaker in one specific way and it is worth naming —
+the same agent writes and reviews nearly every diff here. The mechanical checks are
+untouched: build guards, merged-manifest scan, APK library check, emulator launch, ktlint
+and detekt all still run, and none of them care who wrote the code.
+
+`review` was never a required check, so nothing is blocked by its absence.
+
 ## The app had no screens
 
 Installed the debug APK on a phone and it showed the words "Trim Gallery" centred on a
