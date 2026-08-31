@@ -1381,6 +1381,18 @@ With the target collision gone, `configureCMakeDebug[arm64-v8a]` passed and
   run, before CI ever saw it. The general lesson is worth more than either bug: a local
   harness has to reach the same *kind* of step as the real build, not just the same files.
 
+- **The meson cross file described C and forgot C++.** The `--target` and `--sysroot`
+  fix above went into `c_args` and `c_link_args`, which is all libvmaf appeared to need —
+  it is a C library. It bundles libsvm, though, and `svm.cpp` is the one C++ file in the
+  tree; meson applies `c_args` to C only, so that single object was compiled by the NDK's
+  generic `clang++` with no target and no sysroot, which means for the host. Nothing
+  objected: it archived into `libvmaf.a` cleanly and surfaced minutes later at the end of
+  the arm64 link as `libvmaf.a(svm.cpp.o) is incompatible with aarch64linux`. `cpp_args`
+  and `cpp_link_args` now carry the same values. The lesson is about the shape of the
+  earlier fix rather than about meson: a toolchain description has to cover every language
+  in the dependency, and "it is a C library" is a claim about the API, not about what the
+  build compiles.
+
 ### The guards guard themselves
 
 - **A rule declares the languages it polices, and must have a planted violation in each.**

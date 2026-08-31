@@ -21,3 +21,12 @@ endian = 'little'
 # for it reaches for the host's C runtime.
 c_args = [@TRIM_MESON_TOOLCHAIN_ARGS@'-march=armv8-a+simd', '-O3']
 c_link_args = [@TRIM_MESON_LINK_ARGS@]
+# And the same again for C++, which is not optional here even though libvmaf is a C
+# library: it bundles libsvm, and `svm.cpp` is the one C++ file in the tree. meson applies
+# `c_args` to C only, so with these two lines missing that single object was built by the
+# NDK's clang++ driver with no target and no sysroot — that is, for the host. It archived
+# into libvmaf.a without complaint and surfaced two minutes later, at the very end of the
+# arm64 link, as
+#     ld.lld: error: vmaf-build/src/libvmaf.a(svm.cpp.o) is incompatible with aarch64linux
+cpp_args = [@TRIM_MESON_TOOLCHAIN_ARGS@'-march=armv8-a+simd', '-O3']
+cpp_link_args = [@TRIM_MESON_LINK_ARGS@]

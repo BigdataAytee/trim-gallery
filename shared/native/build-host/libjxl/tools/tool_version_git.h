@@ -1,1 +1,1 @@
-#define JPEGXL_VERSION "f72bd67"
+#define JPEGXL_VERSION "2e6a680"
