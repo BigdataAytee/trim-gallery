@@ -65,7 +65,12 @@ class Milestone1EncodeTest {
 
         // BUILD.md § 2.2: with no hardware HEVC encoder the correct behaviour is to skip
         // the file, not to encode it in software. That is a pass, not a failure.
-        assumeTrue("device has no hardware HEVC encoder", caps.hardwareHevc)
+        //
+        // `caps.hevc.hardware`, not `caps.hardwareHevc`: milestone 12 split `CodecCaps`
+        // into one `EncoderCaps` per codec, because AV1's ceiling is commonly lower than
+        // HEVC's on the same chip and a single flag hid that. This file kept the old flat
+        // name for four milestones without anyone noticing, because nothing compiled it.
+        assumeTrue("device has no hardware HEVC encoder", caps.hevc.hardware)
 
         val spec = EncodeSpec(
             codec = VideoCodec.HEVC,

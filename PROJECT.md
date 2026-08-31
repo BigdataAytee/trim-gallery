@@ -1498,6 +1498,16 @@ With the target collision gone, `configureCMakeDebug[arm64-v8a]` passed and
   ranks by position rather than by significance will eventually rank noise above the cause,
   and when it does it costs more than having no summariser at all.
 
+- **The instrumented tests had never been compiled either, and had rotted.**
+  `Milestone1EncodeTest` referenced `caps.hardwareHevc`, a property milestone 12 removed
+  when it split `CodecCaps` into one `EncoderCaps` per codec — AV1's ceiling is commonly
+  lower than HEVC's on the same chip, and a single flag hid that. The test kept the old
+  name across four milestones because `testBuildType` was `debug` and CI only ever ran
+  `assembleDebug`, so no androidTest source set was ever built. Pointing `testBuildType` at
+  the smoke variant compiled it for the first time and the reference failed immediately.
+  Worth noting what this says about the shape of the gap: the emulator job's value is not
+  only that it runs a test, it is that it *compiles* a source set nothing else touches.
+
 ### The guards guard themselves
 
 - **A rule declares the languages it polices, and must have a planted violation in each.**
