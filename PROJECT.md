@@ -1520,6 +1520,26 @@ With the target collision gone, `configureCMakeDebug[arm64-v8a]` passed and
   and this repository had four such settings — the ABI split, the eager task lookup, the
   detekt source set, and now the runner.
 
+- **The workflow ran on `push` and `pull_request`, and that is what blocked the merge.**
+  A commit on a feature branch fired both, each producing check runs with the *same* names
+  — the names branch protection requires — and the concurrency group then cancelled one
+  side. Every head SHA therefore carried six cancelled required checks beside six
+  successful ones, and a cancelled required check is not a pass. The pull request read as
+  `blocked` with every job visibly green, and nothing could clear it: re-running or
+  approving did not help, because the next push recreated the pair. `push` is now
+  restricted to `main`, so a feature branch gets exactly one run per commit through
+  `pull_request` and `main` gets its own after a merge; nothing goes unbuilt, because a
+  commit only reaches `main` through a PR that already built it.
+
+  Worth recording that the wrong diagnosis was mine and cost real time. Seeing
+  `mergeable_state: blocked` with green checks and no reviews, I concluded the ruleset's
+  `require_extra_approval_for_unattributed_changes` was unsatisfiable on a solo repository
+  — which is true, but was not what was blocking. I read the *rules* and never read the
+  *check runs on the head SHA*, where six cancelled entries named exactly the required
+  contexts. The lesson is the same one the meson failure taught: when a state is puzzling,
+  read what the system actually recorded about that object rather than reasoning forward
+  from the configuration.
+
 ### The guards guard themselves
 
 - **A rule declares the languages it polices, and must have a planted violation in each.**

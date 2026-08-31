@@ -3,15 +3,33 @@
 name: Build
 
 on:
+  # `push` is main only. On a feature branch a commit used to fire this workflow twice —
+  # once for the push, once for the pull request — and both runs produce check runs with
+  # the *same* names, which are the names branch protection requires. The concurrency
+  # group below then cancelled one of them, so every commit left six cancelled runs called
+  # `Build guards`, `Shared JVM tests`, and so on, sitting on the head SHA beside six
+  # successful ones:
+  #
+  #     6 cancelled, 7 successful
+  #     Build / Android APK + native (push)   Cancelled after 2s   Required
+  #
+  # A cancelled required check is not a pass, so the pull request read as blocked with
+  # every job visibly green — and no amount of re-running or approving fixed it, because
+  # the next push recreated the cancelled pair. Restricting `push` to main gives a feature
+  # branch exactly one run per commit, via `pull_request`, and main its own run after a
+  # merge. Nothing is lost: a commit that only ever reaches main through a PR is still
+  # built before it lands.
   push:
+    branches: [main]
   pull_request:
   workflow_dispatch:
 
-# `head_ref` on a pull_request, `ref_name` on a push — both are the bare branch name, so
-# the push run and the pull-request run for the same commit share a group and one cancels
-# the other. `ref` is the wrong second half and was the first attempt: on a push it is
-# `refs/heads/x` while the pull request's `head_ref` is `x`, which are different groups, so
-# every commit built twice — and the macOS runner is the expensive half of this workflow.
+# Successive pushes to the same branch still supersede each other — that is what this is
+# for now, rather than the push/PR duplication above, which no longer happens.
+# `head_ref` on a pull_request, `ref_name` on a push: both are the bare branch name. `ref`
+# is the wrong second half and was the first attempt, because on a push it is
+# `refs/heads/x` while the pull request's `head_ref` is `x` — different groups, so every
+# commit built twice, and the macOS runner is the expensive half of this workflow.
 concurrency:
   group: ${{ github.workflow }}-${{ github.head_ref || github.ref_name }}
   cancel-in-progress: true
