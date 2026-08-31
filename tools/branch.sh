@@ -97,6 +97,13 @@ if [ $# -gt 0 ]; then
     printf '  %s\n' "$@"
 fi
 
+[ $# -gt 0 ] || {
+    echo
+    echo "note: no scope globs given, so no scope file was written and pre-push will"
+    echo "      impose no restriction on this branch. Re-run with globs, or add"
+    echo "      .github/pr-scope/$branch.txt by hand, to opt in."
+}
+
 echo
 echo "worktree: $dest"
 echo "cd $dest"

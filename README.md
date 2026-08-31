@@ -123,10 +123,17 @@ Three guardrails, each of which exists because the thing it prevents already hap
   care. A `pre-commit` hook keeps the primary checkout on `main` so the habit cannot lapse.
 - **`pre-push` refuses a diff that reaches outside the branch's declared scope**, read
   from `.github/pr-scope/<branch>.txt` — one glob per line, where `*` matches within a
-  path segment and `**` crosses slashes, as in gitignore. `PROJECT.md`, `CHANGELOG.md`
-  and the scope file itself are always allowed. No scope file means no restriction. The
-  hook reads the refs git gives it on stdin, so it checks the branch being pushed rather
-  than whatever happens to be checked out.
+  path segment and `**` crosses slashes. Patterns are **anchored at the repository root**,
+  which is where they differ from gitignore: write `**/Foo.kt`, not `Foo.kt`, and
+  `tools/**`, not `tools`. A pattern that reaches no file matches nothing, so the whole
+  diff is rejected against a scope that reads correctly.
+
+  `PROJECT.md`, `CHANGELOG.md` and the scope file itself are always allowed. No scope file
+  means no restriction — but a scope file with every pattern commented out is rejected,
+  not treated as open, and so is a push with no merge-base against `origin/main` (run
+  `git fetch origin main`). The hook reads the refs git gives it on stdin, so it checks the
+  branch being pushed rather than whatever happens to be checked out, and it only fires in
+  clones that ran `install-hooks.sh` — it is not a substitute for review.
 
 `tools/git-hooks-selftest.sh` tests all of it, including a replay of the real leak.
 
