@@ -34,7 +34,10 @@ android {
         // set"), and it rejects it during configuration, so the conflict failed every job
         // in the build — including the ones that never touch Android. Splits exist to
         // produce one APK per ABI; with a single ABI there is nothing to split, and
-        // `abiFilters` is what every library module in this project already uses.
+        // `abiFilters` is the app module's own ABI declaration. The shared library
+        // modules no longer carry one: AGP 9's KMP library plugin has no `ndk` block.
+        // They ship no native code, so the ABI set is decided here and verified by the
+        // afterEvaluate assertion below and by tools/check-apk-libraries.sh.
         ndk { abiFilters += "arm64-v8a" }
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"

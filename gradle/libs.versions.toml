@@ -189,7 +189,11 @@ androidx-test-runner = { group = "androidx.test", name = "runner", version.ref =
 
 [plugins]
 android-application = { id = "com.android.application", version.ref = "agp" }
-android-library = { id = "com.android.library", version.ref = "agp" }
+# No android-library entry: AGP 9 refuses to apply com.android.library alongside
+# kotlin.multiplatform, and all 14 library modules in this project are multiplatform,
+# so nothing was left to use it. androidApp and benchmark keep the ordinary
+# application/test plugins because they are not multiplatform.
+android-kotlin-multiplatform-library = { id = "com.android.kotlin.multiplatform.library", version.ref = "agp" }
 android-test = { id = "com.android.test", version.ref = "agp" }
 kotlin-multiplatform = { id = "org.jetbrains.kotlin.multiplatform", version.ref = "kotlin" }
 kotlin-serialization = { id = "org.jetbrains.kotlin.plugin.serialization", version.ref = "kotlin" }

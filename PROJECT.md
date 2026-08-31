@@ -1582,6 +1582,49 @@ With the target collision gone, `configureCMakeDebug[arm64-v8a]` passed and
   fourth, and the reason each was invisible locally is unchanged — a harness that runs the
   build's *tasks* cannot see errors in the build's *configuration*.
 
+- **AGP 9 will not sit alongside `kotlin.multiplatform` at all.** The second error class,
+  and the one that turns this from a version bump into a build-system migration:
+
+  ```
+  The 'com.android.library' (or 'com.android.application') plugin is not compatible with
+  the 'org.jetbrains.kotlin.multiplatform' plugin since AGP 9.0.
+  Solution:
+    - [Recommended] Replace the 'com.android.library' plugin with the
+      'com.android.kotlin.multiplatform.library' plugin.
+    - Or set the Gradle property 'android.builtInKotlin=false' and 'android.newDsl=false'
+      to temporarily bypass this issue.
+  ```
+
+  All 14 shared modules apply both plugins, so this is every one of them. The saving grace
+  is that their `android` blocks are uniform and thin — namespace, compileSdk, minSdk,
+  `ndk { abiFilters }`, `compileOptions` — and only `shared/core/data` has an `androidMain`
+  source directory at all; the other 13 are pure `commonMain`.
+
+  Two things made this a decision rather than a fix. First, `com.android.kotlin.multiplatform.library`
+  has no `ndk { abiFilters }` block, so the library-module half of the two-place ABI defence
+  goes away (these modules ship no `.so`, so nothing breaks — but the belt-and-braces does).
+  Second, the bypass is not free either: `android.builtInKotlin=false` disables the built-in
+  Kotlin that the previous commit removed `kotlin.android` *for*, so taking it would mean
+  putting that plugin back. The two error classes are coupled, in opposite directions.
+
+  **Decision: take the recommended migration, not the bypass.** The bypass is a deprecation
+  runway that closes on Google's schedule, and it would have to be undone anyway; doing the
+  work once is cheaper than doing it twice with a revert in between. All 14 modules moved to
+  `kotlin { androidLibrary { … } }`: `androidTarget()` is gone (the block declares the
+  target), `namespace`/`compileSdk`/`minSdk` moved inside it, and `compileOptions` became
+  `compilations.configureEach { compilerOptions { jvmTarget = JVM_17 } }`, since the new DSL
+  has no `compileOptions`.
+
+  **What the dropped `abiFilters` cost, precisely.** Nothing programmatic depended on it:
+  the ABI set is decided by `androidApp`'s own `defaultConfig.ndk.abiFilters`, asserted in
+  that module's `afterEvaluate`, and verified against the built APK by
+  `tools/check-apk-libraries.sh` reading `DT_NEEDED`. What was lost is a claim two comments
+  made — `androidApp/build.gradle.kts` said "`abiFilters` is what every library module in
+  this project already uses" and README.md described an ABI split that had already been
+  removed in the hardening pass. Both are corrected here rather than left to rot: a comment
+  that describes a defence which no longer exists is worse than no comment, because the next
+  person budgets for protection they do not have.
+
 - **The local harness was testing the wrong Gradle.** It invokes the system `gradle`, which
   is 8.14.3, not the wrapper — so every "local checks passed" on this branch was exercising
   the version being upgraded away from. Re-run against a downloaded Gradle 9.7.1, the whole
