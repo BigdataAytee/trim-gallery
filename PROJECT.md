@@ -1423,12 +1423,21 @@ With the target collision gone, `configureCMakeDebug[arm64-v8a]` passed and
   deliberately not a UI test — what is on screen belongs in tests that can afford to be
   wrong about layout.
 
-- **The smoke test runs on an Apple-silicon runner, and that follows from the ABI.**
-  `abiFilters` ships arm64-v8a only, so an x86_64 emulator cannot install this APK at all.
-  The alternative was adding x86_64 to debug builds, which cross-compiles every native
-  library twice and then tests an ABI nobody ever ships. Testing the artefact users actually
-  get is worth a macOS runner and a second native build; the CMake cache below takes most of
-  the cost out after the first run.
+- **No GitHub-hosted runner can run the smoke test, and the reason is structural.** The
+  reasoning was: the APK ships arm64-v8a alone, so the emulator must be arm64, so the host
+  must be Apple silicon, so `macos-14`. The step that was wrong is the last one — GitHub's
+  macOS runners are themselves virtual machines and do not expose nested virtualisation, so
+  Hypervisor.framework refuses with `HVF error: HV_UNSUPPORTED` and the device never boots.
+  Every GitHub-hosted runner that *can* boot an emulator (ubuntu with KVM, the Intel macOS
+  images) is x86_64, and this APK will not install on those.
+  So the real choice is between adding x86_64 to debug builds — cross-compiling every
+  native library twice in order to launch an ABI nobody ships — and providing an arm64 host
+  that can virtualise. That is a question about what the project pays for, not something to
+  decide inside a workflow file, so the job is `workflow_dispatch`-only until it is
+  answered. The test and the managed-device definition are correct and unchanged: on an
+  Apple-silicon machine `./gradlew :androidApp:smokePixelDebugAndroidTest` runs them today.
+  Recorded rather than deleted, because the gap it covers — nothing here proves the app
+  starts — is real and still open.
 
 - **The native jobs have a 90-minute cap and a cache.** A cold arm64 cross-compile of
   libjxl, jpegli, brotli, lcms and Highway is about seven minutes, so 90 is far above the

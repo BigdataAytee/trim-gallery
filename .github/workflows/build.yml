@@ -5,6 +5,8 @@ name: Build
 on:
   push:
   pull_request:
+  # The emulator smoke test is dispatch-only; see the `smoke` job for why.
+  workflow_dispatch:
 
 # `head_ref` on a pull_request, `ref_name` on a push — both are the bare branch name, so
 # the push run and the pull-request run for the same commit share a group and one cancels
@@ -281,9 +283,26 @@ jobs:
   smoke:
     name: App launches on a device
     runs-on: macos-14
-    # An Apple-silicon runner, because the APK ships arm64-v8a only: an x86_64 emulator
-    # cannot install it. The alternative was adding x86_64 to debug builds, which would
-    # cross-compile every native library twice and then test an ABI that is never shipped.
+    # Dispatch-only, and not because the test is flaky — because no GitHub-hosted runner
+    # can run it today.
+    #
+    # The APK ships arm64-v8a alone, so the emulator has to be arm64, which means an
+    # Apple-silicon host. GitHub's macos-14 runners are themselves virtual machines and
+    # do not expose nested virtualisation, so Hypervisor.framework refuses:
+    #
+    #     HVF error: HV_UNSUPPORTED
+    #     > Task :androidApp:smokePixelSetup FAILED
+    #
+    # The runners that *can* boot an emulator — ubuntu with KVM, or the Intel macOS
+    # images — are x86_64, and this APK will not install on them. So the choice is between
+    # adding x86_64 to debug builds (cross-compiling every native library twice, to launch
+    # an ABI nobody ships) and waiting for an arm64 runner that can virtualise. That is a
+    # decision about what the project pays for, not one to settle inside a workflow file.
+    #
+    # Everything below is correct and stays wired up: `gh workflow run` on a self-hosted
+    # arm64 host, or `./gradlew :androidApp:smokePixelDebugAndroidTest` on an Apple-silicon
+    # machine, runs it today.
+    if: github.event_name == 'workflow_dispatch'
     timeout-minutes: 90
     steps:
       - uses: actions/checkout@v4

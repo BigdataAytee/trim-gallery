@@ -164,12 +164,15 @@ have made stale on the spot. It has a self-test planting three violations, which
 real bug on its first run — `unzip -Z1` writes "Empty zipfile." to stdout, so an APK with no
 native libraries at all was being parsed as two filenames and passing.
 
-And the app now starts in CI. `MainActivityLaunchTest` launches `MainActivity` on a
-Gradle-managed device and asserts it reaches RESUMED and survives recreation — the only
-check here that proves the app runs rather than that it compiles. It runs on an
-Apple-silicon runner because the APK ships arm64-v8a only, so an x86_64 emulator cannot
-install it; adding x86_64 to debug builds would have cross-compiled everything twice to test
-an ABI nobody ships.
+`MainActivityLaunchTest` launches `MainActivity` on a Gradle-managed device and asserts it
+reaches RESUMED and survives recreation — the check this repository has never had, that the
+app runs rather than compiles. It does not run in CI, and that is a platform limit rather
+than a choice: the APK ships arm64-v8a alone, so the emulator must be arm64, so the host
+must be Apple silicon — and GitHub's macOS runners are virtual machines without nested
+virtualisation, so the emulator cannot start (`HVF error: HV_UNSUPPORTED`). Every hosted
+runner that can boot an emulator is x86_64, which this APK will not install on. The job is
+`workflow_dispatch`-only until that is resolved; the test runs today on any Apple-silicon
+machine.
 
 Both native jobs now cap at 90 minutes and cache `androidApp/.cxx` and oxipng's `target/`,
 keyed on the CMake inputs and the exact submodule commits.
