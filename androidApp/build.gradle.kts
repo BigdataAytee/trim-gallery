@@ -61,6 +61,23 @@ android {
         }
     }
 
+    testOptions {
+        managedDevices {
+            localDevices {
+                create("smokePixel") {
+                    device = "Pixel 6"
+                    apiLevel = 34
+                    // arm64-v8a, and it has to be: `abiFilters` above ships one ABI, so an
+                    // x86_64 system image cannot install this APK at all. That pins the
+                    // smoke test to an arm64 host — an Apple-silicon macOS runner in CI —
+                    // which is the price of testing the artefact users actually get rather
+                    // than a second one built only to be testable.
+                    systemImageSource = "aosp-atd"
+                }
+            }
+        }
+    }
+
     buildTypes {
         release {
             isMinifyEnabled = true

@@ -9,15 +9,15 @@
 #  ifndef JPEGLI_THREADS_EXPORT
 #    ifdef JPEGLI_THREADS_INTERNAL_LIBRARY_BUILD
         /* We are building this library */
-#      define JPEGLI_THREADS_EXPORT __attribute__((visibility("default")))
+#      define JPEGLI_THREADS_EXPORT 
 #    else
         /* We are using this library */
-#      define JPEGLI_THREADS_EXPORT __attribute__((visibility("default")))
+#      define JPEGLI_THREADS_EXPORT 
 #    endif
 #  endif
 
 #  ifndef JPEGLI_THREADS_NO_EXPORT
-#    define JPEGLI_THREADS_NO_EXPORT __attribute__((visibility("hidden")))
+#    define JPEGLI_THREADS_NO_EXPORT 
 #  endif
 #endif
 

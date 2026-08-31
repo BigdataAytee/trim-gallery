@@ -1393,16 +1393,50 @@ With the target collision gone, `configureCMakeDebug[arm64-v8a]` passed and
   in the dependency, and "it is a C library" is a claim about the API, not about what the
   build compiles.
 
-- **The APK's library set is asserted, not assumed.** `libtrim_native.so` links libjxl,
-  libjxl_cms and the three brotli libraries as *shared* objects, so all six have to be
-  packaged or `System.loadLibrary` fails the first time a night pass touches a photo — a
-  crash on a device, from a build that went green. This could not be checked from the
-  development environment (the artifact store is behind the same egress policy as Google
-  Maven), which is the argument for checking it in CI rather than once by hand: the native
-  job now lists `lib/arm64-v8a/*.so` out of the APK and fails if any of the six is absent.
-  Whether AGP packages a CMake target's shared dependencies alongside the target was the
-  open question; the check answers it on every push instead of relying on the answer
-  staying true.
+- **Every vendored native dependency links statically into `libtrim_native.so`.** Left to
+  itself libjxl builds `jxl`, `jxl_cms` and brotli's three libraries as shared objects, and
+  `libtrim_native.so` carried a DT_NEEDED on each — six `.so` files that all had to reach
+  the device or `System.loadLibrary` throws the first time a night pass touches a photo.
+  One self-contained library removes the failure mode rather than checking for it. The
+  licences permit it: libjxl and jpegli BSD-3-Clause, libvmaf BSD-2-Clause-Patent, brotli
+  MIT, Highway Apache-2.0, oxipng MIT — none copyleft, so static linking adds no obligation
+  beyond the attribution that applies either way. A future LGPL dependency would have to be
+  revisited target by target rather than by flipping `BUILD_SHARED_LIBS` back.
+
+- **The APK's library set is checked by reading the ELF, not a list.** The first version of
+  this check compared against six hardcoded names, which is a check that goes stale the
+  moment the link line changes — and the static-link decision above changed it immediately.
+  `tools/check-apk-libraries.sh` now reads DT_NEEDED out of each packaged `.so` and requires
+  every entry to be either packaged for the same ABI or part of the NDK's documented stable
+  ABI. It has a self-test that plants three violations, because a check that cannot fail is
+  not a check — and the self-test earned itself on first run by finding a real bug: `unzip
+  -Z1` writes "Empty zipfile." to *stdout*, so an APK containing no native libraries at all
+  was parsed as two filenames and passed.
+
+- **The app had never been started.** Everything else here is checked without a device —
+  shared logic on the JVM, boundaries by the guards, compilation on four targets — and none
+  of it can catch what only happens when Android loads the app: a missing native library, a
+  theme that resolves at compile time and throws at inflate time, a Koin graph with a cycle,
+  a manifest that merges to something the launcher will not start. Each is a crash on first
+  run from a build that went green. `MainActivityLaunchTest` asserts the smallest thing that
+  exercises all of them: the activity reaches RESUMED, and survives recreation. It is
+  deliberately not a UI test — what is on screen belongs in tests that can afford to be
+  wrong about layout.
+
+- **The smoke test runs on an Apple-silicon runner, and that follows from the ABI.**
+  `abiFilters` ships arm64-v8a only, so an x86_64 emulator cannot install this APK at all.
+  The alternative was adding x86_64 to debug builds, which cross-compiles every native
+  library twice and then tests an ABI nobody ever ships. Testing the artefact users actually
+  get is worth a macOS runner and a second native build; the CMake cache below takes most of
+  the cost out after the first run.
+
+- **The native jobs have a 90-minute cap and a cache.** A cold arm64 cross-compile of
+  libjxl, jpegli, brotli, lcms and Highway is about seven minutes, so 90 is far above the
+  observed time and far below the six-hour default a wedged toolchain would otherwise sit
+  through. The cache covers `androidApp/.cxx` and oxipng's `target/`, which Gradle's own
+  cache does not, and is keyed on the CMake inputs plus the exact submodule commits — a
+  submodule bump or a CMakeLists edit misses and rebuilds, because serving a stale object
+  for a changed source is worse than not caching.
 
 ### The guards guard themselves
 

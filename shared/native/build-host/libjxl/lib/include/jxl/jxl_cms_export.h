@@ -9,15 +9,15 @@
 #  ifndef JXL_CMS_EXPORT
 #    ifdef jxl_cms_EXPORTS
         /* We are building this library */
-#      define JXL_CMS_EXPORT __attribute__((visibility("default")))
+#      define JXL_CMS_EXPORT 
 #    else
         /* We are using this library */
-#      define JXL_CMS_EXPORT __attribute__((visibility("default")))
+#      define JXL_CMS_EXPORT 
 #    endif
 #  endif
 
 #  ifndef JXL_CMS_NO_EXPORT
-#    define JXL_CMS_NO_EXPORT __attribute__((visibility("hidden")))
+#    define JXL_CMS_NO_EXPORT 
 #  endif
 #endif
 

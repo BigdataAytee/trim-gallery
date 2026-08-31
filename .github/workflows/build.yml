@@ -183,6 +183,11 @@ jobs:
   apk:
     name: Android APK + native
     runs-on: ubuntu-latest
+    # The native tree is the one part of this build that can run long enough to matter:
+    # a cold cross-compile of libjxl, jpegli, brotli, lcms and Highway is ~7 minutes, and
+    # a wedged toolchain would otherwise sit on a runner for the six-hour default. 90
+    # minutes is far above the observed time and far below the point where it costs a day.
+    timeout-minutes: 90
     steps:
       # The one job that needs submodules: `shared/native/CMakeLists.txt` builds xpsnr,
       # vmaf, libjxl and jpegli from source, and `assembleDebug` runs it.
@@ -225,6 +230,22 @@ jobs:
           cargo --version
           cargo ndk --version
 
+      # The cross-compiled C/C++ output, which Gradle's own cache does not cover: `.cxx`
+      # holds the CMake/ninja tree, and libvmaf and oxipng build into the source tree
+      # through their own build systems. Keyed on the CMake inputs and the exact submodule
+      # commits, so a submodule bump or a CMakeLists edit misses and rebuilds — anything
+      # coarser would serve a stale object for a changed source, which is worse than no
+      # cache at all.
+      - name: Cache the native build tree
+        uses: actions/cache@v4
+        with:
+          path: |
+            androidApp/.cxx
+            shared/native/oxipng/target
+          key: native-arm64-${{ runner.os }}-${{ hashFiles('shared/native/CMakeLists.txt', 'shared/native/cmake/**', 'androidApp/build.gradle.kts', '.gitmodules') }}-${{ hashFiles('.git/modules/**/HEAD') }}
+          restore-keys: |
+            native-arm64-${{ runner.os }}-${{ hashFiles('shared/native/CMakeLists.txt', 'shared/native/cmake/**', 'androidApp/build.gradle.kts', '.gitmodules') }}-
+
       # assembleDebug depends on the merged-manifest guard, so a network permission
       # arriving through a dependency fails here even if no source changed.
       - name: Assemble
@@ -232,28 +253,19 @@ jobs:
           set -o pipefail
           ./gradlew :androidApp:assembleDebug --console=plain 2>&1 | tee /tmp/assemble.log
 
-      # An APK that builds and is missing a library it loads is a crash on first use, not a
-      # build failure — so the packaged `.so` set is asserted rather than assumed.
-      # `libtrim_native.so` links libjxl, libjxl_cms and the three brotli libraries as
-      # shared objects, and every one of them has to be in the APK for System.loadLibrary
-      # to succeed on a device.
+      # Asserted, not assumed: an APK missing a library it loads is a crash the first time
+      # a night pass touches a photo, not a build failure. The check reads DT_NEEDED out of
+      # each packaged `.so` rather than comparing against a hand-maintained list, so it
+      # stays correct when the link line changes — and it has a self-test that plants a
+      # violation, because a check that cannot fail is not a check.
       - name: The APK carries every library it loads
         run: |
           set -o pipefail
+          bash tools/check-apk-libraries-selftest.sh
           apk=$(ls androidApp/build/outputs/apk/debug/*.apk | head -1)
-          echo "APK: $apk"
-          unzip -l "$apk" | grep -E 'lib/arm64-v8a/.*\.so' || true
-          missing=0
-          for lib in libtrim_native.so libjxl.so libjxl_cms.so \
-                     libbrotlidec.so libbrotlienc.so libbrotlicommon.so; do
-            if unzip -l "$apk" | grep -q "lib/arm64-v8a/$lib"; then
-              echo "  ok      $lib"
-            else
-              echo "::error::$lib is linked into libtrim_native.so but is not in the APK"
-              missing=1
-            fi
-          done
-          exit $missing
+          nm_readelf="$ANDROID_NDK_ROOT/toolchains/llvm/prebuilt/linux-x86_64/bin/llvm-readelf"
+          [ -x "$nm_readelf" ] || nm_readelf=readelf
+          bash tools/check-apk-libraries.sh "$apk" "$nm_readelf"
 
       - uses: actions/upload-artifact@v4
         if: always()
@@ -265,3 +277,66 @@ jobs:
       - name: Failure summary
         if: failure()
         run: bash .github/failure-summary.sh /tmp/assemble.log
+
+  smoke:
+    name: App launches on a device
+    runs-on: macos-14
+    # An Apple-silicon runner, because the APK ships arm64-v8a only: an x86_64 emulator
+    # cannot install it. The alternative was adding x86_64 to debug builds, which would
+    # cross-compile every native library twice and then test an ABI that is never shipped.
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+      - uses: android-actions/setup-android@v3
+      - uses: gradle/actions/setup-gradle@v4
+
+      # Same prerequisites as the Linux native job, resolved for macOS. Homebrew already
+      # has meson and ninja; the Rust target and cargo-ndk are the same two lines.
+      - name: Native build prerequisites
+        run: |
+          set -o pipefail
+          brew install meson ninja
+          rustup target add aarch64-linux-android
+          cargo install cargo-ndk --locked
+
+      - name: Cache the native build tree
+        uses: actions/cache@v4
+        with:
+          path: |
+            androidApp/.cxx
+            shared/native/oxipng/target
+          key: native-arm64-${{ runner.os }}-${{ hashFiles('shared/native/CMakeLists.txt', 'shared/native/cmake/**', 'androidApp/build.gradle.kts', '.gitmodules') }}-${{ hashFiles('.git/modules/**/HEAD') }}
+          restore-keys: |
+            native-arm64-${{ runner.os }}-${{ hashFiles('shared/native/CMakeLists.txt', 'shared/native/cmake/**', 'androidApp/build.gradle.kts', '.gitmodules') }}-
+
+      # Boots the managed device, installs the APK and runs the two tests in
+      # MainActivityLaunchTest: the activity reaches RESUMED, and survives recreation.
+      # That is the whole point — it is the only check in this repository that proves the
+      # app starts rather than that it compiles.
+      #
+      # `--info` because when an emulator test fails the useful line is almost always in
+      # Gradle's device log rather than in the test report.
+      - name: Launch the app on a Gradle-managed device
+        run: |
+          set -o pipefail
+          ./gradlew :androidApp:smokePixelDebugAndroidTest \
+            --console=plain --info 2>&1 | tee /tmp/smoke.log
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: smoke-reports
+          path: |
+            androidApp/build/reports/androidTests/**
+            androidApp/build/outputs/androidTest-results/**
+          if-no-files-found: ignore
+
+      - name: Failure summary
+        if: failure()
+        run: bash .github/failure-summary.sh /tmp/smoke.log

@@ -9,15 +9,15 @@
 #  ifndef JPEGLI_CMS_EXPORT
 #    ifdef jpegli_cms_EXPORTS
         /* We are building this library */
-#      define JPEGLI_CMS_EXPORT __attribute__((visibility("default")))
+#      define JPEGLI_CMS_EXPORT 
 #    else
         /* We are using this library */
-#      define JPEGLI_CMS_EXPORT __attribute__((visibility("default")))
+#      define JPEGLI_CMS_EXPORT 
 #    endif
 #  endif
 
 #  ifndef JPEGLI_CMS_NO_EXPORT
-#    define JPEGLI_CMS_NO_EXPORT __attribute__((visibility("hidden")))
+#    define JPEGLI_CMS_NO_EXPORT 
 #  endif
 #endif
 

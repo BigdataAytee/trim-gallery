@@ -118,6 +118,18 @@ add_library(vmaf STATIC IMPORTED)
 set_target_properties(vmaf PROPERTIES IMPORTED_LOCATION ${VMAF_LIBRARY})
 add_dependencies(vmaf vmaf_build)
 
+# Every vendored dependency links statically into `libtrim_native.so`.
+#
+# Left to itself libjxl builds `jxl`, `jxl_cms` and brotli's three libraries as shared
+# objects, and `libtrim_native.so` then carries a DT_NEEDED on each — six `.so` files that
+# all have to reach the device or `System.loadLibrary` throws the first time a night pass
+# touches a photo. One self-contained library has no such failure mode, and the licences
+# permit it: libjxl and jpegli are BSD-3-Clause, libvmaf BSD-2-Clause-Patent, brotli MIT,
+# Highway Apache-2.0, oxipng MIT. None is copyleft, so static linking carries no obligation
+# beyond the attribution that applies either way. (If a future dependency is LGPL this must
+# be revisited target by target, not by flipping this line back.)
+set(BUILD_SHARED_LIBS OFF CACHE BOOL "" FORCE)
+
 # --- libjxl: SSIMULACRA 2 and the JPEG XL encoder ----------------------------
 #
 # One submodule, two things we need. Everything else is off: benchmarks, examples, man

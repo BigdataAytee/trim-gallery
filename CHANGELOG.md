@@ -149,6 +149,31 @@ diagnostic anywhere in the annotations. And `tools/build-native-host.sh` builds
 it is a static library, so building it alone proved only that every file compiled. That
 change caught one of the five locally, in seconds, before CI saw it.
 
+### One native library, and proof the app starts
+
+`libtrim_native.so` was linking libjxl, libjxl_cms and brotli's three libraries as shared
+objects, so six `.so` files had to reach the device or `System.loadLibrary` would throw the
+first time a night pass touched a photo. They are static now — one self-contained library,
+which removes the failure mode instead of checking for it. Every licence permits it (BSD-3,
+BSD-2-Clause-Patent, MIT, Apache-2.0; nothing copyleft).
+
+The check that was watching for that failure is still there and is now worth more: it reads
+DT_NEEDED out of each packaged `.so` and requires every entry to be packaged or part of the
+NDK's stable ABI, rather than comparing against six names that the static-link change would
+have made stale on the spot. It has a self-test planting three violations, which found a
+real bug on its first run — `unzip -Z1` writes "Empty zipfile." to stdout, so an APK with no
+native libraries at all was being parsed as two filenames and passing.
+
+And the app now starts in CI. `MainActivityLaunchTest` launches `MainActivity` on a
+Gradle-managed device and asserts it reaches RESUMED and survives recreation — the only
+check here that proves the app runs rather than that it compiles. It runs on an
+Apple-silicon runner because the APK ships arm64-v8a only, so an x86_64 emulator cannot
+install it; adding x86_64 to debug builds would have cross-compiled everything twice to test
+an ABI nobody ships.
+
+Both native jobs now cap at 90 minutes and cache `androidApp/.cxx` and oxipng's `target/`,
+keyed on the CMake inputs and the exact submodule commits.
+
 ### Guard self-tests
 
 Every other guard test checks a case somebody thought of. `GuardSelfTest` checks something
