@@ -1249,6 +1249,37 @@ compiler. Recorded by class, because the class is the lesson:
   right to the metre. The no-argument `getLatLong()` returns doubles. Filling the float
   array would have compiled and moved every photo a little.
 
+### Two vendored copies of the same library
+
+`configureCMakeDebug[arm64-v8a]` failed with six CMake errors, all one shape: `add_library
+cannot create target "hwy" because another target with the same name already exists`.
+jpegli is a fork of libjxl and vendors its own `third_party/highway` and its own `tools/`,
+so adding both subdirectories defines `hwy`, `hwy_test`, `hwy_list_targets` and
+`tool_version_git` twice. CMake refuses a duplicate target name outright (CMP0002), and
+there is no policy that relaxes it. This is exactly the collision PROJECT.md predicted when
+it noted that libjxl and jpegli each pull highway, brotli and skcms recursively — predicted
+and then not handled, because nothing had ever configured the CMake.
+
+Fixed without patching either submodule:
+
+- **One highway.** `JPEGLI_FORCE_SYSTEM_HWY` sends jpegli down its `find_package(HWY)`
+  branch instead of `add_subdirectory(highway)`. The find is made to succeed against the
+  copy libjxl has already added by seeding `HWY_INCLUDE_DIR`, `HWY_LIBRARY` and
+  `HWY_VERSION`; jpegli's own `FindHWY.cmake` ends with `if (HWY_LIBRARY AND NOT TARGET
+  hwy)`, so with the target already defined it creates nothing and every `hwy` reference in
+  jpegli resolves to libjxl's real in-tree target. `HWY_LIBRARY` is set to the string `hwy`
+  on purpose: anything consuming `HWY_LIBRARIES` then links the target, not a path that
+  does not exist until the build runs. The version is parsed out of `hwy/base.h` so it
+  cannot drift from the pinned submodule.
+- **One `tool_version_git`.** Both projects define it when their version is not pinned.
+  Pinning jpegli's to its own `git rev-parse --short HEAD` leaves libjxl's — the `tools/`
+  directory that supplies `ssimulacra2.cc` — as the only definition.
+
+Found and fixed locally, not through CI: cmake, ninja, meson and cargo are all present in
+this environment and the submodules are checked out, so `cmake -S shared/native -B …`
+reproduces the arm64 configure failure exactly. Only the NDK is missing. That is a harness
+that should have existed from milestone 7.
+
 ### The guards guard themselves
 
 - **A rule declares the languages it polices, and must have a planted violation in each.**

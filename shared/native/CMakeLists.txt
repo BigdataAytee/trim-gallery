@@ -126,6 +126,52 @@ set(JPEGLI_ENABLE_JNI OFF CACHE BOOL "" FORCE)
 set(JPEGLI_ENABLE_FUZZERS OFF CACHE BOOL "" FORCE)
 set(JPEGLI_ENABLE_TOOLS OFF CACHE BOOL "" FORCE)
 set(JPEGLI_ENABLE_SKCMS ON CACHE BOOL "" FORCE)
+
+# jpegli is a fork of libjxl and vendors its own copy of the same dependencies. Adding
+# both subdirectories therefore defines `hwy`, `hwy_test`, `hwy_list_targets` and
+# `tool_version_git` twice, and CMake refuses a duplicate target name outright (CMP0002).
+# This is the collision PROJECT.md predicted when it noted that libjxl and jpegli each
+# pull highway, brotli and skcms recursively.
+#
+# One highway, not two. `JPEGLI_FORCE_SYSTEM_HWY` sends jpegli down its `find_package(HWY)`
+# branch instead of `add_subdirectory(highway)`, and the cache entries below make that find
+# succeed against the copy libjxl has already added: jpegli's own `FindHWY.cmake` ends with
+# `if (HWY_LIBRARY AND NOT TARGET hwy)`, so with the target already defined it creates
+# nothing and every `hwy` reference in jpegli resolves to libjxl's real, in-tree target.
+# `hwy` as the library value is the target name on purpose — anything that consumes
+# `HWY_LIBRARIES` then links the target rather than a path that does not exist until the
+# build runs.
+#
+# The version is read out of the header rather than written here, so it cannot drift from
+# whatever the submodule is pinned at.
+file(READ "${CMAKE_CURRENT_SOURCE_DIR}/libjxl/third_party/highway/hwy/base.h" TRIM_HWY_BASE_H)
+string(REGEX MATCH "#define HWY_MAJOR +([0-9]+)" _trim_sink "${TRIM_HWY_BASE_H}")
+set(TRIM_HWY_MAJOR "${CMAKE_MATCH_1}")
+string(REGEX MATCH "#define +HWY_MINOR +([0-9]+)" _trim_sink "${TRIM_HWY_BASE_H}")
+set(TRIM_HWY_MINOR "${CMAKE_MATCH_1}")
+string(REGEX MATCH "#define +HWY_PATCH +([0-9]+)" _trim_sink "${TRIM_HWY_BASE_H}")
+set(TRIM_HWY_PATCH "${CMAKE_MATCH_1}")
+set(JPEGLI_FORCE_SYSTEM_HWY ON CACHE BOOL "" FORCE)
+set(HWY_INCLUDE_DIR "${CMAKE_CURRENT_SOURCE_DIR}/libjxl/third_party/highway" CACHE PATH "" FORCE)
+set(HWY_LIBRARY "hwy" CACHE STRING "" FORCE)
+set(HWY_VERSION "${TRIM_HWY_MAJOR}.${TRIM_HWY_MINOR}.${TRIM_HWY_PATCH}" CACHE STRING "" FORCE)
+
+# One `tool_version_git`, not two. Both projects define that custom target when their
+# version is not pinned, so pinning jpegli's leaves libjxl's — the one whose `tools/`
+# directory supplies ssimulacra2.cc — as the only definition. Read from the submodule so
+# the string is the commit actually built, not a guess.
+execute_process(
+    COMMAND git rev-parse --short HEAD
+    WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/jpegli"
+    OUTPUT_VARIABLE TRIM_JPEGLI_REV
+    OUTPUT_STRIP_TRAILING_WHITESPACE
+    ERROR_QUIET
+)
+if(TRIM_JPEGLI_REV STREQUAL "")
+    set(TRIM_JPEGLI_REV "(unknown)")
+endif()
+set(JPEGLI_VERSION "${TRIM_JPEGLI_REV}" CACHE STRING "" FORCE)
+
 add_subdirectory(jpegli EXCLUDE_FROM_ALL)
 
 # --- oxipng ------------------------------------------------------------------
