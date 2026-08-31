@@ -1508,6 +1508,18 @@ With the target collision gone, `configureCMakeDebug[arm64-v8a]` passed and
   Worth noting what this says about the shape of the gap: the emulator job's value is not
   only that it runs a test, it is that it *compiles* a source set nothing else touches.
 
+- **`testInstrumentationRunner` named a class that was never on the classpath.** The
+  emulator booted, installed the APK and started instrumentation, then died with
+  `ClassNotFoundException: androidx.test.runner.AndroidJUnitRunner`. That setting has been
+  in `androidApp/build.gradle.kts` since milestone 1 and `androidx.test.ext:junit` has been
+  an `androidTestImplementation` nearly as long — but ext:junit brings `androidx.test:core`
+  and `monitor`, not the runner. Nothing could reveal it until an instrumented test was
+  actually executed, which had never happened. `androidx.test:runner` is added and recorded
+  in STACK.md; it is test-only and never shipped. The pattern is by now familiar enough to
+  name: configuration that points at something absent is invisible until the thing is used,
+  and this repository had four such settings — the ABI split, the eager task lookup, the
+  detekt source set, and now the runner.
+
 ### The guards guard themselves
 
 - **A rule declares the languages it polices, and must have a planted violation in each.**

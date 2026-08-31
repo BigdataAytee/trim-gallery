@@ -221,6 +221,11 @@ dependencies {
     testImplementation(libs.junit)
     testImplementation(libs.kotlinx.coroutines.test)
     androidTestImplementation(libs.androidx.test.junit)
+    // The runner itself, not just the JUnit4 rules. `testInstrumentationRunner` above has
+    // named `androidx.test.runner.AndroidJUnitRunner` since milestone 1, but nothing put
+    // that class on the classpath — `androidx.test.ext:junit` pulls core and monitor only.
+    // Invisible until an instrumented test actually ran, which first happened today.
+    androidTestImplementation(libs.androidx.test.runner)
     androidTestImplementation(libs.kotlinx.coroutines.test)
 }
 

@@ -82,6 +82,7 @@ have been removed from the version catalog so they cannot be applied by accident
 | Kotlin Coroutines + Flow | concurrency | Gradle `org.jetbrains.kotlinx:kotlinx-coroutines-android` | https://github.com/Kotlin/kotlinx.coroutines |
 | Hilt | DI | Gradle `com.google.dagger:hilt-android` | https://github.com/google/dagger |
 | Macrobenchmark + Baseline Profiles | 120 fps gallery | Gradle `androidx.benchmark:benchmark-macro-junit4` | https://github.com/androidx/androidx |
+| AndroidX Test runner + ext:junit | the instrumented tests that prove the app starts on a device | Gradle `androidx.test:runner`, `androidx.test.ext:junit` | https://github.com/androidx/androidx |
 | Perfetto | frame drops, codec stalls | tooling | https://github.com/google/perfetto |
 | Detekt | lint | Gradle plugin `io.gitlab.arturbosch.detekt` | https://github.com/detekt/detekt |
 | ktlint | formatting | Gradle plugin `org.jlleitschuh.gradle.ktlint` | https://github.com/ktlint/ktlint |

@@ -98,6 +98,10 @@ jimagehash = "1.0.0"              # [central]
 junit = "4.13.2"                  # [central]
 turbine = "1.2.1"                 # [central]
 androidxTestJunit = "1.3.0"       # [google]
+androidxTestRunner = "1.7.0"      # [google] The AndroidJUnitRunner class `testInstrumentationRunner`
+                                  # already names. `androidx.test.ext:junit` brings core and monitor
+                                  # but NOT the runner, so instrumented tests installed and then died
+                                  # with ClassNotFoundException the first time one was ever executed.
 
 [libraries]
 # --- Shared / KMP ---
@@ -175,6 +179,7 @@ turbine = { group = "app.cash.turbine", name = "turbine", version.ref = "turbine
 kotlin-test = { group = "org.jetbrains.kotlin", name = "kotlin-test", version.ref = "kotlin" }
 kotlinx-coroutines-test = { group = "org.jetbrains.kotlinx", name = "kotlinx-coroutines-test", version.ref = "coroutines" }
 androidx-test-junit = { group = "androidx.test.ext", name = "junit", version.ref = "androidxTestJunit" }
+androidx-test-runner = { group = "androidx.test", name = "runner", version.ref = "androidxTestRunner" }
 
 [plugins]
 android-application = { id = "com.android.application", version.ref = "agp" }
