@@ -63,6 +63,17 @@ android {
         }
     }
 
+    // AGP builds an androidTest component for exactly one build type, and it defaults to
+    // `debug` — so with this left alone there is no `smokeAndroidTest`, and therefore no
+    // `pixelSmokeAndroidTest` for the managed device to run:
+    //
+    //     Cannot locate tasks that match ':androidApp:pixelSmokeAndroidTest'
+    //
+    // Pointing it at `smoke` is what makes the instrumented tests build against the variant
+    // that has an ABI the emulator can run. `smoke` is `initWith(debug)`, so the existing
+    // instrumented tests are unaffected by the move.
+    testBuildType = "smoke"
+
     testOptions {
         managedDevices {
             localDevices {

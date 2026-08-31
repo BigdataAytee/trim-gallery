@@ -1442,6 +1442,14 @@ With the target collision gone, `configureCMakeDebug[arm64-v8a]` passed and
 - **The macOS smoke job is gone rather than kept on manual dispatch.** It could not run at
   all, so it offered nothing the Linux job does not.
 
+- **`testBuildType` has to follow the smoke variant.** AGP builds an androidTest component
+  for exactly one build type and defaults to `debug`, so adding a `smoke` build type gave it
+  no instrumented tests and the managed device no task to run —
+  `Cannot locate tasks that match ':androidApp:pixelSmokeAndroidTest'`. Setting
+  `testBuildType = "smoke"` is what makes the tests build against the variant with an ABI the
+  emulator can install. Worth writing down because it is invisible: everything about the
+  build type, the device and the workflow was right, and the tests silently did not exist.
+
 - **The native jobs have a 90-minute cap and a cache.** A cold arm64 cross-compile of
   libjxl, jpegli, brotli, lcms and Highway is about seven minutes, so 90 is far above the
   observed time and far below the six-hour default a wedged toolchain would otherwise sit
