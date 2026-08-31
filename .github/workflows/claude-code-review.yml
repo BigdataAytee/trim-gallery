@@ -53,6 +53,26 @@ jobs:
           # Creates a PR comment the agent owns and updates. Without it there is
           # nowhere for the review to go.
           track_progress: true
+          # TEMPORARY DIAGNOSTIC — remove once the cause below is known.
+          #
+          # Three consecutive runs (PR #7 twice, PR #8 once) ended with the model
+          # never invoked:
+          #
+          #     "is_error": true, "duration_ms": 573, "num_turns": 1,
+          #     "total_cost_usd": 0, "modelUsage": {}
+          #
+          # ~500 ms, zero cost, empty modelUsage — the API rejected the request
+          # before any inference. That envelope is all the log carries, because
+          # the action prints "Running Claude Code via SDK (full output hidden
+          # for security)" and swallows the rest. Exhausted credit, a spend cap,
+          # a revoked key and a rate limit all look identical from outside, and
+          # the secret itself is set and non-empty (`ANTHROPIC_API_KEY: ***` in
+          # the job env), so the "missing secret" cause is already ruled out.
+          #
+          # This prints the SDK's own error string. The cost of leaving it on is
+          # that every review's full output lands in the job log, which is why it
+          # is off by default: take it out again once the reason is in hand.
+          show_full_output: true
           prompt: |
             Review this pull request against the project's own specifications, which
             are in the repository: BUILD.md (the spec), PROJECT.md (decisions already
