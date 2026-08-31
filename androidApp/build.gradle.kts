@@ -104,6 +104,18 @@ android {
             initWith(getByName("debug"))
             matchingFallbacks += "debug"
             ndk { abiFilters += "x86_64" }
+            // Set rather than inherited, and asserted below.
+            //
+            // `initWith` copies the debug build type's properties, and an instrumented test
+            // needs two of them to be true: the variant must be debuggable (the test runner
+            // attaches to the process) and it must be signed (an unsigned APK does not
+            // install, and the emulator reports that as a install failure rather than as a
+            // configuration mistake). The `benchmark` type below already re-states its
+            // signing config despite its own `initWith`, so this build has never relied on
+            // that inheritance — being explicit here says what the variant needs instead of
+            // depending on what another build type happens to carry.
+            isDebuggable = true
+            signingConfig = signingConfigs.getByName("debug")
         }
 
         release {
@@ -244,5 +256,34 @@ androidComponents {
         tasks.matching { it.name == "assemble$capitalised" }.configureEach { dependsOn(verify) }
         // ALL_TASK is registered by the guards plugin at apply time, so it exists here.
         tasks.named(TrimGuardsPlugin.ALL_TASK) { dependsOn(verify) }
+    }
+}
+
+// The smoke variant's two load-bearing properties, checked rather than assumed.
+//
+// `smoke` exists only so an instrumented test can install and drive the app on an emulator,
+// and that needs it debuggable (the test runner attaches to the process) and signed (an
+// unsigned APK will not install, and the failure surfaces as INSTALL_PARSE_FAILED rather
+// than as "somebody changed a build type"). Both come from `initWith(debug)` plus the two
+// explicit lines above; this fails configuration if a future edit removes either, because
+// the alternative is a red emulator job whose message points nowhere near the cause.
+//
+// It also pins the ABI set, which is the other thing the emulator depends on: x86_64 must be
+// present or the APK cannot install on a hosted runner, and arm64-v8a must stay so the
+// variant still resembles what ships.
+afterEvaluate {
+    val smoke = android.buildTypes.getByName("smoke")
+    check(smoke.isDebuggable) {
+        "The `smoke` build type must be debuggable: the instrumented test runner attaches to " +
+            "the app process, and a non-debuggable build refuses that."
+    }
+    checkNotNull(smoke.signingConfig) {
+        "The `smoke` build type must be signed. An unsigned APK does not install, and the " +
+            "emulator reports it as a parse failure rather than as a build-type mistake."
+    }
+    val abis = android.defaultConfig.ndk.abiFilters + smoke.ndk.abiFilters
+    check(abis.containsAll(setOf("arm64-v8a", "x86_64"))) {
+        "The `smoke` build type must carry arm64-v8a and x86_64; got $abis. x86_64 is what " +
+            "lets the APK install on a hosted emulator, which no arm64 runner can virtualise."
     }
 }

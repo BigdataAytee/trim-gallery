@@ -105,11 +105,14 @@ if(ANDROID OR APPLE)
     set(TRIM_MESON_TOOLCHAIN_ARGS "")
     if(CMAKE_C_COMPILER_TARGET)
         string(APPEND TRIM_MESON_TOOLCHAIN_ARGS "'--target=${CMAKE_C_COMPILER_TARGET}', ")
-    elseif(ANDROID AND CMAKE_ANDROID_ARCH_ABI STREQUAL "arm64-v8a")
+    elseif(ANDROID AND TRIM_MESON_CPU_FAMILY)
         # Only reachable if a future NDK toolchain file stops setting the variable above.
-        # Composed rather than assumed, and still an ABI this build actually targets.
+        # Composed from the ABI rather than assumed, and covers both ABIs this build
+        # targets — when it named arm64 alone, an x86_64 build would have silently fallen
+        # through with no `--target` at all, which is exactly how meson ends up compiling
+        # for the host and failing its sanity check with `undefined symbol: main`.
         string(APPEND TRIM_MESON_TOOLCHAIN_ARGS
-            "'--target=aarch64-none-linux-android${CMAKE_SYSTEM_VERSION}', ")
+            "'--target=${TRIM_MESON_CPU_FAMILY}-none-linux-android${CMAKE_SYSTEM_VERSION}', ")
     endif()
     if(CMAKE_SYSROOT)
         string(APPEND TRIM_MESON_TOOLCHAIN_ARGS "'--sysroot=${CMAKE_SYSROOT}', ")

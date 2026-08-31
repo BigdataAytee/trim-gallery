@@ -1,4 +1,23 @@
 # Pinned so CI and dev machines produce the same binary (ndk-build skill, "CI").
+#
+# x86_64-linux-android is listed for the emulator smoke build, not because anything ships
+# on it. It has to be here rather than added ad hoc: with a target missing, the first cargo
+# invocation that needs it makes rustup install it *during* the build, and the two ABI
+# builds run concurrently — rustup's component installer is not safe against that and the
+# two corrupt each other:
+#
+#     error: could not rename 'component' file ... 'lib/rustlib/aarch64-linux-android':
+#            Directory not empty (os error 39)
+#     error: failed to install component: 'rustc-x86_64-unknown-linux-gnu',
+#            detected conflict: 'bin/rust-gdb'
+#     error: the 'cargo' binary ... is not applicable to the '1.94.1-...' toolchain
+#
+# Declaring every target the build can ask for means rustup resolves them once, up front,
+# and nothing installs anything while ninja is running.
 [toolchain]
 channel = "1.94.1"
-targets = ["aarch64-linux-android", "aarch64-apple-ios"]
+targets = [
+    "aarch64-linux-android",
+    "x86_64-linux-android",
+    "aarch64-apple-ios",
+]

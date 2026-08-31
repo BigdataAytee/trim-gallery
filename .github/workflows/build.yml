@@ -243,9 +243,14 @@ jobs:
           path: |
             androidApp/.cxx
             shared/native/oxipng/target
-          key: native-arm64-${{ runner.os }}-${{ hashFiles('shared/native/CMakeLists.txt', 'shared/native/cmake/**', 'androidApp/build.gradle.kts', '.gitmodules') }}-${{ hashFiles('.git/modules/**/HEAD') }}
+          # The ABI set is in the key, not just in the prefix. Both native jobs cache the
+          # same `androidApp/.cxx` path, and .cxx is laid out per ABI — so a key that did
+          # not name the ABIs would let the arm64-only job restore a tree the two-ABI job
+          # wrote, or the reverse, and ninja would then be reasoning about object files for
+          # an architecture it is not building.
+          key: native-abi_arm64-v8a-${{ runner.os }}-${{ hashFiles('shared/native/CMakeLists.txt', 'shared/native/cmake/**', 'androidApp/build.gradle.kts', '.gitmodules') }}-${{ hashFiles('.git/modules/**/HEAD') }}
           restore-keys: |
-            native-arm64-${{ runner.os }}-${{ hashFiles('shared/native/CMakeLists.txt', 'shared/native/cmake/**', 'androidApp/build.gradle.kts', '.gitmodules') }}-
+            native-abi_arm64-v8a-${{ runner.os }}-${{ hashFiles('shared/native/CMakeLists.txt', 'shared/native/cmake/**', 'androidApp/build.gradle.kts', '.gitmodules') }}-
 
       # assembleDebug depends on the merged-manifest guard, so a network permission
       # arriving through a dependency fails here even if no source changed.
@@ -310,8 +315,12 @@ jobs:
         run: |
           set -o pipefail
           python3 -m pip install --upgrade meson ninja
-          # Both ABIs: the smoke variant builds arm64-v8a and x86_64, and oxipng is Rust,
-          # so cargo needs the Android target for each.
+          # Resolve the pinned toolchain and every target it declares *now*, while nothing
+          # else is running. The two ABI builds invoke cargo concurrently, and if a target
+          # is still missing at that point rustup installs it mid-build from two processes
+          # at once and corrupts its own component tree. `rustup show` in the crate
+          # directory is what forces rust-toolchain.toml to be honoured up front.
+          (cd shared/native/oxipng && rustup show)
           rustup target add aarch64-linux-android x86_64-linux-android
           cargo install cargo-ndk --locked
 
@@ -323,9 +332,11 @@ jobs:
           path: |
             androidApp/.cxx
             shared/native/oxipng/target
-          key: native-smoke-${{ runner.os }}-${{ hashFiles('shared/native/CMakeLists.txt', 'shared/native/cmake/**', 'androidApp/build.gradle.kts', '.gitmodules') }}-${{ hashFiles('.git/modules/**/HEAD') }}
+          # arm64-v8a + x86_64 — the smoke variant builds both, so it must never share a
+          # cache entry with the arm64-only job above. See that job's note.
+          key: native-abi_arm64-v8a_x86_64-${{ runner.os }}-${{ hashFiles('shared/native/CMakeLists.txt', 'shared/native/cmake/**', 'androidApp/build.gradle.kts', '.gitmodules') }}-${{ hashFiles('.git/modules/**/HEAD') }}
           restore-keys: |
-            native-smoke-${{ runner.os }}-${{ hashFiles('shared/native/CMakeLists.txt', 'shared/native/cmake/**', 'androidApp/build.gradle.kts', '.gitmodules') }}-
+            native-abi_arm64-v8a_x86_64-${{ runner.os }}-${{ hashFiles('shared/native/CMakeLists.txt', 'shared/native/cmake/**', 'androidApp/build.gradle.kts', '.gitmodules') }}-
 
       # Boots the managed device, installs the smoke APK and runs MainActivityLaunchTest:
       # the activity reaches RESUMED, and survives recreation. The only check in this
