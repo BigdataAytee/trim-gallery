@@ -1139,18 +1139,45 @@ Recorded by class, as each one is fixed:
   would have put the index of the user's photo library under Documents — visible in the Files
   app to anyone who enables file sharing. Both fixed together.
 
-- **Compose 1.12 needs AGP 9.1, AGP 9 needs Gradle 9, and detekt has no Gradle 9 release.**
-  `checkDebugAarMetadata` refused 29 artifacts. The rest of the version catalogue says
-  "latest stable" everywhere, so AGP 8.13 looked like the stale entry — but the chain runs
-  out at detekt, whose latest is 1.23.8 and which has no Gradle 9 line at all. Taking the
-  newest Compose would mean dropping static analysis to get a build, which is the wrong way
-  round in a pass whose whole point is that the checks are real.
+- **`checkDebugAarMetadata` is a version wall, and the honest fix is to pin the libraries
+  down, not to jump the whole toolchain.** It refused 29 artifacts, then 25. Two separate
+  requirements, both declared inside the published `.aar`:
 
-  So: Compose Multiplatform held at 1.11.1, its JetBrains lifecycle companion at 2.10.0, and
-  the androidx `compose-bom` removed from `androidApp` — it was the only module mixing the
-  BOM with the Compose Multiplatform plugin, which put two Compose versions in one build and
-  is what dragged 1.12 in. Every module now takes `compose.*` from the plugin. Revisit when
-  detekt ships for Gradle 9: two version numbers and a wrapper bump.
+  | | declares | this build has |
+  |---|---|---|
+  | `androidx.compose.*:1.12.0` | `minAgpVersion=9.1.0`, `minCompileSdk=37` | AGP 8.13.0, compileSdk 36 |
+  | `io.coil-kt.coil3:*:3.6.0` | `minCompileSdk=37` | compileSdk 36 |
+
+  Three fixes, each checked against the artifact rather than guessed. The androidx
+  `compose-bom` came out of `androidApp` — it was the only module mixing the BOM with the
+  Compose Multiplatform plugin, which put two Compose versions in one build. Compose
+  Multiplatform went to 1.11.1, which maps to androidx.compose **1.11.2**, artifact by
+  artifact, read out of the Gradle module metadata on Maven Central. And coil went to 3.5.0,
+  whose `.aar` declares `minCompileSdk=36` where 3.6.0 declares 37 — downloaded and unzipped
+  to check, because a changelog would not have said.
+
+  The first two were not enough on their own. `org.jetbrains.androidx.lifecycle:2.10.0` maps
+  to `androidx.lifecycle:2.10.0`, which drags the whole androidx.compose line back up to
+  1.12.0 from behind Compose Multiplatform's back — stepping Compose down while leaving its
+  lifecycle companion up changes nothing. Compose Multiplatform 1.11.1 depends on
+  `org.jetbrains.androidx.lifecycle:2.9.6` itself, whose Android variant maps to
+  `androidx.lifecycle:2.9.4` — the version already in the catalogue. Set to 2.9.6, so the
+  two lines agree rather than one silently overriding the other.
+
+- **The first explanation for that wall was wrong, and is recorded here because it was
+  acted on.** It read: Compose 1.12 needs AGP 9.1, AGP 9 needs Gradle 9, detekt has no
+  Gradle 9 release, therefore upgrading means dropping static analysis. The last step is
+  false. detekt 1.23.8 and ktlint-gradle 14.2.0 were both run against Gradle 9.7.1 in this
+  environment and both work: detekt analysed and reported findings, ktlint linted and
+  reported violations. "No release advertised for Gradle 9" is not "does not run on
+  Gradle 9", and the difference is one throwaway project and forty seconds.
+
+  The real reason to hold at Compose 1.11.1 is smaller and duller: taking 1.12 means AGP 9 +
+  Gradle 9 + compileSdk 37 in one step, and every piece of that lives on Google Maven, which
+  this environment's egress policy refuses (403 at the gateway — `dl.google.com`,
+  `maven.google.com` and every mirror tried). It cannot be checked here at all, only in CI,
+  four minutes at a time. That is its own change, not a line item in a pass whose job is to
+  get the existing code compiling.
 
 ### The guards guard themselves
 

@@ -89,6 +89,32 @@ formatted to it.
 - Two guards failed on the ordinary shape of a library module — no manifest, no sources — and
   now say where those are required instead.
 
+### The version wall, read out of the artifacts
+
+`checkDebugAarMetadata` refused 29 dependencies, then 25. Two requirements, both declared
+inside the published `.aar` rather than in anyone's release notes:
+
+- `androidx.compose.*:1.12.0` — `minAgpVersion=9.1.0`, `minCompileSdk=37`
+- `io.coil-kt.coil3:*:3.6.0` — `minCompileSdk=37`
+
+against a build on AGP 8.13.0 and compileSdk 36. Pinned down rather than jumped: the
+androidx `compose-bom` out of `androidApp` (the one module mixing it with the Compose
+Multiplatform plugin, so two Compose versions were in one build), Compose Multiplatform to
+1.11.1, coil to 3.5.0 — whose `.aar` declares `minCompileSdk=36` where 3.6.0 declares 37,
+downloaded and unzipped to check.
+
+Compose alone did not move the number: `org.jetbrains.androidx.lifecycle:2.10.0` maps to
+`androidx.lifecycle:2.10.0`, which pulls androidx.compose back up to 1.12.0 from behind
+Compose Multiplatform's back. Set to 2.9.6 — what Compose Multiplatform 1.11.1 depends on
+itself, and whose Android variant maps to the `androidx.lifecycle:2.9.4` already in the
+catalogue, so the two lines agree instead of one overriding the other.
+
+The first diagnosis was wrong and is corrected in PROJECT.md rather than quietly dropped:
+it said detekt has no Gradle 9 release, so the AGP 9 upgrade would cost static analysis.
+detekt 1.23.8 and ktlint-gradle 14.2.0 were then run against Gradle 9.7.1 and both work.
+The upgrade is still deferred, for a duller reason — AGP, the SDK platform and androidx all
+live on Google Maven, which this environment cannot reach, so it can only be tried in CI.
+
 ### Guard self-tests
 
 Every other guard test checks a case somebody thought of. `GuardSelfTest` checks something
