@@ -61,6 +61,33 @@ set(VMAF_BUILD_DIR ${CMAKE_CURRENT_BINARY_DIR}/vmaf-build)
 set(VMAF_LIBRARY ${VMAF_BUILD_DIR}/src/libvmaf.a)
 
 if(ANDROID OR APPLE)
+    # The NDK's `clang` is one generic driver for every ABI: without `--target` it compiles
+    # for the *host*. CMake passes that flag itself, so its own rules are fine — but meson
+    # only knows what this file tells it, and the first arm64 build proved the gap exactly:
+    #
+    #     clang -o sanity_check_for_c_cross.exe … -march=armv8-a+simd
+    #     error: unknown target CPU 'armv8-a+simd'
+    #     note: valid target CPU values are: nocona, core2, … znver4, x86-64
+    #     ld.lld: error: undefined symbol: main
+    #     >>> referenced by /lib/x86_64-linux-gnu/Scrt1.o:(_start)
+    #
+    # x86 CPU names and the host's C runtime, from a compiler invoked to build for arm64.
+    # So the target and sysroot come from the values CMake already resolved, on both the
+    # compile and the link line — meson runs its sanity check through the linker too.
+    set(TRIM_MESON_TOOLCHAIN_ARGS "")
+    if(CMAKE_C_COMPILER_TARGET)
+        string(APPEND TRIM_MESON_TOOLCHAIN_ARGS "'--target=${CMAKE_C_COMPILER_TARGET}', ")
+    elseif(ANDROID AND CMAKE_ANDROID_ARCH_ABI STREQUAL "arm64-v8a")
+        # Only reachable if a future NDK toolchain file stops setting the variable above.
+        # Composed rather than assumed, and still an ABI this build actually targets.
+        string(APPEND TRIM_MESON_TOOLCHAIN_ARGS
+            "'--target=aarch64-none-linux-android${CMAKE_SYSTEM_VERSION}', ")
+    endif()
+    if(CMAKE_SYSROOT)
+        string(APPEND TRIM_MESON_TOOLCHAIN_ARGS "'--sysroot=${CMAKE_SYSROOT}', ")
+    endif()
+    # The same arguments without the trailing separator, for the list that ends with them.
+    string(REGEX REPLACE ", $" "" TRIM_MESON_LINK_ARGS "${TRIM_MESON_TOOLCHAIN_ARGS}")
     set(TRIM_MESON_CROSS ${CMAKE_CURRENT_BINARY_DIR}/meson-cross.ini)
     configure_file(${CMAKE_CURRENT_SOURCE_DIR}/cmake/meson-cross.ini.in ${TRIM_MESON_CROSS} @ONLY)
     set(TRIM_MESON_CROSS_ARG --cross-file ${TRIM_MESON_CROSS})

@@ -15,5 +15,9 @@ cpu = 'aarch64'
 endian = 'little'
 
 [built-in options]
-c_args = ['-march=armv8-a+simd', '-O3']
-c_link_args = []
+# The two lists below open with the target and sysroot CMake resolved, substituted in by
+# configure_file. They are on the link line as well as the compile line because meson's
+# sanity check links an executable, and a driver told to compile for arm64 but not to link
+# for it reaches for the host's C runtime.
+c_args = [@TRIM_MESON_TOOLCHAIN_ARGS@'-march=armv8-a+simd', '-O3']
+c_link_args = [@TRIM_MESON_LINK_ARGS@]

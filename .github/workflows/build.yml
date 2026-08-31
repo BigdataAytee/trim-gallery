@@ -216,9 +216,14 @@ jobs:
           set -o pipefail
           python3 -m pip install --upgrade meson ninja
           rustup target add aarch64-linux-android
+          # `cargo ndk`, not plain `cargo`: the CMake invokes the cargo-ndk subcommand,
+          # which sets the linker and the sysroot for the Android target. Without it cargo
+          # answers "no such command: ndk" after the C libraries have already built.
+          cargo install cargo-ndk --locked
           meson --version
           ninja --version
           cargo --version
+          cargo ndk --version
 
       # assembleDebug depends on the merged-manifest guard, so a network permission
       # arriving through a dependency fails here even if no source changed.

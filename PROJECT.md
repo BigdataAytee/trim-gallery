@@ -1289,6 +1289,37 @@ shape libjxl already had. With it, libvmaf, xpsnr, libjxl, jpegli, brotli and hi
 build and `libtrim_native.a` links — the first time the native tree has been built from
 this repository at all.
 
+### The cross build was only half cross
+
+With the target collision gone, `configureCMakeDebug[arm64-v8a]` passed and
+`buildCMakeDebug[arm64-v8a]` produced two more:
+
+- **meson was compiling libvmaf for the host.** The NDK ships one generic `clang` driver
+  for every ABI; without `--target` it builds for whatever the machine is. CMake passes
+  that flag from its own rules, so CMake's targets were fine — but meson only knows what
+  `meson-cross.ini` tells it, and that file carried the compiler path and `-march` and
+  nothing else. The evidence is unambiguous:
+
+  ```
+  error: unknown target CPU 'armv8-a+simd'
+  note: valid target CPU values are: nocona, core2, … znver4, x86-64
+  ld.lld: error: undefined symbol: main
+  >>> referenced by /lib/x86_64-linux-gnu/Scrt1.o:(_start)
+  ```
+
+  x86 CPU names and the host's C runtime, out of a compiler asked to build for arm64. The
+  cross file now carries `--target` and `--sysroot` from the values CMake resolved, on the
+  link line as well as the compile line — meson's sanity check links an executable, and a
+  driver told to compile for arm64 but not to link for it reaches for the host's `Scrt1.o`.
+  The template renders through the real `configure_file`, checked here against a stand-in
+  toolchain, because the host build never takes this branch.
+
+- **`cargo ndk` was not installed.** oxipng is Rust and the CMake shells out to the
+  cargo-ndk subcommand, which sets the linker and sysroot for the Android target. The
+  runner has cargo and now has the `aarch64-linux-android` target, but the subcommand is a
+  separate install, and cargo answered `no such command: ndk` after the C libraries had
+  already built. Added to the APK job's prerequisites beside meson and ninja.
+
 ### The guards guard themselves
 
 - **A rule declares the languages it polices, and must have a planted violation in each.**
