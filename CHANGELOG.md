@@ -19,6 +19,55 @@ rule this project treats as non-negotiable — passed it without a word. The bot
 turns and posted nothing. A green `review` currently means the job exited zero, not that
 anything was reviewed.
 
+## The review check now posts its findings
+
+`claude-code-review.yml` ran in agent mode with `track_progress` off and a prompt that
+asked for a review but never said to post one, so the action had nowhere to publish the
+result and no instruction to try. The job passed, silently, having reviewed nothing that
+anyone could see — including a deliberately planted software-encoder fallback.
+
+`track_progress: true` gives the agent a tracking comment to write into, and the prompt
+now requires a comment on every run, findings or not, on the grounds that a silent pass
+is indistinguishable from a job that never ran. The prompt also asks the reviewer to
+judge what changed code *does* rather than where it sits, since the build guards already
+enforce location and the planted violation lived inside the one file where creating a
+codec is legal.
+
+## AGP 9 / Compose Multiplatform 1.12
+
+A version bump with no behaviour change, done as one commit because the pieces cannot
+move apart.
+
+androidx.compose 1.12.0 declares `minAgpVersion=9.1.0` and `minCompileSdk=37` in its AAR
+metadata. That makes Compose Multiplatform 1.12.0, AGP 9.1.0, Gradle 9.7.1, compileSdk and
+targetSdk 37, and coil 3.6.0 a single set — split them and `checkDebugAarMetadata` fails
+one dependency at a time. The lifecycle pair (`org.jetbrains.androidx.lifecycle` and
+`androidx.lifecycle`, both 2.10.0) is in the set for a subtler reason: the multiplatform
+line resolves to the AndroidX one, which pulls androidx.compose to 1.12.0 from behind
+Compose Multiplatform's back, so holding Compose back while that moved achieved nothing.
+
+AGP 9 also refuses to apply `com.android.library` alongside `org.jetbrains.kotlin.multiplatform`
+at all, which is every one of the 14 shared modules. They now use
+`com.android.kotlin.multiplatform.library`: `androidTarget()` is replaced by an
+`android { }` block inside `kotlin { }` carrying namespace, compileSdk and minSdk, and the
+JVM level moved from `compileOptions` to a `jvmToolchain(17)`, because the new DSL has no
+`compileOptions`. That plugin has no `ndk` block either, so the shared modules no longer
+declare an ABI — they contain no native code, and the arm64-only guarantee was always
+enforced by the app module's filter and by `tools/check-apk-libraries.sh` reading
+`DT_NEEDED` from the built APK. Two comments that claimed otherwise are corrected.
+
+AGP 9 also supplies Kotlin itself and *rejects* `org.jetbrains.kotlin.android` — "no
+longer required for Kotlin support since AGP 9.0". It is gone from `androidApp`, from
+`benchmark`, from the root plugin list and from the version catalogue.
+`kotlin-multiplatform` is unaffected; the shared modules are not Android-plugin projects.
+
+Compose 1.12 turned two plugin accessors into errors — `compose.ui` ("specify dependency
+directly") and `compose.uiTooling` ("use org.jetbrains.compose.ui:ui-tooling module
+instead"). Both are version-catalogue entries now, referencing the same
+`composeMultiplatform` version so the build still has exactly one Compose version in it.
+`compose.runtime`, `compose.foundation` and `compose.material3` were not deprecated and are
+untouched.
+
 ## Hardening pass — CI, guard self-tests, thermal floor
 
 No new features. Three things that were claims rather than facts, made into facts.

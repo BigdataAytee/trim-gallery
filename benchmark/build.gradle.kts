@@ -3,8 +3,8 @@
 // measured rather than asserted.
 
 plugins {
+    // See androidApp/build.gradle.kts: AGP 9 supplies Kotlin and rejects `kotlin.android`.
     alias(libs.plugins.android.test)
-    alias(libs.plugins.kotlin.android)
 }
 
 android {
