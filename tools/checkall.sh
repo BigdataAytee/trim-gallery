@@ -48,6 +48,7 @@ run "configure every project"  help
 run "shared JVM tests"         sharedTest
 run "build guards"             guards
 run "ktlint + detekt"          ktlintCheck detekt
+run "compile androidApp"       :androidApp:compileDebugKotlin
 # build-logic is an included build (settings.gradle.kts: includeBuild), so its
 # tests are reached with -p, not with a :build-logic: task path.
 run "guard self-tests"         -p build-logic test
@@ -55,10 +56,22 @@ run "guard self-tests"         -p build-logic test
 # The shell-level self-tests. A check nobody runs is a check that does not exist,
 # which is this file's whole argument — so the harness runs its own hook tests
 # rather than leaving them as something someone ran once by hand.
+# iosCompile needs a Mac. Say so out loud when skipping: this file's own argument
+# is that a harness covering less than its wording promises is the failure mode.
+if [ "$(uname)" = Darwin ]; then
+    run "iOS cross-compile"    iosCompile
+else
+    echo
+    echo "=== iOS cross-compile ==="
+    echo "-- SKIPPED: needs macOS. CI covers it (build.yml, iosCompile); this run does not."
+fi
+
+# `bash "$f"`, not `./"$f"`: the executable bit is exactly what install-hooks.sh
+# resets because it is not to be trusted on every clone. Same call as build.yml.
 for selftest in tools/git-hooks-selftest.sh tools/check-apk-libraries-selftest.sh; do
     echo
     echo "=== $selftest ==="
-    if ./"$selftest"; then echo "-- $selftest OK"; else echo "-- $selftest FAILED"; fail=1; fi
+    if bash "$selftest"; then echo "-- $selftest OK"; else echo "-- $selftest FAILED"; fail=1; fi
 done
 
 echo

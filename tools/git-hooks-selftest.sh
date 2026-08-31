@@ -85,6 +85,43 @@ commit_check() { # name, expected, branch, where(primary|worktree)
     fi
 }
 
+# The case the previous fixture could not express. Every other case pushes the
+# branch that is already checked out, so the HEAD fallback and the stdin path
+# give the same answer — which is exactly why a broken stdin path (no timeout(1)
+# on macOS) and a scope file read from the wrong worktree both went unnoticed.
+echo
+echo "pushing a branch that is not checked out:"
+rm -rf "$tmp/x"; mkdir -p "$tmp/x"
+(
+    cd "$tmp/x"
+    git init -q -b main
+    git config user.email t@t; git config user.name t
+    echo seed > seed.txt; git add -A; git commit -qm seed
+    git update-ref refs/remotes/origin/main main
+
+    # other-branch carries a scope file and a file outside it; it is committed,
+    # then we return to main so it is NOT the checked-out branch.
+    git checkout -q -b claude/other
+    mkdir -p .github/pr-scope/claude androidApp shared/core/model
+    printf 'androidApp/**\n' > .github/pr-scope/claude/other.txt
+    echo x > androidApp/ok.kt
+    echo x > shared/core/model/stray.kt
+    git add -A; git commit -qm change
+    other_sha=$(git rev-parse HEAD)
+    git checkout -q main
+
+    mkdir -p .git/hooks; cp "$hookdir/pre-push" .git/hooks/; chmod +x .git/hooks/pre-push
+    printf 'refs/heads/claude/other %s refs/heads/claude/other %s\n' "$other_sha" "$(git rev-parse main)" \
+        | bash .git/hooks/pre-push >/dev/null 2>&1
+    echo $?
+) > "$tmp/xout"
+x_exit=$(cat "$tmp/xout")
+if [ "$x_exit" = "1" ]; then
+    echo "  ok    an out-of-scope file is caught on a branch that is not HEAD"; pass=$((pass+1))
+else
+    echo "  FAIL  an out-of-scope file is caught on a branch that is not HEAD (expected 1, got $x_exit)"; fail=$((fail+1))
+fi
+
 echo
 echo "branch.sh:"
 rm -rf "$tmp/b"; mkdir -p "$tmp/b"
@@ -92,7 +129,7 @@ rm -rf "$tmp/b"; mkdir -p "$tmp/b"
     cd "$tmp/b"
     git init -q -b main src && cd src
     git config user.email t@t; git config user.name t
-    mkdir -p tools; cp "$PWD/../../../tools/branch.sh" tools/ 2>/dev/null || cp "$root/tools/branch.sh" tools/
+    mkdir -p tools; cp "$root/tools/branch.sh" tools/
     echo x > f.txt; git add -A; git commit -qm seed
     git remote add origin .; git update-ref refs/remotes/origin/main main
     TRIM_WORKTREES="$tmp/b/wts" bash tools/branch.sh claude/slashed 'androidApp/**' >/dev/null 2>&1

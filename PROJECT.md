@@ -2135,3 +2135,41 @@ Three further findings from the same review, all confirmed and fixed:
 The lesson is the one this file keeps recording from a new angle: the guards were written
 by the same person who wrote the thing they guard, and shared its blind spot. An
 independent reader found in one pass what the author's own tests were built not to see.
+
+### The second review, on the fixes themselves
+
+The reviewer read the fix commit and found that two of the four fixes did not work, both
+failing open, and both invisible to the self-tests.
+
+- **The scope file was read from the wrong tree.** `pre-push` correctly derived the branch
+  from the pushed ref, then looked its scope file up in the *current working tree*. Under
+  the worktree-per-branch workflow this branch mandates, pushing `other-branch` while
+  standing in another worktree finds no scope file, and a missing scope file means "no
+  restriction". The exact fail-open the previous fix was written to close was still open,
+  one step further in — and harder to see, because the branch name in the message was
+  finally correct. The scope now comes out of the pushed commit (`git show
+  $sha:.github/pr-scope/$branch.txt`), which also stops an uncommitted `rm` of the scope
+  file from disabling the check for a commit that still contains it.
+
+- **`timeout` is not on macOS.** The bounded stdin read used `timeout 2 cat`, with stderr
+  discarded and `|| true` after it. On a Mac that is: command not found → silenced →
+  swallowed → empty `refs` → fall back to HEAD. Every Mac would have run the pre-fix hook,
+  silently, on a project with an iOS app and a macOS CI job. It is a `read -r -t 2`
+  builtin loop now.
+
+- **`${#violations[@]}` on an empty array under `set -u`** is an error before bash 4.4,
+  which is what macOS ships — so the first fully in-scope push would have been *rejected*
+  with no message. `${violations[*]:-}` is safe on 3.2. Likewise `\s` in grep is a GNU
+  extension that BSD grep reads as a literal `s`, so an indented comment in a scope file
+  would have survived into the pattern list and matched nothing, making every file a
+  violation. `[[:space:]]` everywhere.
+
+**Why the self-tests could not see any of it.** Every case pushed the branch that was
+already checked out, so the HEAD fallback and the stdin path returned the same answer.
+The test asserted the outcome without distinguishing the mechanism that produced it.
+There is now a case that commits a branch, returns to `main`, and pushes the branch that
+is *not* HEAD — which fails on the old code and passes on the new.
+
+That is the second time on this branch that the tests were shaped by the same assumption
+as the code. The first was a fixture using a flat branch name where the convention is
+slashed. Both were found by a reader who had not written either.

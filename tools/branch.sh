@@ -29,10 +29,17 @@ dest="$trees/${branch//\//-}"
 [ -e "$dest" ] && { echo "already exists: $dest" >&2; exit 1; }
 
 echo "fetching origin/main"
+fetched=0
 for attempt in 1 2 3 4; do
-    git fetch origin main && break
+    if git fetch origin main; then fetched=1; break; fi
+    [ "$attempt" = 4 ] && break          # no point sleeping after the last try
     echo "  fetch failed, retrying in $((2 ** attempt))s"; sleep $((2 ** attempt))
 done
+# Without this the loop just ends and the worktree is cut from a stale local
+# origin/main, while the header promises a freshly fetched one. Four "retrying"
+# lines followed by an apparently successful worktree is the quiet partial
+# success this tooling exists to prevent.
+[ "$fetched" = 1 ] || { echo "could not fetch origin/main; not cutting a branch from a stale ref" >&2; exit 1; }
 
 mkdir -p "$trees"
 git worktree add -b "$branch" "$dest" origin/main
@@ -50,7 +57,8 @@ if [ $# -gt 0 ]; then
         echo "# Files this branch is allowed to touch, enforced by tools/git-hooks/pre-push."
         echo "# PROJECT.md, CHANGELOG.md and this file are always allowed."
         echo "#"
-        echo "# \`*\` matches within one path segment; \`**\` crosses slashes."
+        echo "# \`*\` matches within one path segment; \`**\` crosses slashes. A pattern must"
+        echo "# reach a file: androidApp/**, not androidApp."
         echo "#"
         echo "# If this branch adds a platform implementation, ARCHITECTURE.md § 2.7 requires"
         echo "# a JVM fake under shared/ to ship with it — so include that path here too."
