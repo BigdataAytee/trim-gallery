@@ -210,7 +210,18 @@ find_program(CARGO_EXECUTABLE cargo REQUIRED)
 
 if(ANDROID)
     set(TRIM_RUST_TARGET aarch64-linux-android)
-    set(TRIM_CARGO_COMMAND ${CARGO_EXECUTABLE} ndk -t arm64-v8a -o ${CMAKE_CURRENT_BINARY_DIR}/rust build --release)
+    # No `-o`. That flag turns on cargo-ndk's artifact collection, which copies **cdylibs**
+    # into a jniLibs layout and fails outright when there are none:
+    #
+    #     error: No usable artifacts produced by cargo
+    #     error: Did you set the crate-type in Cargo.toml to include 'cdylib'?
+    #
+    # This crate is a `staticlib` on purpose — it is archived into `libtrim_native.a`, not
+    # loaded as its own `.so` — so there is nothing to collect and nothing that wants
+    # collecting. Without `-o`, cargo-ndk does the one job needed here: set the linker, ar
+    # and sysroot for the Android target and run cargo. The `.a` is read straight out of
+    # `target/aarch64-linux-android/release/`.
+    set(TRIM_CARGO_COMMAND ${CARGO_EXECUTABLE} ndk -t arm64-v8a build --release)
 elseif(APPLE)
     set(TRIM_RUST_TARGET aarch64-apple-ios)
     set(TRIM_CARGO_COMMAND ${CARGO_EXECUTABLE} build --release --target ${TRIM_RUST_TARGET})

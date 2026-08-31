@@ -1320,6 +1320,21 @@ With the target collision gone, `configureCMakeDebug[arm64-v8a]` passed and
   separate install, and cargo answered `no such command: ndk` after the C libraries had
   already built. Added to the APK job's prerequisites beside meson and ninja.
 
+- **And then `cargo ndk -o` asked for an artifact this crate deliberately does not
+  produce.** With the subcommand installed, libvmaf cross-built and the next failure was
+  `No usable artifacts produced by cargo. Did you set the crate-type in Cargo.toml to
+  include 'cdylib'?`. `-o` turns on cargo-ndk's artifact collection, which copies
+  **cdylibs** into a jniLibs layout — but `trim_oxipng` is a `staticlib` on purpose,
+  archived into `libtrim_native.a` rather than loaded as its own `.so`. Dropping `-o`
+  leaves cargo-ndk doing the one job needed: set the linker, ar and sysroot, and run
+  cargo. The `.a` is read straight out of `target/aarch64-linux-android/release/`.
+
+  Half-checkable here. `rustup target add aarch64-linux-android` and
+  `cargo build --release --target aarch64-linux-android` get as far as a transitive
+  `cc-rs` build script looking for `aarch64-linux-android-clang` — the NDK compiler that
+  cargo-ndk exists to point at. That is the boundary of what this environment can prove,
+  and it confirms the shape of the fix rather than the fix itself.
+
 ### The guards guard themselves
 
 - **A rule declares the languages it polices, and must have a planted violation in each.**
