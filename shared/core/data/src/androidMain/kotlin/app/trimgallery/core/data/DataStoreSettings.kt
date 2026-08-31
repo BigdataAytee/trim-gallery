@@ -90,7 +90,14 @@ class DataStoreSettings(private val store: DataStore<Preferences>, private val t
         prefs[Keys.FACE_CLUSTERING] = faceClusteringEnabled
         // Removed rather than written as empty: absent means "no stop time", and an empty
         // string that parses to nothing would be a second way to say the same thing.
-        if (stopByTime == null) prefs.remove(Keys.STOP_BY) else prefs[Keys.STOP_BY] = stopByTime
+        //
+        // Bound to a local rather than smart-cast in the `else`: `stopByTime` is a public API
+        // property of `Settings`, which lives in `core.model` — a different module, so Kotlin
+        // will not narrow it, because that module could add a custom getter without this one
+        // recompiling. Same error as `TriageStep`'s latitude/longitude, in the one source set
+        // no harness here can compile.
+        val stopBy = stopByTime
+        if (stopBy == null) prefs.remove(Keys.STOP_BY) else prefs[Keys.STOP_BY] = stopBy
     }
 
     /**

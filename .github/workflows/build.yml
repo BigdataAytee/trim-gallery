@@ -6,12 +6,13 @@ on:
   push:
   pull_request:
 
-# `head_ref` on a pull_request, `ref` on a push — so the push run and the pull-request
-# run for the same branch share a group and one cancels the other. Keyed on `ref` alone
-# they are different groups (refs/heads/x versus refs/pull/1/merge) and every commit
-# builds twice, which on the macOS runner is the expensive half of the workflow.
+# `head_ref` on a pull_request, `ref_name` on a push — both are the bare branch name, so
+# the push run and the pull-request run for the same commit share a group and one cancels
+# the other. `ref` is the wrong second half and was the first attempt: on a push it is
+# `refs/heads/x` while the pull request's `head_ref` is `x`, which are different groups, so
+# every commit built twice — and the macOS runner is the expensive half of this workflow.
 concurrency:
-  group: ${{ github.workflow }}-${{ github.head_ref || github.ref }}
+  group: ${{ github.workflow }}-${{ github.head_ref || github.ref_name }}
   cancel-in-progress: true
 
 # Every job ends with a failure summary that both prints the diagnosis and emits it as
@@ -194,6 +195,30 @@ jobs:
           java-version: '21'
       - uses: android-actions/setup-android@v3
       - uses: gradle/actions/setup-gradle@v4
+
+      # `shared/native/CMakeLists.txt` drives three build systems it does not own, and
+      # `find_program(... REQUIRED)` fails configuration when any of them is missing:
+      #
+      #   meson + ninja  libvmaf builds with meson; CMake shells out to it through a
+      #                  generated cross file. The Android SDK ships a private ninja
+      #                  beside its CMake, but not on PATH, which is where find_program
+      #                  looks — so both come from pip, pinned to nothing because they
+      #                  are build tools, not shipped code.
+      #   cargo          oxipng is Rust. The runner image has the toolchain; what it does
+      #                  not have is the Android target, and cross-compiling to arm64
+      #                  without it fails after the C libraries have already built.
+      #
+      # Not a workaround for a broken CMake file: these are its documented prerequisites,
+      # and the first CI run of `assembleDebug` is the first time anything has had to
+      # satisfy them.
+      - name: Native build prerequisites
+        run: |
+          set -o pipefail
+          python3 -m pip install --upgrade meson ninja
+          rustup target add aarch64-linux-android
+          meson --version
+          ninja --version
+          cargo --version
 
       # assembleDebug depends on the merged-manifest guard, so a network permission
       # arriving through a dependency fails here even if no source changed.

@@ -1179,6 +1179,40 @@ Recorded by class, as each one is fixed:
   four minutes at a time. That is its own change, not a line item in a pass whose job is to
   get the existing code compiling.
 
+- **"Both jobs must be required" is a repository setting, not a file in this repository.**
+  Required status checks live in branch protection / a ruleset on `main`, which no API
+  available to this session can write. The workflow does everything the code side can: it
+  runs on `push` and `pull_request`, and each of the five jobs fails the run on its own.
+  Someone with admin on the repository has to add **Build guards**, **Shared JVM tests**,
+  **iOS cross-compile**, **Android build + lint** and **Android APK + native** to the
+  required checks for `main`. Until that is done a red run does not block a merge, and this
+  half of hardening task 1 is not finished.
+
+- **The concurrency key was wrong and every commit built twice.** The group was
+  `${{ github.head_ref || github.ref }}`. On a push `head_ref` is empty and `ref` is
+  `refs/heads/x`; on the pull request `head_ref` is `x` — different strings, different
+  groups, so the push run and the pull-request run for the same commit never cancelled each
+  other. `ref_name` is the bare branch name on a push, which is what the second half was
+  meant to be. Two macOS runners per commit down to one.
+
+- **The same cross-module smart cast, in the one source set nothing here can compile.**
+  `DataStoreSettings.writeInto` narrowed `stopByTime` in an `else` branch. It is a public
+  API property of `Settings`, which lives in `core.model`, and Kotlin will not narrow a
+  property across a module boundary — the other module could add a custom getter without
+  this one recompiling. Identical to `TriageStep`'s latitude/longitude, found a run later
+  because `shared/core/data/src/androidMain` needs DataStore from Google Maven, so no local
+  harness reaches it. Both are now bound to a local first. A grep over every source set no
+  harness compiles found no third instance.
+
+- **The native build's prerequisites had never been satisfied by anything.**
+  `shared/native/CMakeLists.txt` shells out to meson (libvmaf builds with it), ninja and
+  cargo (oxipng is Rust), each behind `find_program(... REQUIRED)`, and
+  `configureCMakeDebug[arm64-v8a]` failed on the first of them. The runner has cargo but
+  not the `aarch64-linux-android` target; the Android SDK ships a ninja beside its CMake
+  but not on `PATH`, where `find_program` looks. All three are installed in the APK job
+  now. Not a workaround: they are the CMake file's documented inputs, and this was the
+  first time anything had been asked to provide them.
+
 ### The guards guard themselves
 
 - **A rule declares the languages it polices, and must have a planted violation in each.**
