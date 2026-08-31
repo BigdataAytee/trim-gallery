@@ -47,6 +47,44 @@ jobs:
         with:
           fetch-depth: 0
 
+      # The action refuses to run when this file differs from the default branch's
+      # copy — and it refuses *quietly*, exiting zero. On #9 that produced a green
+      # `review` check in thirteen seconds, having reviewed nothing. That is the
+      # same lie this workflow told for weeks and that #6 was meant to end, arriving
+      # by a different route: the check colour cannot distinguish "reviewed, found
+      # nothing" from "never ran".
+      #
+      # So the condition is tested here and made red. Not by reading the action's
+      # own output — a later step cannot see it, and matching its wording would
+      # break the day that wording changes — but by testing the same fact the
+      # action tests: is this file identical to the default branch's copy.
+      #
+      # The consequence is deliberate: every pull request that edits this file now
+      # has a red `review`, this one included. The reviewer genuinely cannot run
+      # there, and a red check naming the reason is the honest report. The dance is
+      # unchanged — land the change on the default branch, then exercise it from a
+      # pull request that does not touch this file — but it is now enforced rather
+      # than remembered.
+      - name: The reviewer can actually run
+        env:
+          DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
+        run: |
+          set -euo pipefail
+          self=.github/workflows/claude-code-review.yml
+          # An explicit fetch: `fetch-depth: 0` fetches the checked-out ref's
+          # history in full, which does not guarantee a ref for the default branch.
+          # No `--depth`: a shallow fetch into the full clone `fetch-depth: 0` just
+          # made writes a .git/shallow that later git commands have to reason about,
+          # for no gain when the history is already local.
+          git fetch origin "$DEFAULT_BRANCH"
+          if ! git diff --quiet FETCH_HEAD -- "$self"; then
+            echo "::error file=$self::This pull request changes the review workflow, so anthropics/claude-code-action will decline to run and report nothing. Land the change on $DEFAULT_BRANCH first, then exercise it from a pull request that does not touch this file."
+            echo "How this file differs from $DEFAULT_BRANCH:"
+            git --no-pager diff FETCH_HEAD -- "$self"
+            exit 1
+          fi
+          echo "Identical to $DEFAULT_BRANCH — the action will run."
+
       - uses: anthropics/claude-code-action@v1
         with:
           anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
