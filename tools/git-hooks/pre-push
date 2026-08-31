@@ -12,6 +12,13 @@
 # line, `#` comments ignored. No scope file means no restriction, so this cannot
 # block work that has not opted in.
 #
+# Globs follow the conventional meaning rather than shell `case` semantics:
+# `*` matches within one path segment, `**` crosses slashes, `?` matches one
+# non-slash character. This is not pedantry — with plain `case`, `*` matches `/`
+# too, so `shared/*` would silently authorise `shared/core/pipeline/**`, which is
+# the boundary this project guards hardest. Anyone reading a scope file brings
+# gitignore intuitions to it, and the file should mean what it looks like.
+#
 # Always allowed, without being declared: the branch's own scope file, PROJECT.md
 # and CHANGELOG.md. Those three are touched by nearly every branch here (the
 # standing rule is that decisions get written down), and requiring them in every
@@ -22,53 +29,95 @@
 
 set -uo pipefail
 
-branch=$(git rev-parse --abbrev-ref HEAD)
-root=$(git rev-parse --show-toplevel)
-scope="$root/.github/pr-scope/$branch.txt"
-
-[ -f "$scope" ] || exit 0
-
-base=$(git merge-base origin/main HEAD 2>/dev/null) || {
-    echo "pre-push: no merge-base with origin/main; not checking scope" >&2
-    exit 0
+# Conventional glob matching: ** crosses slashes, * and ? do not.
+matches_glob() {
+    local file=$1 pattern=$2 rx='' i c
+    for (( i=0; i<${#pattern}; i++ )); do
+        c=${pattern:i:1}
+        case "$c" in
+            '*')
+                if [ "${pattern:i:2}" = '**' ]; then rx+='.*'; i=$((i+1))
+                else rx+='[^/]*'; fi ;;
+            '?') rx+='[^/]' ;;
+            '.'|'+'|'('|')'|'['|']'|'{'|'}'|'^'|'$'|'|'|'\\') rx+="\\$c" ;;
+            *) rx+="$c" ;;
+        esac
+    done
+    [[ $file =~ ^$rx$ ]]
 }
 
-changed=$(git diff --name-only "$base"..HEAD)
-[ -n "$changed" ] || exit 0
+root=$(git rev-parse --show-toplevel)
+status=0
 
-patterns=$(grep -v '^\s*#' "$scope" | grep -v '^\s*$')
-violations=()
+# Git hands a pre-push hook the refs actually being pushed, one per line:
+#   <local ref> <local sha> <remote ref> <remote sha>
+# Checking HEAD instead would check the wrong branch for `git push origin
+# other-branch`, a multi-ref push, or `git push --all` — and if HEAD were `main`
+# (no scope file) an out-of-scope branch would go up unexamined. When stdin is
+# empty the hook is being run by hand, so fall back to HEAD for dry runs.
+# Bounded read: git writes the ref lines and closes stdin immediately, so this
+# returns at once in real use. A plain `cat` would block forever whenever stdin
+# is a terminal or an open pipe that never reaches EOF — which is every manual
+# dry run of this hook, and `[ -t 0 ]` does not catch the second case.
+refs=$(timeout 2 cat 2>/dev/null || true)
+[ -n "$refs" ] || refs="$(git symbolic-ref -q HEAD || echo refs/heads/HEAD) $(git rev-parse HEAD) - -"
 
-while IFS= read -r file; do
-    case "$file" in
-        ".github/pr-scope/$branch.txt"|PROJECT.md|CHANGELOG.md) continue ;;
-    esac
-    ok=0
-    while IFS= read -r pattern; do
-        # shellcheck disable=SC2254
-        case "$file" in $pattern) ok=1; break ;; esac
-    done <<< "$patterns"
-    [ "$ok" = "1" ] || violations+=("$file")
-done <<< "$changed"
+while read -r local_ref local_sha _remote_ref _remote_sha; do
+    [ -n "${local_ref:-}" ] || continue
+    case "$local_sha" in ''|0000000000000000000000000000000000000000) continue ;; esac  # branch deletion
 
-[ ${#violations[@]} -eq 0 ] && exit 0
+    branch=${local_ref#refs/heads/}
+    scope="$root/.github/pr-scope/$branch.txt"
+    [ -f "$scope" ] || continue
 
-{
-    echo
-    echo "pre-push: this branch's diff reaches outside its declared scope."
-    echo
-    echo "  branch : $branch"
-    echo "  scope  : .github/pr-scope/$branch.txt"
-    echo
-    echo "  declared:"
-    while IFS= read -r pattern; do echo "    $pattern"; done <<< "$patterns"
-    echo
-    echo "  outside it:"
-    for v in "${violations[@]}"; do echo "    $v"; done
-    echo
-    echo "Either these files do not belong on this branch — the usual cause is an"
-    echo "edit carried across by a checkout — or the scope is too narrow. Fix the"
-    echo "branch, or widen $scope and say why in the commit."
-    echo
-} >&2
-exit 1
+    base=$(git merge-base origin/main "$local_sha" 2>/dev/null) || {
+        echo "pre-push: no merge-base with origin/main for $branch; not checking scope" >&2
+        continue
+    }
+
+    changed=$(git diff --name-only "$base".."$local_sha")
+    [ -n "$changed" ] || continue
+
+    patterns=$(grep -v '^\s*#' "$scope" | grep -v '^\s*$')
+    if [ -z "$patterns" ]; then
+        echo "pre-push: $scope declares no patterns; treating as unrestricted." >&2
+        echo "          Delete the file, or list what this branch may touch." >&2
+        continue
+    fi
+    violations=()
+
+    while IFS= read -r file; do
+        case "$file" in
+            ".github/pr-scope/$branch.txt"|PROJECT.md|CHANGELOG.md) continue ;;
+        esac
+        ok=0
+        while IFS= read -r pattern; do
+            matches_glob "$file" "$pattern" && { ok=1; break; }
+        done <<< "$patterns"
+        [ "$ok" = "1" ] || violations+=("$file")
+    done <<< "$changed"
+
+    [ ${#violations[@]} -eq 0 ] && continue
+
+    {
+        echo
+        echo "pre-push: this branch's diff reaches outside its declared scope."
+        echo
+        echo "  branch : $branch"
+        echo "  scope  : .github/pr-scope/$branch.txt"
+        echo
+        echo "  declared:"
+        while IFS= read -r pattern; do echo "    $pattern"; done <<< "$patterns"
+        echo
+        echo "  outside it:"
+        for v in "${violations[@]}"; do echo "    $v"; done
+        echo
+        echo "Either these files do not belong on this branch — the usual cause is an"
+        echo "edit carried across by a checkout — or the scope is too narrow. Fix the"
+        echo "branch, or widen $scope and say why in the commit."
+        echo
+    } >&2
+    status=1
+done <<< "$refs"
+
+exit "$status"

@@ -38,12 +38,19 @@ mkdir -p "$trees"
 git worktree add -b "$branch" "$dest" origin/main
 
 if [ $# -gt 0 ]; then
-    mkdir -p "$dest/.github/pr-scope"
+    # `dirname`, not a fixed `.github/pr-scope`: a branch name contains slashes
+    # (claude/dev-guardrails), so the scope file is nested and its parent must be
+    # created too. Without this the redirect below fails, `set -e` aborts *after*
+    # the worktree already exists, and the branch is left with no scope file at
+    # all — which pre-push reads as "no restriction". Failing into no-guardrail
+    # was the worst part; caught in review of this very branch.
+    scope_file="$dest/.github/pr-scope/$branch.txt"
+    mkdir -p "$(dirname "$scope_file")"
     {
         echo "# Files this branch is allowed to touch, enforced by tools/git-hooks/pre-push."
         echo "# PROJECT.md, CHANGELOG.md and this file are always allowed."
         for glob in "$@"; do echo "$glob"; done
-    } > "$dest/.github/pr-scope/$branch.txt"
+    } > "$scope_file"
     echo "declared scope:"
     printf '  %s\n' "$@"
 fi

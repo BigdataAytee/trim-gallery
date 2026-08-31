@@ -52,6 +52,15 @@ run "ktlint + detekt"          ktlintCheck detekt
 # tests are reached with -p, not with a :build-logic: task path.
 run "guard self-tests"         -p build-logic test
 
+# The shell-level self-tests. A check nobody runs is a check that does not exist,
+# which is this file's whole argument — so the harness runs its own hook tests
+# rather than leaving them as something someone ran once by hand.
+for selftest in tools/git-hooks-selftest.sh tools/check-apk-libraries-selftest.sh; do
+    echo
+    echo "=== $selftest ==="
+    if ./"$selftest"; then echo "-- $selftest OK"; else echo "-- $selftest FAILED"; fail=1; fi
+done
+
 echo
 if [ "$fail" = "0" ]; then
     echo "ALL LOCAL CHECKS PASSED (Gradle $version, via ./gradlew)"

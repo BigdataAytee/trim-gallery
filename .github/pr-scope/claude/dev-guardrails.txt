@@ -1,6 +1,9 @@
 # Files this branch is allowed to touch, enforced by tools/git-hooks/pre-push.
 # PROJECT.md, CHANGELOG.md and this file are always allowed.
-tools/*
-tools/git-hooks/*
-.github/pr-scope/*
+#
+# `*` matches within one path segment; `**` crosses slashes. So tools/** is
+# needed to reach tools/git-hooks/, and .github/pr-scope/** to reach the nested
+# per-branch files.
+tools/**
+.github/pr-scope/**
 README.md

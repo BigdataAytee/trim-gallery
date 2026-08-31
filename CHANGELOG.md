@@ -13,6 +13,13 @@ checkout` carries uncommitted edits across branches and once did. A `pre-push` h
 refuses a diff that reaches outside the scope declared in `.github/pr-scope/<branch>.txt`,
 and its self-test replays the exact leak that motivated it.
 
+Then the fixed reviewer read this branch and found a bug in it: `branch.sh` created only
+`.github/pr-scope`, not the nested directory a slashed branch name needs, so it aborted
+after making the worktree and left the branch with no scope file — failing into
+no-guardrail. Three more real gaps came with it: scope globs matched across slashes,
+`pre-push` inspected `HEAD` instead of the refs being pushed, and nothing ran the
+self-tests. All four are fixed, with cases covering each.
+
 The finding: the `review` check had never completed before today (no API key), and once
 it could run, a deliberately planted software-encoder fallback — a violation of the one
 rule this project treats as non-negotiable — passed it without a word. The bot ran 18

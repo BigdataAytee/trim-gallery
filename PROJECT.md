@@ -2089,3 +2089,44 @@ The likely cause: the workflow's prompt asks for a review but never tells the ag
 **Until that is fixed, a green `review` check means the job exited zero and nothing more.**
 It is not evidence that a diff was reviewed. That is worse than having no reviewer, because
 a green tick invites the trust that an absent one would not.
+
+### What the fixed reviewer caught, on its first real run
+
+The review workflow's first run after #6 landed was against the guardrails branch itself,
+and it found a bug that the branch's own eight self-tests did not:
+
+`tools/branch.sh` wrote its scope file to `.github/pr-scope/$branch.txt` after creating
+only `.github/pr-scope`. Every branch name in this repository contains a slash, so the
+redirect targeted `.github/pr-scope/claude/<name>.txt` in a directory that did not exist.
+Under `set -euo pipefail` the script aborted — *after* `git worktree add` had already
+succeeded. The result was a created worktree, on a new branch, with no scope file, which
+`pre-push` reads as "no restriction". It failed into no-guardrail, silently, from then on.
+
+It was invisible to the self-tests because the fixture used the flat branch name `scoped`
+while the repository's convention is `claude/<name>`. A test fixture that does not look
+like production is a test of something else. The fixture is now slashed, and there is a
+case that runs `branch.sh` end to end and asserts the scope file exists.
+
+It also went unnoticed by the author because both scope files on this branch were created
+by hand with `mkdir -p` before `branch.sh` was ever asked to do it — so the PR's claim
+that "the tooling has been used to build itself" was half true, and the half that was
+false was the half under test. Corrected in the PR body.
+
+Three further findings from the same review, all confirmed and fixed:
+
+- **Scope globs matched recursively.** `case "$file" in $pattern` lets `*` match `/`, so
+  `shared/*` would have authorised `shared/core/pipeline/**` — the boundary this project
+  guards hardest. Patterns now compile to a regex where `*` stays inside a segment and
+  `**` crosses, which is what a reader brings gitignore intuitions to.
+- **`pre-push` checked `HEAD`, not the push.** Git passes the refs being pushed on stdin;
+  the hook ignored them, so `git push origin other-branch` was checked against whatever
+  was checked out — and if that was `main`, with no scope file, the push went unexamined.
+  It now loops over the refs on stdin, and falls back to HEAD only for manual dry runs.
+- **The self-tests were not run by anything.** `checkall.sh` claimed to be every local
+  check while never invoking `tools/git-hooks-selftest.sh` or
+  `tools/check-apk-libraries-selftest.sh`. Both now run in it, which is the difference
+  between eight passing cases and a screenshot of eight passing cases.
+
+The lesson is the one this file keeps recording from a new angle: the guards were written
+by the same person who wrote the thing they guard, and shared its blind spot. An
+independent reader found in one pass what the author's own tests were built not to see.

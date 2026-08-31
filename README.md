@@ -122,8 +122,11 @@ Three guardrails, each of which exists because the thing it prevents already hap
   on an unrelated branch. Separate worktrees remove the mechanism instead of relying on
   care. A `pre-commit` hook keeps the primary checkout on `main` so the habit cannot lapse.
 - **`pre-push` refuses a diff that reaches outside the branch's declared scope**, read
-  from `.github/pr-scope/<branch>.txt`. `PROJECT.md`, `CHANGELOG.md` and the scope file
-  itself are always allowed. No scope file means no restriction.
+  from `.github/pr-scope/<branch>.txt` — one glob per line, where `*` matches within a
+  path segment and `**` crosses slashes, as in gitignore. `PROJECT.md`, `CHANGELOG.md`
+  and the scope file itself are always allowed. No scope file means no restriction. The
+  hook reads the refs git gives it on stdin, so it checks the branch being pushed rather
+  than whatever happens to be checked out.
 
 `tools/git-hooks-selftest.sh` tests all of it, including a replay of the real leak.
 

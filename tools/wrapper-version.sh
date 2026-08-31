@@ -18,7 +18,11 @@ props=gradle/wrapper/gradle-wrapper.properties
 [ -f "$props" ] || { echo "guardrail: $props not found" >&2; exit 1; }
 
 # distributionUrl=https\://services.gradle.org/distributions/gradle-9.7.1-bin.zip
-pinned=$(sed -n 's/^distributionUrl=.*\/gradle-\([0-9][^-]*\)-\(bin\|all\)\.zip$/\1/p' "$props")
+# Everything between "gradle-" and the trailing "-bin.zip"/"-all.zip", so release
+# candidates and milestones (gradle-9.8-rc-1-bin.zip) parse too. Matching only
+# digits-and-dots would fail closed on the day someone pins an RC to chase an AGP
+# preview — which this project's history says will happen.
+pinned=$(sed -n 's/^distributionUrl=.*\/gradle-\(.*\)-\(bin\|all\)\.zip$/\1/p' "$props")
 [ -n "$pinned" ] || {
     echo "guardrail: could not read a version out of distributionUrl in $props" >&2
     grep '^distributionUrl' "$props" >&2
