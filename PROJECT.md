@@ -1426,135 +1426,164 @@ procedure; none of it can be inferred from a desk.
 **Reduce-motion and TalkBack.** DESIGN_SYSTEM.md's motion springs and the content
 descriptions on the grid, viewer and result card. *Procedure:* enable Remove Animations and
 TalkBack, then walk the grid → viewer → result-card flow and confirm every control is
-reachable and announced, and that no shared-element transition runs. Not verifiable here for
-the same reason nothing Compose is: it has never been compiled.
+reachable and announced, and that no shared-element transition runs. Compiling is no longer
+the obstacle — CI does that on every push — but nothing has drawn a pixel, and motion and
+screen-reader behaviour are only observable once something does.
 
-## Open questions added
-- **The Compose layer has never been compiled.** Every Compose Multiplatform version
-  resolves `androidx.annotation`, `androidx.collection` and `androidx.lifecycle` from
-  Google Maven, which this environment refuses, so there is no path to building it here —
-  desktop target included. The Compose-free half of the design system is verified; the
-  composables are not. Expect to fix API details on the first real build.
-- Whether a Compose Multiplatform host on iOS is the right call for the viewer, or
-  whether the shared-element motion in BUILD.md § 9 wants SwiftUI there. Revisit at
-  milestone 8.
-- **`NightRun.Step` is not bound.** It is `VideoOptimiseStep`, which chains triage →
-  search → encode → verify → replace; triage is milestone 6, and until it can decide what
-  belongs in the queue at all there is nothing honest to bind. Everything around it — the
-  scheduler, the guards, the loop, the queue, the checkpoint — is in place.
-- **`androidApp` does not use the package layout in ARCHITECTURE.md § 3.** It puts storage
-  and scheduler classes in their own `storage/` and `scheduler/` packages; everything is
-  currently under `engine/`, because the obvious names (`app.trimgallery.storage`) would
-  read oddly beside the shared `app.trimgallery.engine`, and a rename of files that have
-  never been compiled is churn with no way to check it. To be done at the first real build,
-  when the compiler can confirm the imports.
-- **The native photo libraries have not been cross-compiled for arm64.** There is no NDK in
-  this environment, so libjxl, jpegli and oxipng were built for the host to verify the ABI
-  against upstream — exactly as the metrics were in milestone 2. The CMake for
-  android-arm64 and ios-arm64 is written and unexercised; expect toolchain work at the
-  first real build, and note that libjxl and jpegli each pull `highway`, `brotli` and
-  `skcms` recursively.
-- **Nothing Android in milestones 4, 5 and 7 has been compiled or run**, for the same Google Maven
-  reason as the Compose layer. The SAF mechanics, the mp4parser rewrite-and-rename, the
-  `MediaExtractor` probe, the WorkManager constraints and the SQLDelight repository are all
-  written to documented behaviour and reviewed, not executed — the repository in particular
-  names generated symbols this environment cannot produce. The decision logic they sit
-  under — verify, ladder, replace ordering, rollback, offload, guard order, thermal
-  hysteresis, budgets, the alarm window and the run loop — is verified on the JVM, which is
-  why it was pushed there.
+## Open questions
 
-- **The GL tee for play-to-compress is not written.** Feeding the decoder's frames to an
-  encoder input surface while they also reach the screen is a `GlEffect` on
-  `ExoPlayer.setVideoEffects`, and whether that tee costs a dropped frame at 4K60 is not a
-  thing that can be reasoned out — it has to be measured on a device. `PlayToCompressTap`
-  is the finished half: the ExoPlayer callbacks mapped onto the shared state machine, with
-  the encoder behind a four-method `EncoderSink` seam.
-- **`DataStoreSettings` has not been compiled or run**, for the same Google Maven reason as
-  everything else Android. The rules it enforces are in `SettingsPolicy`, on the JVM, with
-  tests; this file is key-value plumbing around them.
+Rewritten at the end of the hardening pass, because most of the list had stopped being
+true. Every entry that read "has never been compiled" is gone for the Kotlin and Swift
+layers: since the CI work above, every Kotlin source in this repository is compiled on every
+push for the JVM, for Android, for `iosArm64` and for `iosSimulatorArm64`, and every Swift
+source is parsed. The android-arm64 native build is the one still being driven to green —
+it now configures and links the right target, and what remains open about it is tracked as a
+build task rather than as a question about the code. What is left below is grouped by what
+would actually settle it, because "open" covers three quite different situations and mixing
+them made the list useless as a plan.
 
-- **SCHEMA.md has no table for an edit recipe, and this milestone did not add one.**
-  BUILD.md § 9's *"non-destructive"* is satisfied by keeping the original — Save writes a new
-  copy, Save over parks the original in the undo bin — so nothing needs a stored recipe to be
-  correct. What a recipe table would buy is re-opening an edit to adjust it, the way Apple
-  Photos does, and that is a product decision with a schema migration attached rather than
-  something to slip in. `EditRecipe` is already a plain serialisable value, so the table is a
-  column when it is wanted.
-- **The editor's renderer does not exist.** `EditRecipe` says exactly what to do to the
-  pixels and `EditRender` says how little work it takes, but the shader or effect chain that
-  applies eight sliders to a bitmap and to a video frame is Compose and Media3 work that
-  cannot be built or looked at here. The two halves that would be wrong invisibly — the
-  geometry and the save policy — are the halves that are written.
+### Needs a device, or the field test
 
-- **AV1's XPSNR↔VMAF calibration is not measured.** `CodecLadder.xpsnrThreshold` is keyed by
-  codec and AV1 currently returns the HEVC numbers, which is a placeholder rather than a
-  finding: XPSNR is a proxy for VMAF and the mapping depends on what the artefacts look
-  like, which AV1's and HEVC's do not do alike. The calibration harness now sweeps either
-  encoder (`./calibrate.sh clip.mp4 out.csv av1`) but needs an ffmpeg built with SVT-AV1,
-  which this environment does not have — and properly the number wants the device fleet from
-  milestone 13 rather than a host encoder, for the same reason the HEVC point is provisional.
-- **`CodecChoice.MeasuredSpeed` has no producer yet.** The numbers are in the `job` table —
-  `realtime_multiple` per row, and `engine` says which codec produced each — but nothing
-  aggregates them per device and codec. It is one query, and it belongs with the assembly of
-  `VideoOptimiseStep`, which is still the missing piece of the night pass. Until then the
-  caller passes null, which means "try AV1", which is the correct behaviour for an encoder
-  nothing has measured.
+The procedures are in **Device-required verification** above and in FIELD_TEST.md. Nothing
+here is faked in a test: a green suite asserting made-up platform behaviour is worse than an
+open question, because it looks like an answer.
+
+- **The XPSNR↔VMAF threshold is still milestone 2's provisional one** — software x265, one
+  640×360 clip — and AV1 has no calibration at all. `CodecLadder.xpsnrThreshold` returns the
+  HEVC numbers for AV1, which is a placeholder rather than a finding: XPSNR is a proxy for
+  VMAF and the mapping depends on what the artefacts look like, which AV1's and HEVC's do
+  not do alike. The fitting and the per-bucket harness exist and sweep either encoder
+  (`./calibrate.sh clip.mp4 out.csv av1`); what is missing is the sweep on device, per
+  (resolution, codec) bucket, against the milestone 1 encoder.
 - **`AV1_BITRATE_RATIO` is a literature number, not a measurement.** Two thirds is the
   conservative end of what codec comparisons report for hardware encoders. It only sets
   where the first probe lands, so being wrong costs a probe rather than quality — but it is
   the kind of constant milestone 13 should replace with something this app measured.
+- **The field test has not been run, and no number in this repository is a field-test
+  result.** It needs three device classes, a fortnight and a real library.
+- **Nothing here has been *run* on Android.** Compilation is now proven on every push; the
+  SAF grant mechanics, the mp4parser rewrite-and-rename, the `MediaExtractor` probe, the
+  WorkManager constraints and the SQLDelight repository have still never met a real
+  MediaStore. The decision logic under them — verify, ladder, replace ordering, rollback,
+  offload, guard order, thermal hysteresis, budgets, the alarm window, the run loop — is
+  verified on the JVM, which is why it was pushed there.
+- **Nothing Compose has been rendered.** It compiles; no pixel has been drawn. That covers
+  reduce-motion and TalkBack (procedure above), whether the grid holds its frame budget at
+  the smallest cell size, and every API detail that type-checks but looks wrong.
+- **The iOS replace path is unconfirmed on hardware** — PhotoKit change-block atomicity,
+  `isHidden` on a creation request, smart-album re-derivation, and whether
+  `ProcessInfo.thermalState` really oscillates. Procedures above. **Until the atomicity one
+  is confirmed, the iOS replace path should not ship.**
+- **Whether the GL tee for play-to-compress costs a dropped frame at 4K60.** Feeding the
+  decoder's frames to an encoder input surface while they also reach the screen is a
+  `GlEffect` on `ExoPlayer.setVideoEffects`; the cost is not a thing that can be reasoned
+  out. `PlayToCompressTap` is the finished half: the ExoPlayer callbacks mapped onto the
+  shared state machine, with the encoder behind a four-method `EncoderSink` seam.
+- **Whether a map pack can be opened without copying it into app storage.** The document
+  picker returns a `content://` URI and SQLite needs a real path; a pack is tens to hundreds
+  of megabytes, so the copy is a real cost. A custom VFS over a `ParcelFileDescriptor` may
+  avoid it — worth checking on device before settling for the copy.
+- **Whether `MediaTranscodingManager` beats the in-app pipeline on any target device.**
 
-- **The field test itself has not been run, and no number in this repository is a
-  field-test result.** It needs three device classes, a fortnight and a real library.
-  FIELD_TEST.md is the procedure — devices, library, nights, what to export and how to read
-  the gate — written so that the run produces a comparable answer rather than an anecdote.
-  Every number the run is meant to settle is listed there and marked as open here.
-- **The XPSNR threshold is still milestone 2's provisional one**, from software x265 on one
-  640×360 clip, and AV1 has no calibration at all. The fitting and the per-bucket harness
-  now exist; what is missing is the sweep on device, per (resolution, codec) bucket, against
-  the milestone 1 encoder.
-- **`Diagnostics` has no producer wired into the UI.** The report builder, the redaction and
-  the Android file-and-share are written; the Settings → Privacy row that calls them is
-  Compose, which cannot be built here. The decision that matters — what may be in the file —
-  is the half that is written and tested.
+### Needs a decision, not a machine
 
-- **Memories has no music, and that is deliberate for now.** BUILD.md § 9 says "Memories /
-  On this day with music" and MONETIZATION.md puts "Memories with music" in Phase 2's Pro+
-  tier, so the v1.1 feature is the memory and the music is a later, paid addition. It also
-  has a problem this milestone did not need to solve: an app with no network cannot stream a
-  track, so music means bundling audio, and bundled audio means licensing. Worth settling
-  before it is promised in a store listing.
-- **Nothing draws the map.** The tile source, the clustering, the trips and the memories are
-  written and tested; the Compose canvas that renders pins over tiles is not, for the same
-  Google Maven reason as every other composable here. `MbTilesFile` is written to documented
-  SQLite behaviour and has not been run.
-- **A pack has to be copied into app storage before SQLite can open it.** The document
-  picker returns a `content://` URI and SQLite needs a real path. A pack is tens to hundreds
-  of megabytes, so the copy is a real cost and the UI must show its size and ask before
-  spending it. Whether a better route exists — a custom VFS over a `ParcelFileDescriptor` —
-  is worth checking on device before settling for the copy.
+- **Which face-embedding model.** ARCHITECTURE.md § 6 says LiteRT on Android and Core ML on
+  iOS, "same model converted"; none is chosen on either. It is load-bearing: `MlKitIndexer`
+  returns normalised landmark geometry in the embedding's place, which exercises the whole
+  path but is not a face embedding, and `FaceClustering`'s 0.72 threshold was chosen for the
+  properties of a real embedding. Clustering quality changes on both platforms at once when
+  one is picked, which is the argument for choosing before the Android launch rather than
+  after.
+- **Whether the iOS viewer is Compose Multiplatform or SwiftUI.** The shared-element motion
+  in BUILD.md § 9 is the part that might want SwiftUI. Revisit at milestone 8's iOS half.
+- **Whether Memories gets music, and on what licence.** BUILD.md § 9 says "Memories / On this
+  day with music" and MONETIZATION.md puts it in Phase 2's Pro+ tier, so the v1.1 feature is
+  the memory and the music is a later, paid addition. It also has a problem this repository
+  cannot solve: an app with no network cannot stream a track, so music means bundling audio,
+  and bundled audio means licensing. Worth settling before it is promised in a store listing.
+- **Whether an edit recipe gets a table.** BUILD.md § 9's *"non-destructive"* is already
+  satisfied by keeping the original, so nothing needs a stored recipe to be correct. What a
+  recipe table buys is re-opening an edit to adjust it. `EditRecipe` is already a plain
+  serialisable value, so it is a column when it is wanted — with a schema migration attached,
+  which is what makes it a decision rather than a chore.
+- **Whether `run_session` gets a failure column.** A night that falls over leaves no row
+  saying so: `StopReason` has no value for "threw". `NightWorker` logs the exception rather
+  than discarding it, but a diagnostics export still cannot answer "why did last night do
+  nothing", which is the first question a field test asks. It wants a nullable column, so it
+  belongs with the first migration.
 
-- **No Swift or Kotlin/Native code in this repository has been compiled.** There is no Mac
-  and no Xcode in the build environment, and the iOS targets are still declared only on one.
-  Four adapters are written — the replacer, the scheduler, the thermal guard and the codec
-  factory — chosen because their contracts are the ones where getting it wrong loses a file
-  or a user's albums. Expect API details to move on the first real build; the decisions
-  inside them are the part worth keeping.
-- **Most of the adapter matrix is still unwritten.** `PhotoKitStorage`, `AVAssetWriterEncoder`,
+### Written and not built, knowingly
+
+Each of these is a named gap with a reason, not an oversight. None of them is blocked on
+tooling any more.
+
+- **`VideoOptimiseStep`.** `NightRun.Step` is unbound: the step that chains triage → search
+  → encode → verify → replace is the missing centre of the night pass. Two things wait on
+  it. Stage-boundary resume has no stage boundaries to interrupt at — only file boundaries,
+  which are covered — so the test that kills at each stage should land with the step. And
+  `CodecChoice.MeasuredSpeed` has no producer: the numbers are in the `job` table
+  (`realtime_multiple` per row, `engine` naming the codec) but nothing aggregates them per
+  device and codec. It is one query, and it belongs with the step. Until then the caller
+  passes null, which means "try AV1" — the correct behaviour for an encoder nothing has
+  measured.
+- **The editor's renderer.** `EditRecipe` says exactly what to do to the pixels and
+  `EditRender` says how little work it takes; the shader chain that applies eight sliders to
+  a bitmap and to a video frame is not written. The two halves that would be wrong invisibly
+  — the geometry and the save policy — are the halves that are.
+- **The map canvas.** Tile source, clustering, trips and memories are written and tested;
+  the Compose canvas that draws pins over tiles is not. `MbTilesFile` is written to
+  documented SQLite behaviour and has never been run.
+- **The Settings → Privacy row that exports diagnostics.** The report builder, the redaction
+  and the Android file-and-share are written and tested; nothing calls them.
+- **Most of the iOS adapter matrix.** `PhotoKitStorage`, `AVAssetWriterEncoder`,
   `YuvSourceIos`, `VisionIndexer`, `UndoBinIos`, the `CGImageDestination` photo path, the
-  `AVPlayerItemVideoOutput` tap, and the cinterop that binds `shared/native` for ios-arm64.
+  `AVPlayerItemVideoOutput` tap, and the cinterop binding `shared/native` for ios-arm64.
   Each implements an interface that already exists and is already exercised by fakes in the
-  shared tests, which is the point of having written them that way — but none of it is done.
-- **Face embeddings need the same model on both platforms.** ARCHITECTURE.md § 6 says LiteRT
-  on Android and Core ML on iOS, "same model converted". No model has been chosen on either,
-  and clustering quality will change when one is — on both platforms at once, which is the
-  argument for choosing before the Android launch rather than after.
+  shared tests, which is the point of having written them that way. Four adapters are done —
+  the replacer, the scheduler, the thermal guard, the codec factory — chosen because their
+  contracts are the ones where getting it wrong loses a file or a user's albums.
+- **There is no Xcode project, so `xcodebuild` does not run in CI.** The iOS job compiles
+  every shared module for both iOS targets and runs `swiftc -parse` over every Swift source,
+  which catches syntax and, for the Kotlin half, real cross-compilation. It does not catch a
+  Swift type error against the framework header, because there is no framework consumer to
+  build. That closes when the iOS app target is created at milestone 8's iOS half.
+- **`androidApp` still has no `storage/` and `scheduler/` packages.** The twenty engine
+  files now live in `app/trimgallery/engine/android/`, matching the package they always
+  declared; the split ARCHITECTURE.md § 3 describes has not been made. Now a mechanical
+  move that CI would check, rather than an unverifiable one.
+- **The migration harness has nothing to cover yet.** The schema is at version 1 with no
+  `.sqm` files, so "every version pair" is vacuously satisfied. What is missing is the
+  harness that would stop the *first* migration landing untested; it should be written in
+  the same change as that migration.
+
+### Not in this repository at all
+
+- **"Both jobs must be required" is a repository setting.** Required status checks live in
+  branch protection or a ruleset on `main`, which no API available to this session can
+  write. The workflow does everything the code side can: it runs on `push` and
+  `pull_request`, and each of the five jobs fails the run on its own. Someone with admin has
+  to add **Build guards**, **Shared JVM tests**, **iOS cross-compile**, **Android build +
+  lint** and **Android APK + native** to the required checks for `main`. Until that is done
+  a red run does not block a merge.
+
+### Standing rule
+
+- **The detekt baseline is 37 findings, and should only ever shrink.** They are shape rather
+  than defect: five long `when` chains, seven six-parameter functions, a thirty-method
+  repository. Each is working, tested code, and refactoring to a threshold in a hardening
+  pass is churn with a risk attached. Anything new fails the build.
+
+## Bugs the sweep found, kept for the record
+
+These were live defects in code that was already written and already tested. They are here
+rather than in a changelog entry because each one says something about where the tests were
+looking and where they were not.
 
 - **`Predictor.bounds` could construct invalid bounds and throw.** A confident entry whose
-  learned setting falls entirely outside the fallback bracket produced `low > high`, which
-  the `Bounds` constructor rejects — a crash in the night pass from a table row that was
-  merely out of date. It became reachable at milestone 12, when the fallback bracket started
-  being derived from the source's own bitrate rather than being a fixed wide range. Now the
+  learned setting fell entirely outside the fallback bracket produced `low > high`, which the
+  `Bounds` constructor rejects — a crash in the night pass from a table row that was merely
+  out of date. It became reachable at milestone 12, when the fallback bracket started being
+  derived from the source's own bitrate rather than being a fixed wide range. Now the
   non-overlapping case falls back, which is also the right answer: a prediction that does not
   intersect the search space is not a prediction about this file. Found by a property test
   over settings, sample counts and variances rather than by a case somebody thought of.
@@ -1568,27 +1597,3 @@ the same reason nothing Compose is: it has never been compiled.
   `UndoLocation.SYSTEM_TRASH` fell through to `FromBin`. PhotoKit has no API to restore from
   Recently Deleted, by design, so the button would have failed every time. It is now its own
   state with its own copy and an Open Photos action.
-- **Stage-boundary resume is not testable yet, and this is not a gap in the tests.**
-  `NightRun.Step` is one opaque `run(item)` call; per-file stages (probe, encode, verify,
-  replace) live inside `VideoOptimiseStep`, which is still unwritten. So there are no stage
-  boundaries in the code to kill at — only file boundaries, which are covered. When that step
-  is assembled, a test that interrupts at each of its stages should land with it.
-- **Migration coverage has nothing to cover yet.** The schema is at version 1 with no `.sqm`
-  files, so "every version pair" is vacuously satisfied. What is missing is the harness that
-  would stop the *first* migration landing untested; it needs SQLDelight's generated code,
-  which is compiled only in CI, so it should be written in the same change as that migration.
-- **A night that falls over leaves no row saying so.** `run_session` records how a pass
-  *stopped* — `StopReason` — which has no value for "threw". `NightWorker` now logs the
-  exception rather than discarding it, but a diagnostics export still cannot answer "why did
-  last night do nothing", which is the first question a field test asks. It wants a nullable
-  failure column on `run_session`, and that is a schema change, so it belongs with the first
-  migration rather than in a hardening pass.
-- **`androidApp` still has no `storage/` and `scheduler/` packages.** The note above about
-  ARCHITECTURE.md § 3 is half-closed: the twenty engine files now live in
-  `app/trimgallery/engine/android/`, matching the package they always declared, but the split
-  into `storage/` and `scheduler/` has not been made. Same reason as before — the compiler
-  cannot check the imports here — and now a smaller move than it was.
-- **The detekt baseline is 37 findings, and should only ever shrink.** They are shape rather
-  than defect: five long `when` chains, seven six-parameter functions, a thirty-method
-  repository. Each is working, tested code, and refactoring to a threshold in a hardening
-  pass is churn with a risk attached. Anything new fails the build.
