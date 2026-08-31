@@ -1,5 +1,3 @@
-import org.jetbrains.kotlin.gradle.dsl.JvmTarget
-
 // Generated as part of the ARCHITECTURE.md § 3 module layout.
 // ARCHITECTURE.md § 3 — feature/cleanup. Duplicates and chat media review (BUILD.md § 8).
 
@@ -14,17 +12,17 @@ kotlin {
     // A plain JVM target so the shared unit tests in ARCHITECTURE.md § 14 run in CI
     // without an Android SDK.
     jvm()
-    androidLibrary {
+    android {
         namespace = "app.trimgallery.feature.cleanup"
         compileSdk = libs.versions.compileSdk.get().toInt()
         minSdk = libs.versions.minSdk.get().toInt()
-
-        // The AGP 9 KMP library plugin has no `compileOptions`; the JVM target is a
-        // property of each compilation instead.
-        compilations.configureEach {
-            compilerOptions.configure { jvmTarget.set(JvmTarget.JVM_17) }
-        }
     }
+
+    // Java 17 everywhere, replacing the `compileOptions` block the AGP 9 KMP plugin
+    // does not have. A toolchain rather than a per-compilation `jvmTarget`: it covers
+    // the jvm() and android targets at once, and it is the idiom androidApp already
+    // uses, so it is proven on this CI.
+    jvmToolchain(17)
 
     // iOS targets are declared only on a Mac. ARCHITECTURE.md § 1 puts iOS at v1.5;
     // until then Linux CI has to configure and run the shared JVM tests without a

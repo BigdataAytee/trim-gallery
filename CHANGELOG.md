@@ -16,8 +16,8 @@ Compose Multiplatform's back, so holding Compose back while that moved achieved 
 AGP 9 also refuses to apply `com.android.library` alongside `org.jetbrains.kotlin.multiplatform`
 at all, which is every one of the 14 shared modules. They now use
 `com.android.kotlin.multiplatform.library`: `androidTarget()` is replaced by an
-`androidLibrary { }` block carrying namespace, compileSdk and minSdk, and the JVM target
-moved from `compileOptions` to each compilation, because the new DSL has no
+`android { }` block inside `kotlin { }` carrying namespace, compileSdk and minSdk, and the
+JVM level moved from `compileOptions` to a `jvmToolchain(17)`, because the new DSL has no
 `compileOptions`. That plugin has no `ndk` block either, so the shared modules no longer
 declare an ABI — they contain no native code, and the arm64-only guarantee was always
 enforced by the app module's filter and by `tools/check-apk-libraries.sh` reading

@@ -1,5 +1,3 @@
-import org.jetbrains.kotlin.gradle.dsl.JvmTarget
-
 // ARCHITECTURE.md § 3, § 11 — Compose Multiplatform design system, motion specs and
 // shared screens. Every screen in the app is Compose MP; platform hosts exist only for
 // share sheets, permission dialogs, document pickers and biometrics.
@@ -13,17 +11,17 @@ plugins {
 
 kotlin {
     jvm()
-    androidLibrary {
+    android {
         namespace = "app.trimgallery.core.ui"
         compileSdk = libs.versions.compileSdk.get().toInt()
         minSdk = libs.versions.minSdk.get().toInt()
-
-        // The AGP 9 KMP library plugin has no `compileOptions`; the JVM target is a
-        // property of each compilation instead.
-        compilations.configureEach {
-            compilerOptions.configure { jvmTarget.set(JvmTarget.JVM_17) }
-        }
     }
+
+    // Java 17 everywhere, replacing the `compileOptions` block the AGP 9 KMP plugin
+    // does not have. A toolchain rather than a per-compilation `jvmTarget`: it covers
+    // the jvm() and android targets at once, and it is the idiom androidApp already
+    // uses, so it is proven on this CI.
+    jvmToolchain(17)
 
     if (System.getProperty("os.name").startsWith("Mac")) {
         iosArm64()

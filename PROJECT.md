@@ -1625,6 +1625,27 @@ With the target collision gone, `configureCMakeDebug[arm64-v8a]` passed and
   that describes a defence which no longer exists is worse than no comment, because the next
   person budgets for protection they do not have.
 
+- **AGP 9.1 deprecates the block its own error message recommends.** Migrating to
+  `androidLibrary { }` — the name printed in the incompatibility error — produced:
+
+  ```
+  'androidLibrary' ... is deprecated. The 'androidLibrary' block is deprecated.
+  Please use 'android' instead.
+  e: shared/engine-api/build.gradle.kts:23:41: Unresolved reference 'jvmTarget'.
+  ```
+
+  The block is `kotlin { android { … } }`, not `androidLibrary`. The error text and the
+  developer.android.com page it links are a release behind the plugin they describe; the
+  compiler is the authority, not the documentation.
+
+  The second half is the more useful correction. `compilations.configureEach {
+  compilerOptions.configure { jvmTarget.set(…) } }` does not resolve on this target, and
+  rather than hunt for the shape that does, the JVM level is now `jvmToolchain(17)` at the
+  `kotlin { }` level. That covers the `jvm()` and android targets in one line, and it is the
+  idiom `androidApp` has been using all along — so it is already proven on this CI rather
+  than being a second guess. Reaching for a construct the repo already runs beats reaching
+  for the one the migration guide suggests.
+
 - **The local harness was testing the wrong Gradle.** It invokes the system `gradle`, which
   is 8.14.3, not the wrapper — so every "local checks passed" on this branch was exercising
   the version being upgraded away from. Re-run against a downloaded Gradle 9.7.1, the whole
