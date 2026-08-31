@@ -4,14 +4,24 @@
 
 plugins {
     alias(libs.plugins.kotlin.multiplatform)
-    alias(libs.plugins.android.library)
+    alias(libs.plugins.android.kotlin.multiplatform.library)
     alias(libs.plugins.compose.multiplatform)
     alias(libs.plugins.kotlin.compose)
 }
 
 kotlin {
     jvm()
-    androidTarget()
+    android {
+        namespace = "app.trimgallery.core.ui"
+        compileSdk = libs.versions.compileSdk.get().toInt()
+        minSdk = libs.versions.minSdk.get().toInt()
+    }
+
+    // Java 17 everywhere, replacing the `compileOptions` block the AGP 9 KMP plugin
+    // does not have. A toolchain rather than a per-compilation `jvmTarget`: it covers
+    // the jvm() and android targets at once, and it is the idiom androidApp already
+    // uses, so it is proven on this CI.
+    jvmToolchain(17)
 
     if (System.getProperty("os.name").startsWith("Mac")) {
         iosArm64()
@@ -25,7 +35,7 @@ kotlin {
                 api(compose.runtime)
                 api(compose.foundation)
                 api(compose.animation)
-                api(compose.ui)
+                api(libs.compose.ui)
                 implementation(libs.lifecycle.viewmodel.compose.mp)
                 implementation(libs.navigation.compose.mp)
                 api(projects.shared.core.model)
@@ -38,18 +48,5 @@ kotlin {
                 implementation(libs.kotlin.test)
             }
         }
-    }
-}
-
-android {
-    namespace = "app.trimgallery.core.ui"
-    compileSdk = libs.versions.compileSdk.get().toInt()
-    defaultConfig {
-        minSdk = libs.versions.minSdk.get().toInt()
-        ndk { abiFilters += "arm64-v8a" }
-    }
-    compileOptions {
-        sourceCompatibility = JavaVersion.VERSION_17
-        targetCompatibility = JavaVersion.VERSION_17
     }
 }
