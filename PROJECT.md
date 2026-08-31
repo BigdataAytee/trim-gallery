@@ -1540,6 +1540,145 @@ With the target collision gone, `configureCMakeDebug[arm64-v8a]` passed and
   read what the system actually recorded about that object rather than reasoning forward
   from the configuration.
 
+- **x86_64 is opt-in, not part of the smoke variant.** Both `pixelSmokeAndroidTest` and
+  `connectedSmokeAndroidTest` build the same `smoke` build type, so an unconditional second
+  ABI made every physical-device run cross-compile libjxl, jpegli, libvmaf and oxipng twice
+  — the second time for an architecture that phone cannot execute. It now sits behind
+  `-Ptrimgallery.smoke.x86_64=true`, set by the CI emulator job and nowhere else. The
+  configuration-time assertion follows the same rule: arm64-v8a is required always, because
+  it is what ships and a smoke run without it is not testing the real artefact; x86_64 is
+  required only when the property asked for it, since asserting it unconditionally would
+  fail exactly the physical run this change exists to keep cheap.
+
+- **`const val` at the top of a `.kts` file is a configuration-time failure.** A Kotlin
+  script's top level is the body of an implicit class, so `const` is rejected there —
+  `Const 'val' are only allowed on top level, in named objects, or in companion objects`.
+  Because it fails script *compilation*, every job in the workflow goes red, including the
+  ones that touch nothing Android and the separate review workflow. A plain `val` is
+  correct.
+
+  The reason it reached CI is worth more than the fix: **nothing local compiles
+  `androidApp/build.gradle.kts`.** That script needs AGP, which lives on Google Maven, which
+  this environment's egress policy refuses — so the local harness stages build scripts for
+  *ktlint*, which parses them but does not type-check or compile them. A syntactically valid
+  script with a semantic error passes every check available here and fails everything in CI.
+  That is the third configuration-time fault to reach CI this way, after the ABI split and
+  the eager `tasks.named`, and the pattern is identical each time: an error in the build's
+  own configuration is invisible to a harness that only runs the build's *tasks*.
+## AGP 9 / Compose 1.12 upgrade
+
+- **The whole version set had to move in one commit.** androidx.compose 1.12.0 declares
+  `minAgpVersion=9.1.0` and `minCompileSdk=37` in its AAR metadata, so Compose Multiplatform
+  1.12.0 cannot land without AGP 9.1, Gradle 9, compileSdk 37 and — because it was held only
+  by compileSdk 36 — coil 3.6.0. Splitting them would just fail `checkDebugAarMetadata` one
+  dependency at a time. The lifecycle pair moved too: `org.jetbrains.androidx.lifecycle`
+  2.10.0 resolves to `androidx.lifecycle` 2.10.0 (read from the Gradle module metadata on
+  Maven Central), which is what pulls androidx.compose to 1.12.0 from behind Compose
+  Multiplatform's back — so holding Compose down while that line moved achieved nothing.
+
+- **Compose 1.12 deprecated two plugin accessors.** `compose.ui` and `compose.uiTooling` are
+  now errors — "Specify dependency directly" and "Use org.jetbrains.compose.ui:ui-tooling
+  module instead". They are catalogue entries now, versioned from the same
+  `composeMultiplatform` reference so there is still exactly one Compose version in the
+  build. `compose.runtime`, `compose.foundation` and `compose.material3` were not deprecated
+  and are unchanged. `compose.ui` was used in `shared/core/ui` as well as `androidApp`, so
+  fixing only the site CI named would have failed on the next module.
+
+- **AGP 9 supplies Kotlin, and rejects the Kotlin plugin.** The first CI error class of
+  this upgrade:
+
+  ```
+  Failed to apply plugin 'org.jetbrains.kotlin.android'.
+    The 'org.jetbrains.kotlin.android' plugin is no longer required for Kotlin support
+    since AGP 9.0.
+  ```
+
+  Removed from `androidApp` and `benchmark`, from the root `apply false` list, and from
+  the catalogue, so the alias cannot be reintroduced by autocomplete. `kotlin-multiplatform`
+  is untouched — the shared modules are not Android-plugin projects, and the rejection is
+  specific to applying `kotlin.android` alongside AGP 9's built-in Kotlin.
+
+  It failed *configuration*, so it took all six checks with it — including **iOS
+  cross-compile on macOS, which died on `androidApp/build.gradle.kts`** while building for
+  `iosArm64`. That is the same lesson this file already records twice: Gradle configures
+  every project on every invocation, so a fault in one module's build script is a fault in
+  every job, whatever that job asked for. Three configuration-time faults reached CI before
+  this one (the ABI split, the eager `tasks.named`, the top-level `const val`); this is the
+  fourth, and the reason each was invisible locally is unchanged — a harness that runs the
+  build's *tasks* cannot see errors in the build's *configuration*.
+
+- **AGP 9 will not sit alongside `kotlin.multiplatform` at all.** The second error class,
+  and the one that turns this from a version bump into a build-system migration:
+
+  ```
+  The 'com.android.library' (or 'com.android.application') plugin is not compatible with
+  the 'org.jetbrains.kotlin.multiplatform' plugin since AGP 9.0.
+  Solution:
+    - [Recommended] Replace the 'com.android.library' plugin with the
+      'com.android.kotlin.multiplatform.library' plugin.
+    - Or set the Gradle property 'android.builtInKotlin=false' and 'android.newDsl=false'
+      to temporarily bypass this issue.
+  ```
+
+  All 14 shared modules apply both plugins, so this is every one of them. The saving grace
+  is that their `android` blocks are uniform and thin — namespace, compileSdk, minSdk,
+  `ndk { abiFilters }`, `compileOptions` — and only `shared/core/data` has an `androidMain`
+  source directory at all; the other 13 are pure `commonMain`.
+
+  Two things made this a decision rather than a fix. First, `com.android.kotlin.multiplatform.library`
+  has no `ndk { abiFilters }` block, so the library-module half of the two-place ABI defence
+  goes away (these modules ship no `.so`, so nothing breaks — but the belt-and-braces does).
+  Second, the bypass is not free either: `android.builtInKotlin=false` disables the built-in
+  Kotlin that the previous commit removed `kotlin.android` *for*, so taking it would mean
+  putting that plugin back. The two error classes are coupled, in opposite directions.
+
+  **Decision: take the recommended migration, not the bypass.** The bypass is a deprecation
+  runway that closes on Google's schedule, and it would have to be undone anyway; doing the
+  work once is cheaper than doing it twice with a revert in between. All 14 modules moved to
+  `kotlin { androidLibrary { … } }`: `androidTarget()` is gone (the block declares the
+  target), `namespace`/`compileSdk`/`minSdk` moved inside it, and `compileOptions` became
+  `compilations.configureEach { compilerOptions { jvmTarget = JVM_17 } }`, since the new DSL
+  has no `compileOptions`.
+
+  **What the dropped `abiFilters` cost, precisely.** Nothing programmatic depended on it:
+  the ABI set is decided by `androidApp`'s own `defaultConfig.ndk.abiFilters`, asserted in
+  that module's `afterEvaluate`, and verified against the built APK by
+  `tools/check-apk-libraries.sh` reading `DT_NEEDED`. What was lost is a claim two comments
+  made — `androidApp/build.gradle.kts` said "`abiFilters` is what every library module in
+  this project already uses" and README.md described an ABI split that had already been
+  removed in the hardening pass. Both are corrected here rather than left to rot: a comment
+  that describes a defence which no longer exists is worse than no comment, because the next
+  person budgets for protection they do not have.
+
+- **AGP 9.1 deprecates the block its own error message recommends.** Migrating to
+  `androidLibrary { }` — the name printed in the incompatibility error — produced:
+
+  ```
+  'androidLibrary' ... is deprecated. The 'androidLibrary' block is deprecated.
+  Please use 'android' instead.
+  e: shared/engine-api/build.gradle.kts:23:41: Unresolved reference 'jvmTarget'.
+  ```
+
+  The block is `kotlin { android { … } }`, not `androidLibrary`. The error text and the
+  developer.android.com page it links are a release behind the plugin they describe; the
+  compiler is the authority, not the documentation.
+
+  The second half is the more useful correction. `compilations.configureEach {
+  compilerOptions.configure { jvmTarget.set(…) } }` does not resolve on this target, and
+  rather than hunt for the shape that does, the JVM level is now `jvmToolchain(17)` at the
+  `kotlin { }` level. That covers the `jvm()` and android targets in one line, and it is the
+  idiom `androidApp` has been using all along — so it is already proven on this CI rather
+  than being a second guess. Reaching for a construct the repo already runs beats reaching
+  for the one the migration guide suggests.
+
+- **The local harness was testing the wrong Gradle.** It invokes the system `gradle`, which
+  is 8.14.3, not the wrapper — so every "local checks passed" on this branch was exercising
+  the version being upgraded away from. Re-run against a downloaded Gradle 9.7.1, the whole
+  local surface passes: shared modules, SQLDelight, ktlint, detekt, the guards over 194
+  files, and the guard self-tests. That is the half of this upgrade provable here; AGP 9.1.0,
+  compileSdk 37 and androidx.compose 1.12.0 live on Google Maven, which this environment
+  refuses, so they are CI-only.
+
 ### The guards guard themselves
 
 - **A rule declares the languages it polices, and must have a planted violation in each.**
@@ -1642,8 +1781,9 @@ hardware there would be requiring the impossible. The smoke job's remit is there
 install, launch, and this capability report; the encode is a device test.
 
 *Procedure:* on each of the three field-test device classes, run
-`./gradlew :androidApp:connectedSmokeAndroidTest` with the device attached and confirm the
-encode test runs rather than skips, produces HEVC video with the audio track transmuxed
+`./gradlew :androidApp:connectedSmokeAndroidTest` with the device attached — arm64-v8a
+only, because the second ABI is behind `-Ptrimgallery.smoke.x86_64` which only the CI
+emulator job sets — and confirm the encode test runs rather than skips, produces HEVC video with the audio track transmuxed
 rather than re-encoded, and plays back at full duration. Record the device, chip and the
 `reportsCodecCapabilities` log line for each. A skip on physical hardware means the device
 genuinely has no hardware HEVC encoder, which is itself a finding worth recording against
@@ -1858,3 +1998,266 @@ only pass is not a check. The build guards have planted-violation self-tests for
 reason; the hooks in `tools/git-hooks` have them; this reviewer had nothing, and spent
 weeks green while doing nothing. Before trusting any new check, make it fail on purpose
 once.
+
+### The review workflow cannot be tested on its own pull request
+
+`claude-code-action` refuses to run when the workflow file differs from the copy on the
+default branch:
+
+```
+Skipping action due to workflow validation: Workflow validation failed. The workflow
+file must exist and have identical content to the version on the repository's default
+branch.
+```
+
+That is a sensible security property — it stops a pull request from rewriting the
+reviewer that is about to review it — and it means the usual trick of relying on
+`pull_request` workflows running from the merge commit does not apply here. Both #6 (the
+fix) and #7 (the fix plus a planted violation) had their `review` job exit in about
+eleven seconds without reviewing anything.
+
+So a change to this workflow can only be validated **after** it lands on `main`, by
+opening a pull request that does not itself touch the file. The calibration PR has to be
+re-run at that point, not before.
+
+Worth recording because it also validates the earlier finding rather than undermining it:
+PR #4's review ran fully — 18 turns, 108 seconds — precisely because its workflow file
+*was* identical to main's. That test was sound, and its result stands: the reviewer read
+a planted software-encoder fallback and said nothing.
+
+## Development guardrails
+
+Three failures in this project were process failures, not code failures, and each is now
+prevented by a mechanism rather than by remembering.
+
+- **The harness was testing the wrong Gradle.** It invoked the system `gradle` (8.14.3)
+  while the wrapper pinned 9.7.1, so every "local checks passed" during the AGP 9 upgrade
+  exercised the version being upgraded away from. Both are real Gradle and both build, so
+  nothing in the output gave it away. `tools/checkall.sh` now invokes `./gradlew` and has
+  no way to invoke anything else, and `tools/wrapper-version.sh` compares
+  `./gradlew --version` against `distributionUrl` and refuses to continue if they differ.
+
+- **An uncommitted edit crossed branches.** A version bump in progress rode a
+  `git checkout` onto an unrelated ABI branch, was committed there, and was pushed; it was
+  caught only by reading the PR diff afterwards. `tools/branch.sh` gives each branch its
+  own worktree, which removes the mechanism instead of asking for care, and a `pre-commit`
+  hook keeps the primary checkout on `main` so the habit cannot quietly lapse back into
+  `git checkout -b`.
+
+- **Nothing checked that a diff stayed in its lane.** A branch declares its scope in
+  `.github/pr-scope/<branch>.txt` and `pre-push` refuses anything outside it. The
+  self-test replays the real leak — `androidApp/build.gradle.kts` plus
+  `gradle/libs.versions.toml` on a branch scoped to the former — and confirms it is
+  rejected.
+
+  `PROJECT.md`, `CHANGELOG.md` and the scope file itself are always allowed without being
+  declared. They are touched by nearly every branch here, and requiring them in every
+  scope file would turn the mechanism into boilerplate people stop reading. A guardrail
+  that is annoying enough to be routinely bypassed protects nothing.
+
+- **A guardrail with no planted violation is a guardrail nobody has seen work.** Same rule
+  as the build guards. `tools/git-hooks-selftest.sh` covers sixteen cases across both hooks and `branch.sh`,
+  including the ones that must *not* fire: docs-only changes, in-scope changes, and branch
+  work inside a linked worktree.
+
+## The review bot did not review anything
+
+`claude-code-review.yml` had never once completed before 2026-08-31: `ANTHROPIC_API_KEY`
+was unset, so every run died at credential validation in about twenty seconds. Once the
+secret was set it started passing on every PR.
+
+Passing is not reviewing. A throwaway PR (#4, closed unmerged) planted a software-encoder
+fallback inside `MediaCodecFactory`:
+
+```kotlin
+val hardware = available.filter(::isHardware)
+return hardware.ifEmpty { available }   // BUILD.md § 2 rule 2, violated
+```
+
+It was planted in that file deliberately: the build guard polices *where* codecs are
+created, not what is done with them, so a violation there compiles and the guard passes.
+Only a reviewer reading intent can catch it.
+
+The bot ran for 108 seconds over 18 turns and posted nothing — no review, no inline
+comments, no issue comment — and the check went green. `permission_denials_count: 1` in
+the result, and `show_full_output` is false, so whatever it concluded went to a hidden
+log.
+
+The likely cause: the workflow's prompt asks for a review but never tells the agent to
+*post* anything, and in agent mode nothing publishes the final message on its own.
+
+**Until that is fixed, a green `review` check means the job exited zero and nothing more.**
+It is not evidence that a diff was reviewed. That is worse than having no reviewer, because
+a green tick invites the trust that an absent one would not.
+
+*Superseded on 2026-08-31 by #6.* Runs after that commit do post: the first one read this
+branch and filed six findings, one of them a real bug. The caution above applies to runs
+**before** #6; it is kept rather than deleted because the failure it describes is the kind
+that returns quietly, and one posting run is not yet a track record.
+
+### What the fixed reviewer caught, on its first real run
+
+The review workflow's first run after #6 landed was against the guardrails branch itself,
+and it found a bug that the branch's own eight self-tests did not:
+
+`tools/branch.sh` wrote its scope file to `.github/pr-scope/$branch.txt` after creating
+only `.github/pr-scope`. Every branch name in this repository contains a slash, so the
+redirect targeted `.github/pr-scope/claude/<name>.txt` in a directory that did not exist.
+Under `set -euo pipefail` the script aborted — *after* `git worktree add` had already
+succeeded. The result was a created worktree, on a new branch, with no scope file, which
+`pre-push` reads as "no restriction". It failed into no-guardrail, silently, from then on.
+
+It was invisible to the self-tests because the fixture used the flat branch name `scoped`
+while the repository's convention is `claude/<name>`. A test fixture that does not look
+like production is a test of something else. The fixture is now slashed, and there is a
+case that runs `branch.sh` end to end and asserts the scope file exists.
+
+It also went unnoticed by the author because both scope files on this branch were created
+by hand with `mkdir -p` before `branch.sh` was ever asked to do it — so the PR's claim
+that "the tooling has been used to build itself" was half true, and the half that was
+false was the half under test. Corrected in the PR body.
+
+Three further findings from the same review, all confirmed and fixed:
+
+- **Scope globs matched recursively.** `case "$file" in $pattern` lets `*` match `/`, so
+  `shared/*` would have authorised `shared/core/pipeline/**` — the boundary this project
+  guards hardest. Patterns now compile to a regex where `*` stays inside a segment and
+  `**` crosses, which is what a reader brings gitignore intuitions to.
+- **`pre-push` checked `HEAD`, not the push.** Git passes the refs being pushed on stdin;
+  the hook ignored them, so `git push origin other-branch` was checked against whatever
+  was checked out — and if that was `main`, with no scope file, the push went unexamined.
+  It now loops over the refs on stdin, and falls back to HEAD only for manual dry runs.
+- **The self-tests were not run by anything.** `checkall.sh` claimed to be every local
+  check while never invoking `tools/git-hooks-selftest.sh` or
+  `tools/check-apk-libraries-selftest.sh`. Both now run in it, which is the difference
+  between eight passing cases and a screenshot of eight passing cases.
+
+The lesson is the one this file keeps recording from a new angle: the guards were written
+by the same person who wrote the thing they guard, and shared its blind spot. An
+independent reader found in one pass what the author's own tests were built not to see.
+
+### The second review, on the fixes themselves
+
+The reviewer read the fix commit and found that two of the four fixes did not work, both
+failing open, and both invisible to the self-tests.
+
+- **The scope file was read from the wrong tree.** `pre-push` correctly derived the branch
+  from the pushed ref, then looked its scope file up in the *current working tree*. Under
+  the worktree-per-branch workflow this branch mandates, pushing `other-branch` while
+  standing in another worktree finds no scope file, and a missing scope file means "no
+  restriction". The exact fail-open the previous fix was written to close was still open,
+  one step further in — and harder to see, because the branch name in the message was
+  finally correct. The scope now comes out of the pushed commit (`git show
+  $sha:.github/pr-scope/$branch.txt`), which also stops an uncommitted `rm` of the scope
+  file from disabling the check for a commit that still contains it.
+
+- **`timeout` is not on macOS.** The bounded stdin read used `timeout 2 cat`, with stderr
+  discarded and `|| true` after it. On a Mac that is: command not found → silenced →
+  swallowed → empty `refs` → fall back to HEAD. Every Mac would have run the pre-fix hook,
+  silently, on a project with an iOS app and a macOS CI job. It is a `read -r -t 2`
+  builtin loop now.
+
+- **`${#violations[@]}` on an empty array under `set -u`** is an error before bash 4.4,
+  which is what macOS ships — so the first fully in-scope push would have been *rejected*
+  with no message. `${violations[*]:-}` is safe on 3.2. Likewise `\s` in grep is a GNU
+  extension that BSD grep reads as a literal `s`, so an indented comment in a scope file
+  would have survived into the pattern list and matched nothing, making every file a
+  violation. `[[:space:]]` everywhere.
+
+**Why the self-tests could not see any of it.** Every case pushed the branch that was
+already checked out, so the HEAD fallback and the stdin path returned the same answer.
+The test asserted the outcome without distinguishing the mechanism that produced it.
+There is now a case that commits a branch, returns to `main`, and pushes the branch that
+is *not* HEAD — which fails on the old code and passes on the new.
+
+That is the second time on this branch that the tests were shaped by the same assumption
+as the code. The first was a fixture using a flat branch name where the convention is
+slashed. Both were found by a reader who had not written either.
+
+### Third round: three GNU-only constructs in a repo that ships an iOS target
+
+The reviewer's third pass found the pattern rather than just the instances. Each round I
+had reached for whatever worked on this Linux container, and each time it was a GNU
+extension that fails differently — and mostly silently — on the macOS half of this
+project:
+
+| Construct | On macOS |
+|---|---|
+| `timeout 2 cat` | absent; stderr discarded and `\|\| true` swallow it, so the hook falls back to HEAD |
+| `grep '^\s*#'` | `\s` is literal `s`, so an indented comment survives into the pattern list |
+| `sed 's/...\(bin\|all\)...'` | BRE alternation is GNU-only; the parse returns empty and *every* local check refuses to start |
+
+The last one I introduced myself, in the commit that fixed the reviewer's previous
+complaint about that same regex. Fixing a portability-adjacent bug by writing a
+less portable expression is worth recording as its own failure mode.
+
+Two more holes from the same pass, both in the shape this branch is supposed to be about:
+
+- **Rename detection hid a boundary crossing.** `git diff --name-only` reports only the
+  destination of a rename, so `git mv shared/core/pipeline/Foo.kt androidApp/Foo.kt` on a
+  branch scoped to `androidApp/**` passed — while deleting a file in the directory
+  ARCHITECTURE.md guards hardest. `--no-renames` shows both paths. Verified by
+  construction before fixing, and there is a case for it now.
+- **`checkall.sh` could never pass without an ELF toolchain.**
+  `check-apk-libraries-selftest.sh` exits 2 for "I cannot run here", distinct from 1 for a
+  real violation, and the harness collapsed both into failure. On a Mac the green state
+  was unreachable — and an unreachable green is how a harness gets ignored, which is the
+  disease this file replaced.
+
+The self-tests went 8 → 11 → 12 → 14 across the three rounds, and every added case came
+from a defect a reader found rather than one the author predicted.
+
+### Round four: the fix that invalidated the tool
+
+Moving `pre-push` to read the scope out of the pushed commit — itself a fix for a
+fail-open — silently broke `branch.sh`, which wrote the scope file and never committed
+it. A file on disk but not in the commit is invisible to `git show`, and a missing scope
+file means *no restriction*. So the tool whose job is to create guarded branches was
+creating unguarded ones, with a scope file sitting visibly in the worktree saying
+otherwise.
+
+That is the third time on this branch that a guardrail failed into no-guardrail while
+looking correct, and the second time a fix created the next defect. `branch.sh` now
+commits the scope file as the branch's first commit.
+
+The self-test could not see it because it asserted `[ -f ... ]` — presence on disk, which
+is exactly the property that stopped being sufficient. It now asserts
+`git cat-file -e HEAD:<scope>`, the property the hook actually depends on. **A test that
+asserts a proxy for the real property will keep passing after the real property is gone.**
+
+Also from that round: the fixture inherited the developer's global git config, so anyone
+with a global `core.hooksPath` would have had the fixture's own commits rejected by this
+repo's `pre-commit` and the case would have measured a hook against a commit that never
+happened. `GIT_CONFIG_GLOBAL=/dev/null` now isolates it.
+
+And the branch's scope file no longer claims `.github/pr-scope/**`, which had granted it
+write access to every other branch's scope file — a guardrail that can edit its siblings
+is a poor example for the branches that copy it.
+
+### Round five, and where this stops
+
+Two findings worth acting on, both about the guardrail's own integrity rather than new
+behaviour:
+
+- **The last fail-open.** A failed `git merge-base origin/main` printed one stderr line
+  into the middle of a push and let it through — eighteen lines above a deliberate
+  fail-closed for an empty scope file, reaching the same state (a scope file exists, so
+  the intent to be scoped is on record) and resolving it the opposite way. Reachable
+  ordinarily: a shallow or `--single-branch` clone, a fork whose origin has no `main`, a
+  fresh worktree where `origin/main` was never fetched. It rejects now, naming the fetch
+  that fixes it.
+
+- **The two behaviours changed by argument were asserted by nothing.** The empty-scope
+  direction was reversed this round on the strength of a review comment. A direction that
+  nothing tests is the one that flips back the next time someone finds it inconvenient at
+  six in the evening. Both edges have cases now: 14 → 16.
+
+Five rounds, and the shape of the findings changed each time: original defects, then
+defects created by the fixes, then a portability class, then a fix that invalidated its
+own tool, then asymmetries in how failure is handled. The reviewer's own summary is the
+right note to stop on — *"none of the three is a reason to hold the branch if you would
+rather land it and file them"* — and what remains after this commit is genuinely that:
+`checkall.sh` could assemble an APK and run the real ABI check rather than only its
+self-test, `pre-push` could use the remote name git passes it rather than assuming
+`origin`, and nothing enforces scope outside a clone that ran `install-hooks.sh`. All
+three are follow-ups, not blockers, and none of them fails open.

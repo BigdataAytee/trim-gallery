@@ -97,8 +97,45 @@ Gradle API, and run without an Android SDK — so CI reports a violation in seco
 
 A guard that finds nothing to scan fails, rather than passing quietly.
 
-**arm64 only**, on both platforms: `ndk.abiFilters` plus an ABI split with
-`isUniversalApk = false`. The native metric libraries are built for one ABI.
+**arm64 only** in everything that ships, on both platforms. The app module declares
+`ndk.abiFilters`; the shared library modules declare nothing, because AGP 9's KMP library
+plugin has no `ndk` block and they contain no native code. The native metric libraries are
+built for one ABI, and `tools/check-apk-libraries.sh` checks the built APK rather than
+trusting the declaration.
+
+## Working on this repo
+
+```
+tools/install-hooks.sh                      # once per clone
+tools/branch.sh my-branch 'androidApp/**'   # a branch in its own worktree, with a scope
+tools/checkall.sh                           # every local check, through ./gradlew only
+```
+
+Three guardrails, each of which exists because the thing it prevents already happened:
+
+- **`tools/checkall.sh` runs `./gradlew` and nothing else**, and refuses to start unless
+  the wrapper agrees with `gradle-wrapper.properties`. An earlier harness called the
+  system `gradle`, a different version from the pinned one, so its "all checks passed"
+  was testing a Gradle the project does not use.
+- **`tools/branch.sh` puts each branch in its own worktree.** A `git checkout` carries
+  uncommitted edits with it; that is how an in-progress version bump ended up committed
+  on an unrelated branch. Separate worktrees remove the mechanism instead of relying on
+  care. A `pre-commit` hook keeps the primary checkout on `main` so the habit cannot lapse.
+- **`pre-push` refuses a diff that reaches outside the branch's declared scope**, read
+  from `.github/pr-scope/<branch>.txt` — one glob per line, where `*` matches within a
+  path segment and `**` crosses slashes. Patterns are **anchored at the repository root**,
+  which is where they differ from gitignore: write `**/Foo.kt`, not `Foo.kt`, and
+  `tools/**`, not `tools`. A pattern that reaches no file matches nothing, so the whole
+  diff is rejected against a scope that reads correctly.
+
+  `PROJECT.md`, `CHANGELOG.md` and the scope file itself are always allowed. No scope file
+  means no restriction — but a scope file with every pattern commented out is rejected,
+  not treated as open, and so is a push with no merge-base against `origin/main` (run
+  `git fetch origin main`). The hook reads the refs git gives it on stdin, so it checks the
+  branch being pushed rather than whatever happens to be checked out, and it only fires in
+  clones that ran `install-hooks.sh` — it is not a substitute for review.
+
+`tools/git-hooks-selftest.sh` tests all of it, including a replay of the real leak.
 
 ## Building
 

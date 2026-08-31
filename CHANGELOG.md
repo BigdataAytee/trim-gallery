@@ -1,5 +1,37 @@
 # Changelog
 
+## Development guardrails, and a reviewer that was not reviewing
+
+No product change. Three process failures turned into mechanisms, and one uncomfortable
+finding.
+
+`tools/checkall.sh` runs `./gradlew` and nothing else, refusing to start unless the
+wrapper matches `gradle-wrapper.properties` — the previous harness called the system
+`gradle`, a different version, so its green results meant nothing during the AGP 9
+upgrade. `tools/branch.sh` starts each branch in its own worktree, because a `git
+checkout` carries uncommitted edits across branches and once did. A `pre-push` hook
+refuses a diff that reaches outside the scope declared in `.github/pr-scope/<branch>.txt`,
+and its self-test replays the exact leak that motivated it.
+
+Then the fixed reviewer read this branch and found a bug in it: `branch.sh` created only
+`.github/pr-scope`, not the nested directory a slashed branch name needs, so it aborted
+after making the worktree and left the branch with no scope file — failing into
+no-guardrail. Three more real gaps came with it: scope globs matched across slashes,
+`pre-push` inspected `HEAD` instead of the refs being pushed, and nothing ran the
+self-tests. All four were fixed — and a second review found that two of the fixes did not work. The
+scope file was read from the working tree rather than the pushed commit, so pushing a
+branch from another worktree still went unchecked; and the bounded stdin read used
+`timeout`, which does not exist on macOS, so every Mac would have silently run the
+unfixed hook. Both failed open. Both are fixed, along with two bash-3.2 and BSD-grep
+portability faults, and the self-test now covers the case that hid them: pushing a branch
+that is not the one checked out.
+
+The finding: the `review` check had never completed before today (no API key), and once
+it could run, a deliberately planted software-encoder fallback — a violation of the one
+rule this project treats as non-negotiable — passed it without a word. The bot ran 18
+turns and posted nothing. A green `review` currently means the job exited zero, not that
+anything was reviewed.
+
 ## The review check now posts its findings
 
 `claude-code-review.yml` ran in agent mode with `track_progress` off and a prompt that
@@ -13,6 +45,41 @@ is indistinguishable from a job that never ran. The prompt also asks the reviewe
 judge what changed code *does* rather than where it sits, since the build guards already
 enforce location and the planted violation lived inside the one file where creating a
 codec is legal.
+
+## AGP 9 / Compose Multiplatform 1.12
+
+A version bump with no behaviour change, done as one commit because the pieces cannot
+move apart.
+
+androidx.compose 1.12.0 declares `minAgpVersion=9.1.0` and `minCompileSdk=37` in its AAR
+metadata. That makes Compose Multiplatform 1.12.0, AGP 9.1.0, Gradle 9.7.1, compileSdk and
+targetSdk 37, and coil 3.6.0 a single set — split them and `checkDebugAarMetadata` fails
+one dependency at a time. The lifecycle pair (`org.jetbrains.androidx.lifecycle` and
+`androidx.lifecycle`, both 2.10.0) is in the set for a subtler reason: the multiplatform
+line resolves to the AndroidX one, which pulls androidx.compose to 1.12.0 from behind
+Compose Multiplatform's back, so holding Compose back while that moved achieved nothing.
+
+AGP 9 also refuses to apply `com.android.library` alongside `org.jetbrains.kotlin.multiplatform`
+at all, which is every one of the 14 shared modules. They now use
+`com.android.kotlin.multiplatform.library`: `androidTarget()` is replaced by an
+`android { }` block inside `kotlin { }` carrying namespace, compileSdk and minSdk, and the
+JVM level moved from `compileOptions` to a `jvmToolchain(17)`, because the new DSL has no
+`compileOptions`. That plugin has no `ndk` block either, so the shared modules no longer
+declare an ABI — they contain no native code, and the arm64-only guarantee was always
+enforced by the app module's filter and by `tools/check-apk-libraries.sh` reading
+`DT_NEEDED` from the built APK. Two comments that claimed otherwise are corrected.
+
+AGP 9 also supplies Kotlin itself and *rejects* `org.jetbrains.kotlin.android` — "no
+longer required for Kotlin support since AGP 9.0". It is gone from `androidApp`, from
+`benchmark`, from the root plugin list and from the version catalogue.
+`kotlin-multiplatform` is unaffected; the shared modules are not Android-plugin projects.
+
+Compose 1.12 turned two plugin accessors into errors — `compose.ui` ("specify dependency
+directly") and `compose.uiTooling` ("use org.jetbrains.compose.ui:ui-tooling module
+instead"). Both are version-catalogue entries now, referencing the same
+`composeMultiplatform` version so the build still has exactly one Compose version in it.
+`compose.runtime`, `compose.foundation` and `compose.material3` were not deprecated and are
+untouched.
 
 ## Hardening pass — CI, guard self-tests, thermal floor
 

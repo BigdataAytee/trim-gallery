@@ -1,0 +1,11 @@
+# Files this branch is allowed to touch, enforced by tools/git-hooks/pre-push.
+# PROJECT.md, CHANGELOG.md and this file are always allowed.
+#
+# `*` matches within one path segment; `**` crosses slashes. A pattern must
+# reach a file: tools/**, not tools.
+#
+# Note this does NOT say .github/pr-scope/** — that would grant this branch write
+# access to every other branch's scope file, and a guardrail that can edit its
+# siblings is a poor example for the branches that copy it.
+tools/**
+README.md
