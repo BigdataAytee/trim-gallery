@@ -1967,3 +1967,60 @@ looking and where they were not.
   `UndoLocation.SYSTEM_TRASH` fell through to `FromBin`. PhotoKit has no API to restore from
   Recently Deleted, by design, so the button would have failed every time. It is now its own
   state with its own copy and an Open Photos action.
+
+## Why the review workflow posted nothing
+
+The `review` check passed on three pull requests without reviewing any of them. Two
+separate faults, one after the other.
+
+First, `ANTHROPIC_API_KEY` was never set, so every run since the workflow was added died
+at credential validation in about twenty seconds. That one was loud — a red check on
+every PR — and was fixed by setting the secret.
+
+The second was silent, and worse. With the key in place the job ran a real review — 18
+turns, 108 seconds — and posted nothing, so the check went green. A planted
+software-encoder fallback (PR #4, closed unmerged) passed it without a word.
+
+The cause was the workflow, not the model. In agent mode the action runs the prompt and
+nothing publishes the result: `track_progress` was false, so no tracking comment existed
+for the agent to write into, and the prompt asked for a review without ever saying to
+post one. `show_full_output` is false, so whatever it concluded went to a hidden log.
+`permission_denials_count: 1` in the result suggests it tried something and was refused.
+
+The fix is `track_progress: true` plus an explicit, unconditional instruction to post —
+including when there is nothing to report. The prompt now also tells the reviewer to
+judge behaviour rather than location, because the build guards already cover location and
+the gap between them is exactly where the planted violation lived: inside
+`MediaCodecFactory`, where constructing a codec is legal and a software fallback is not.
+
+**The general lesson, which is the third time this project has met it.** A check that can
+only pass is not a check. The build guards have planted-violation self-tests for this
+reason; the hooks in `tools/git-hooks` have them; this reviewer had nothing, and spent
+weeks green while doing nothing. Before trusting any new check, make it fail on purpose
+once.
+
+### The review workflow cannot be tested on its own pull request
+
+`claude-code-action` refuses to run when the workflow file differs from the copy on the
+default branch:
+
+```
+Skipping action due to workflow validation: Workflow validation failed. The workflow
+file must exist and have identical content to the version on the repository's default
+branch.
+```
+
+That is a sensible security property — it stops a pull request from rewriting the
+reviewer that is about to review it — and it means the usual trick of relying on
+`pull_request` workflows running from the merge commit does not apply here. Both #6 (the
+fix) and #7 (the fix plus a planted violation) had their `review` job exit in about
+eleven seconds without reviewing anything.
+
+So a change to this workflow can only be validated **after** it lands on `main`, by
+opening a pull request that does not itself touch the file. The calibration PR has to be
+re-run at that point, not before.
+
+Worth recording because it also validates the earlier finding rather than undermining it:
+PR #4's review ran fully — 18 turns, 108 seconds — precisely because its workflow file
+*was* identical to main's. That test was sound, and its result stands: the reviewer read
+a planted software-encoder fallback and said nothing.
