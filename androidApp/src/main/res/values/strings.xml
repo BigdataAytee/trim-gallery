@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">Trim Gallery</string>
+
+    <!--
+      DESIGN_SYSTEM.md, Copy tone: short, calm, concrete; numbers over adjectives; never
+      "compress" or "shrink" in user-facing copy — "optimise", "freed", "smaller".
+    -->
+    <string name="night_channel_name">Overnight optimising</string>
+    <string name="night_notification_title">Optimising while you sleep</string>
+    <string name="morning_channel_name">Morning summary</string>
+</resources>

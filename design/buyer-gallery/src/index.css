@@ -1,0 +1,183 @@
+@import 'tailwindcss';
+
+/* Self-hosted so the screen renders identically with no network, which is also the
+   house style of the project this prototype feeds (BUILD.md rule 8). One variable
+   file covers 400-700. */
+@font-face {
+  font-family: 'Inter';
+  font-style: normal;
+  font-weight: 100 900;
+  font-display: swap;
+  src: url('/fonts/inter-var-latin.woff2') format('woff2');
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC,
+    U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215,
+    U+FEFF, U+FFFD;
+}
+
+/* ---------------------------------------------------------------------------
+   Tokens — DESIGN_SPEC.md section 3.
+   Every colour lives here so the theme switch is one attribute change.
+   --------------------------------------------------------------------------- */
+:root {
+  --page: #faf9f6;
+  --band: #f0efe9;
+  --card: #ffffff;
+  --sheet: #ffffff;
+  --text: #1c1b1a;
+  --muted: #8a8782;
+  --line: #d9d6cf;
+  --glaze: #3f9aa0;
+  --ember: #c9663f;
+  --glow-a: 0.55;
+
+  /* Derived from the tokens above; kept here so components never hard-code a colour. */
+  --tab-on: var(--text);
+  --chip-bg: rgb(255 255 255 / 0.85);
+  --chip-fg: var(--text);
+  --star: #c98a12;
+  --veil: rgb(250 249 246 / 0.82);
+
+  --radius: 14px;
+  --radius-hero: 26px;
+  --breath: 4.6s;
+  --shell: 430px;
+}
+
+[data-theme='dark'] {
+  --page: #161412;
+  --band: #1d1a17;
+  --card: #221f1b;
+  --sheet: #221f1b;
+  --text: #f1ebe2;
+  --muted: #8f877c;
+  --line: #3a3630;
+  --glaze: #4fa3a8;
+  --ember: #c9663f;
+  --glow-a: 0.4;
+
+  --chip-bg: rgb(22 20 18 / 0.7);
+  --star: #f3c96b;
+  --veil: rgb(10 9 8 / 0.86);
+}
+
+/* Inside @layer base on purpose. Tailwind v4 emits utilities into @layer utilities,
+   and unlayered rules beat every layer — an unlayered `* { margin: 0; padding: 0 }`
+   silently outranks px-*, mx-*, mb-* and friends. */
+@layer base {
+  * {
+    box-sizing: border-box;
+    margin: 0;
+    padding: 0;
+  }
+
+  html,
+  body {
+    height: 100%;
+  }
+}
+
+body {
+  background: var(--page);
+  color: var(--text);
+  font-family: Inter, system-ui, -apple-system, sans-serif;
+  -webkit-font-smoothing: antialiased;
+  /* Nothing should ever scroll sideways at 360-430px (acceptance item 7). */
+  overflow-x: hidden;
+  /* The 350ms crossfade the spec asks for. */
+  transition: background 350ms, color 350ms;
+}
+
+@layer base {
+  button {
+    font: inherit;
+    color: inherit;
+    background: none;
+    border: 0;
+    cursor: pointer;
+  }
+}
+
+/* Keyboard focus stays visible; the design never removes it. */
+:focus-visible {
+  outline: 2px solid var(--glaze);
+  outline-offset: 2px;
+}
+
+/* ---------------------------------------------------------------------------
+   Motion — DESIGN_SPEC.md section 4.
+   Arrival and breathing are CSS: 30 tiles running an infinite 4.6s loop is work the
+   compositor should do on its own, not something React should re-render for. The hero
+   zoom and press feedback are Motion, where the FLIP and gesture handling earn their
+   keep.
+   --------------------------------------------------------------------------- */
+@keyframes tile-arrive {
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+/* A 2px coloured ring plus a soft 30px halo, brightening 5% at the peak. */
+@keyframes tile-breathe {
+  0%,
+  100% {
+    box-shadow:
+      0 0 0 0 transparent,
+      0 4px 14px -6px rgb(0 0 0 / 0.18);
+    filter: brightness(1);
+  }
+  50% {
+    box-shadow:
+      0 0 0 2px color-mix(in srgb, var(--hue) calc(var(--glow-a) * 100%), transparent),
+      0 0 30px 6px color-mix(in srgb, var(--hue) calc(var(--glow-a) * 60%), transparent);
+    filter: brightness(1.05);
+  }
+}
+
+.tile {
+  /* Photos and files glaze, clips ember (section 4.1). */
+  --hue: var(--glaze);
+  opacity: 0;
+  transform: translateY(18px) scale(0.96);
+}
+
+.tile[data-type='clip'] {
+  --hue: var(--ember);
+}
+
+/* While its hero is open the tile stays mounted -- Motion needs its live rect to
+   animate back into -- but must not also be drawn behind the veil. */
+.tile[data-open='true'] {
+  visibility: hidden;
+}
+
+/* `.is-in` is added by the arrival observer, once per tile per tab. */
+.tile.is-in {
+  animation:
+    tile-arrive 600ms cubic-bezier(0.2, 0.8, 0.2, 1) forwards,
+    tile-breathe var(--breath) ease-in-out infinite;
+  /* Breathing starts after the arrival finishes, then offsets by a per-tile random
+     negative delay so neighbours never pulse together. */
+  animation-delay: var(--arrive-delay, 0ms), calc(var(--arrive-delay, 0ms) + 600ms + var(--phase, 0ms));
+}
+
+/* ---------------------------------------------------------------------------
+   Reduced motion — DESIGN_SPEC.md section 4.6.
+   Not a degraded version: the same screen, fully usable, without the movement.
+   --------------------------------------------------------------------------- */
+@media (prefers-reduced-motion: reduce) {
+  body {
+    transition: none;
+  }
+
+  .tile {
+    opacity: 1;
+    transform: none;
+  }
+
+  .tile.is-in {
+    animation: none;
+    /* A static 1.5px tinted ring stands in for the breathing. */
+    box-shadow: 0 0 0 1.5px color-mix(in srgb, var(--hue) 40%, transparent);
+  }
+}

@@ -1,0 +1,65 @@
+# Detekt configuration for trim-gallery.
+# Builds on the default rule set; only project-specific deviations live here.
+
+build:
+  maxIssues: 0
+
+complexity:
+  LongMethod:
+    # Compose screen functions are declarative and read fine when long.
+    ignoreAnnotated: ['Composable']
+  LongParameterList:
+    ignoreAnnotated: ['Composable']
+    # Test sources build fixtures by naming every field of a wide domain object; that is
+    # what makes the assertions readable, and hiding them behind builders would hide what
+    # a test is actually setting. Production code keeps the default.
+    excludes: ['**/commonTest/**', '**/jvmTest/**', '**/test/**', '**/androidTest/**']
+  TooManyFunctions:
+    ignoreAnnotated: ['Composable']
+
+naming:
+  FunctionNaming:
+    # Composables are PascalCase by convention.
+    ignoreAnnotated: ['Composable']
+
+style:
+  # Off, deliberately, and this is the one rule here that is switched off rather than tuned.
+  #
+  # Until the hardening pass every `:shared:*:detekt` task was NO-SOURCE, so the rule had
+  # never run over the shared layer. When it did, its 220 hits were: UUIDv7 bit shifts and
+  # hex masks, degree/radian and metre/pixel conversions in the tile maths, the EXIF
+  # orientation codes 1..8, and the design-token tables — none of which is improved by a
+  # name, and several of which (`0xFF`, `180.0`) would get one that only restates the
+  # literal. The numbers this rule exists to catch — thresholds, gates, ratios — are already
+  # named constants carrying the reason they hold that value, which is the house style
+  # throughout `shared/core`, and what the tests assert against.
+  #
+  # Re-enable with one line if that stops being true.
+  MagicNumber:
+    active: false
+  MaxLineLength:
+    maxLineLength: 120
+  # Guard clauses are the house style: `?: return null` at the top of a function reads
+  # better than the nested `if` the default of 2 forces. Four is still few enough that a
+  # function with a real control-flow problem shows up.
+  ReturnCount:
+    max: 4
+    excludeGuardClauses: true
+  ForbiddenMethodCall:
+    active: true
+    methods:
+      # BUILD.md rule 2: no software video encoding, ever. Creating a codec by name
+      # is how a software encoder gets in by the back door; go through the
+      # hardware-only selector instead.
+      # Belt and braces alongside the verifySourceBoundaries build guard, which is the
+      # real enforcement (ARCHITECTURE.md section 14).
+      - reason: 'Codecs are created only in CodecFactory (BUILD.md rule 2).'
+        value: 'android.media.MediaCodec.createEncoderByType'
+      - reason: 'Codecs are created only in CodecFactory (BUILD.md rule 2).'
+        value: 'android.media.MediaCodec.createByCodecName'
+      - reason: 'Codecs are created only in CodecFactory (BUILD.md rule 2).'
+        value: 'android.media.MediaCodec.createDecoderByType'
+
+exceptions:
+  TooGenericExceptionCaught:
+    active: true

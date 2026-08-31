@@ -1,0 +1,48 @@
+# Automated review of every pull request against BUILD.md, PROJECT.md and STACK.md.
+# Set up per STACK.md, "Anthropic open-source".
+name: Claude review
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened]
+
+permissions:
+  contents: read
+  pull-requests: write
+  id-token: write
+
+jobs:
+  review:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: anthropics/claude-code-action@v1
+        with:
+          anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
+          prompt: |
+            Review this pull request against the project's own specifications, which
+            are in the repository: BUILD.md (the spec), PROJECT.md (decisions already
+            made and why), STACK.md (the only approved library list) and
+            ARCHITECTURE.md (the module layout and the platform adapter matrix).
+
+            Read the project skills in .claude/skills/ and hold the diff to them:
+              - codec-priority: hardware encoders only, KEY_PRIORITY=1, reclaim
+                handling, no software video encoding anywhere, ever.
+              - safe-replace:   originals read-only until one final rename; verify
+                before replace; metadata and lastModified preserved.
+              - ndk-build:      arm64-v8a only, NEON, submodules not vendored copies.
+
+            Flag in particular:
+              - any dependency added that is not listed in STACK.md
+              - anything that could put a network permission in the manifest
+              - any software video encoding path, or a fallback that could reach one
+              - any write to an original file other than the final rename
+              - a second ABI creeping into the build
+              - a codec created outside CodecFactory, or a library write outside Replacer
+              - shared/core/pipeline reaching for a platform type instead of an
+                engine-api interface
+              - a platform implementation shipped without a fake for the JVM tests
+                (ARCHITECTURE.md section 2.7)

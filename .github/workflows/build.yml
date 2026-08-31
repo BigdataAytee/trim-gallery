@@ -1,0 +1,405 @@
+# ARCHITECTURE.md § 16, "Definition of done": compiles for all enabled targets, build
+# guards pass, shared tests pass.
+name: Build
+
+on:
+  # `push` is main only. On a feature branch a commit used to fire this workflow twice —
+  # once for the push, once for the pull request — and both runs produce check runs with
+  # the *same* names, which are the names branch protection requires. The concurrency
+  # group below then cancelled one of them, so every commit left six cancelled runs called
+  # `Build guards`, `Shared JVM tests`, and so on, sitting on the head SHA beside six
+  # successful ones:
+  #
+  #     6 cancelled, 7 successful
+  #     Build / Android APK + native (push)   Cancelled after 2s   Required
+  #
+  # A cancelled required check is not a pass, so the pull request read as blocked with
+  # every job visibly green — and no amount of re-running or approving fixed it, because
+  # the next push recreated the cancelled pair. Restricting `push` to main gives a feature
+  # branch exactly one run per commit, via `pull_request`, and main its own run after a
+  # merge. Nothing is lost: a commit that only ever reaches main through a PR is still
+  # built before it lands.
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+# Successive pushes to the same branch still supersede each other — that is what this is
+# for now, rather than the push/PR duplication above, which no longer happens.
+# `head_ref` on a pull_request, `ref_name` on a push: both are the bare branch name. `ref`
+# is the wrong second half and was the first attempt, because on a push it is
+# `refs/heads/x` while the pull request's `head_ref` is `x` — different groups, so every
+# commit built twice, and the macOS runner is the expensive half of this workflow.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.head_ref || github.ref_name }}
+  cancel-in-progress: true
+
+# Every job ends with a failure summary that both prints the diagnosis and emits it as
+# GitHub error annotations. Gradle failures are mostly stack trace; the interesting lines
+# are the compiler errors and the "What went wrong" block, and a job that checks out
+# submodules buries its own log tail under two hundred lines of post-job cleanup, which an
+# annotation survives.
+jobs:
+  guards:
+    name: Build guards
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+      - uses: gradle/actions/setup-gradle@v4
+
+      # Runs first and on its own, for two reasons. The guards need no Android SDK and no
+      # Google Maven, so a violation is reported in seconds rather than after a full
+      # dependency resolution — and, more importantly, `GuardSelfTest` plants a deliberate
+      # violation for every rule in every language it claims to police and asserts each one
+      # fires. A guard that has never been shown to fire is not a guard, so it is proved
+      # here before the step below trusts it.
+      - name: Guard self-tests
+        run: |
+          set -o pipefail
+          ./gradlew -p build-logic test --console=plain 2>&1 | tee /tmp/selftest.log
+
+      - name: Run guards over every module
+        run: |
+          set -o pipefail
+          ./gradlew guards --console=plain 2>&1 | tee /tmp/guards.log
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: guard-reports
+          path: |
+            build-logic/build/reports/tests/test
+            **/build/reports/guards
+          if-no-files-found: ignore
+
+      - name: Failure summary
+        if: failure()
+        run: bash .github/failure-summary.sh /tmp/selftest.log /tmp/guards.log
+
+  shared-tests:
+    name: Shared JVM tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+      - uses: gradle/actions/setup-gradle@v4
+
+      # The JVM half of ARCHITECTURE.md § 14. iOS targets are only declared on macOS, so
+      # this configures and runs on Linux without a Kotlin/Native toolchain.
+      - name: Shared unit tests
+        run: |
+          set -o pipefail
+          ./gradlew sharedTest --console=plain 2>&1 | tee /tmp/shared.log
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: shared-test-reports
+          path: '**/build/reports/tests'
+          if-no-files-found: ignore
+
+      - name: Failure summary
+        if: failure()
+        run: bash .github/failure-summary.sh /tmp/shared.log
+
+  ios-compile:
+    name: iOS cross-compile
+    runs-on: macos-14
+    steps:
+      # No submodules. `iosCompile` is Kotlin only — the native metric libraries under
+      # shared/native are not built here.
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+      - uses: gradle/actions/setup-gradle@v4
+
+      # The claim this job exists to test. Until it ran, "the shared layer is portable"
+      # rested on a source scan: the code had never been through the Kotlin/Native
+      # compiler, which is the only thing that can actually answer the question.
+      #
+      # The portability guard catches what a grep can see — a `java.util` import in
+      # commonMain. It cannot see an expect/actual gap, a dependency published with no
+      # Native artifact, or an API that is in the JVM standard library and not in
+      # kotlin-stdlib-common. This can.
+      - name: Compile every shared module for both iOS targets
+        run: |
+          set -o pipefail
+          ./gradlew iosCompile --console=plain 2>&1 | tee /tmp/ios.log
+
+      # The Swift half, as far as it can honestly go.
+      #
+      # `xcodebuild build` needs an Xcode project, an app target with a `@main`, and the
+      # shared modules published as an XCFramework. None of that exists: ARCHITECTURE.md § 1
+      # puts iOS at v1.5, and `iosApp/` is four adapters written to documented behaviour,
+      # not an application. Building one is a feature, not hardening.
+      #
+      # `swiftc -parse` is what is left, and it is not nothing: it is the same check that
+      # caught two files in this repository whose entire second half sat inside an unclosed
+      # comment. It parses; it does not resolve `import Photos`, so it cannot catch a wrong
+      # API. That gap is recorded in PROJECT.md § Device-required verification.
+      - name: Parse every Swift source
+        if: always()
+        run: |
+          set -o pipefail
+          find iosApp -name '*.swift' -print0 \
+            | xargs -0 -n1 -t xcrun swiftc -parse \
+                -sdk "$(xcrun --sdk iphonesimulator --show-sdk-path)" \
+                -target arm64-apple-ios17.0-simulator
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: ios-compile-reports
+          path: '**/build/reports'
+          if-no-files-found: ignore
+
+      - name: Failure summary
+        if: failure()
+        run: bash .github/failure-summary.sh /tmp/ios.log
+
+  android:
+    name: Android build + lint
+    runs-on: ubuntu-latest
+    steps:
+      # No submodules: nothing in this job runs CMake, and a recursive checkout of libjxl
+      # and jpegli pulls a dozen nested repositories, then spends two hundred lines of the
+      # post-job step cleaning them up — two hundred lines between this job's failure
+      # summary and the end of its log. The native build lives in `apk` below.
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+      - uses: android-actions/setup-android@v3
+      - uses: gradle/actions/setup-gradle@v4
+
+      - name: Static analysis
+        run: |
+          set -o pipefail
+          ./gradlew detekt ktlintCheck --console=plain 2>&1 | tee /tmp/lint.log
+
+      # The first and only place Compose Multiplatform is compiled: the environment this
+      # code is written in cannot resolve androidx from Google Maven at all. Split from the
+      # assemble so a Compose error is not reported as a failure of a CMake build of libjxl.
+      - name: Compile Kotlin for Android
+        run: |
+          set -o pipefail
+          ./gradlew :androidApp:compileDebugKotlin --console=plain 2>&1 | tee /tmp/compile.log
+
+      - name: Failure summary
+        if: failure()
+        run: bash .github/failure-summary.sh /tmp/lint.log /tmp/compile.log
+
+  apk:
+    name: Android APK + native
+    runs-on: ubuntu-latest
+    # The native tree is the one part of this build that can run long enough to matter:
+    # a cold cross-compile of libjxl, jpegli, brotli, lcms and Highway is ~7 minutes, and
+    # a wedged toolchain would otherwise sit on a runner for the six-hour default. 90
+    # minutes is far above the observed time and far below the point where it costs a day.
+    timeout-minutes: 90
+    steps:
+      # The one job that needs submodules: `shared/native/CMakeLists.txt` builds xpsnr,
+      # vmaf, libjxl and jpegli from source, and `assembleDebug` runs it.
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+      - uses: android-actions/setup-android@v3
+      - uses: gradle/actions/setup-gradle@v4
+
+      # `shared/native/CMakeLists.txt` drives three build systems it does not own, and
+      # `find_program(... REQUIRED)` fails configuration when any of them is missing:
+      #
+      #   meson + ninja  libvmaf builds with meson; CMake shells out to it through a
+      #                  generated cross file. The Android SDK ships a private ninja
+      #                  beside its CMake, but not on PATH, which is where find_program
+      #                  looks — so both come from pip, pinned to nothing because they
+      #                  are build tools, not shipped code.
+      #   cargo          oxipng is Rust. The runner image has the toolchain; what it does
+      #                  not have is the Android target, and cross-compiling to arm64
+      #                  without it fails after the C libraries have already built.
+      #
+      # Not a workaround for a broken CMake file: these are its documented prerequisites,
+      # and the first CI run of `assembleDebug` is the first time anything has had to
+      # satisfy them.
+      - name: Native build prerequisites
+        run: |
+          set -o pipefail
+          python3 -m pip install --upgrade meson ninja
+          rustup target add aarch64-linux-android
+          # `cargo ndk`, not plain `cargo`: the CMake invokes the cargo-ndk subcommand,
+          # which sets the linker and the sysroot for the Android target. Without it cargo
+          # answers "no such command: ndk" after the C libraries have already built.
+          cargo install cargo-ndk --locked
+          meson --version
+          ninja --version
+          cargo --version
+          cargo ndk --version
+
+      # The cross-compiled C/C++ output, which Gradle's own cache does not cover: `.cxx`
+      # holds the CMake/ninja tree, and libvmaf and oxipng build into the source tree
+      # through their own build systems. Keyed on the CMake inputs and the exact submodule
+      # commits, so a submodule bump or a CMakeLists edit misses and rebuilds — anything
+      # coarser would serve a stale object for a changed source, which is worse than no
+      # cache at all.
+      - name: Cache the native build tree
+        uses: actions/cache@v4
+        with:
+          path: |
+            androidApp/.cxx
+            shared/native/oxipng/target
+          # The ABI set is in the key, not just in the prefix. Both native jobs cache the
+          # same `androidApp/.cxx` path, and .cxx is laid out per ABI — so a key that did
+          # not name the ABIs would let the arm64-only job restore a tree the two-ABI job
+          # wrote, or the reverse, and ninja would then be reasoning about object files for
+          # an architecture it is not building.
+          key: native-abi_arm64-v8a-${{ runner.os }}-${{ hashFiles('shared/native/CMakeLists.txt', 'shared/native/cmake/**', 'androidApp/build.gradle.kts', '.gitmodules') }}-${{ hashFiles('.git/modules/**/HEAD') }}
+          restore-keys: |
+            native-abi_arm64-v8a-${{ runner.os }}-${{ hashFiles('shared/native/CMakeLists.txt', 'shared/native/cmake/**', 'androidApp/build.gradle.kts', '.gitmodules') }}-
+
+      # assembleDebug depends on the merged-manifest guard, so a network permission
+      # arriving through a dependency fails here even if no source changed.
+      - name: Assemble
+        run: |
+          set -o pipefail
+          ./gradlew :androidApp:assembleDebug --console=plain 2>&1 | tee /tmp/assemble.log
+
+      # Asserted, not assumed: an APK missing a library it loads is a crash the first time
+      # a night pass touches a photo, not a build failure. The check reads DT_NEEDED out of
+      # each packaged `.so` rather than comparing against a hand-maintained list, so it
+      # stays correct when the link line changes — and it has a self-test that plants a
+      # violation, because a check that cannot fail is not a check.
+      - name: The APK carries every library it loads
+        run: |
+          set -o pipefail
+          bash tools/check-apk-libraries-selftest.sh
+          apk=$(ls androidApp/build/outputs/apk/debug/*.apk | head -1)
+          nm_readelf="$ANDROID_NDK_ROOT/toolchains/llvm/prebuilt/linux-x86_64/bin/llvm-readelf"
+          [ -x "$nm_readelf" ] || nm_readelf=readelf
+          bash tools/check-apk-libraries.sh "$apk" "$nm_readelf"
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: apk
+          path: androidApp/build/outputs/apk/debug/*.apk
+          if-no-files-found: ignore
+
+      - name: Failure summary
+        if: failure()
+        run: bash .github/failure-summary.sh /tmp/assemble.log
+
+  smoke:
+    name: App launches on a device
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+      - uses: android-actions/setup-android@v3
+      - uses: gradle/actions/setup-gradle@v4
+
+      # Without this the emulator falls back to software rendering and instruction-level
+      # emulation, and a launch that takes seconds takes minutes — long enough that the
+      # test looks broken rather than slow. GitHub's Linux runners expose /dev/kvm but not
+      # to the runner user; the udev rule hands it over.
+      - name: Enable KVM
+        run: |
+          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' \
+            | sudo tee /etc/udev/rules.d/99-kvm4all.rules
+          sudo udevadm control --reload-rules
+          sudo udevadm trigger --name-match=kvm
+          ls -l /dev/kvm
+
+      - name: Native build prerequisites
+        run: |
+          set -o pipefail
+          python3 -m pip install --upgrade meson ninja
+          # nasm, for x86_64 only: libvmaf's SIMD is hand-written x86 assembly and its
+          # meson.build hard-requires an assembler to build it —
+          #
+          #     libvmaf/src/meson.build:65:15: ERROR: Program 'nasm' not found or not executable
+          #
+          # arm64 never needs it, because there the SIMD is NEON intrinsics that clang
+          # compiles itself. That asymmetry is why this only ever broke the smoke variant.
+          sudo apt-get update -qq && sudo apt-get install -y -qq nasm
+          nasm -v
+          # Resolve the pinned toolchain and every target it declares *now*, while nothing
+          # else is running. The two ABI builds invoke cargo concurrently, and if a target
+          # is still missing at that point rustup installs it mid-build from two processes
+          # at once and corrupts its own component tree. `rustup show` in the crate
+          # directory is what forces rust-toolchain.toml to be honoured up front.
+          (cd shared/native/oxipng && rustup show)
+          rustup target add aarch64-linux-android x86_64-linux-android
+          cargo install cargo-ndk --locked
+
+      # Keyed the same way as the arm64 job but with its own prefix, because this variant
+      # builds two ABIs and would otherwise fight the other job over one cache entry.
+      - name: Cache the native build tree
+        uses: actions/cache@v4
+        with:
+          path: |
+            androidApp/.cxx
+            shared/native/oxipng/target
+          # arm64-v8a + x86_64 — the smoke variant builds both, so it must never share a
+          # cache entry with the arm64-only job above. See that job's note.
+          key: native-abi_arm64-v8a_x86_64-${{ runner.os }}-${{ hashFiles('shared/native/CMakeLists.txt', 'shared/native/cmake/**', 'androidApp/build.gradle.kts', '.gitmodules') }}-${{ hashFiles('.git/modules/**/HEAD') }}
+          restore-keys: |
+            native-abi_arm64-v8a_x86_64-${{ runner.os }}-${{ hashFiles('shared/native/CMakeLists.txt', 'shared/native/cmake/**', 'androidApp/build.gradle.kts', '.gitmodules') }}-
+
+      # Boots the managed device, installs the smoke APK and runs MainActivityLaunchTest:
+      # the activity reaches RESUMED, and survives recreation. The only check in this
+      # repository that proves the app runs rather than that it compiles.
+      #
+      # `--info` because when an emulator test fails the useful line is almost always in
+      # Gradle's device log rather than in the test report.
+      - name: Launch the app on a Gradle-managed device
+        run: |
+          set -o pipefail
+          ./gradlew :androidApp:pixelSmokeAndroidTest \
+            --console=plain --info 2>&1 | tee /tmp/smoke.log
+
+      # meson's own log records the exact sanity-check command and its output, which is the
+      # only place the cause of an `undefined symbol: main` is actually written down. The
+      # generated cross file beside it says what CMake composed. Always, not on failure:
+      # a passing run's copy is the reference the next failure gets compared against.
+      - name: Dump the meson cross files and logs
+        if: always()
+        run: |
+          for f in $(find androidApp/.cxx -name meson-cross.ini 2>/dev/null); do
+            echo "=== $f ==="; cat "$f"
+          done
+          for f in $(find androidApp/.cxx -name meson-log.txt 2>/dev/null); do
+            echo "=== $f (last 80) ==="; tail -80 "$f"
+          done
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: smoke-reports
+          path: |
+            androidApp/build/reports/androidTests/**
+            androidApp/build/outputs/androidTest-results/**
+          if-no-files-found: ignore
+
+      - name: Failure summary
+        if: failure()
+        run: bash .github/failure-summary.sh /tmp/smoke.log

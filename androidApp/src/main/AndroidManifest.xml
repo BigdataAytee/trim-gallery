@@ -1,0 +1,99 @@
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools">
+
+    <!--
+      There is deliberately no network permission here, and there never will be.
+      BUILD.md rule 8: the app states "no network access" in the UI as a feature, so the
+      manifest has to make that literally true. Two build guards keep it that way
+      (ARCHITECTURE.md section 14): verifyNoInternetPermission scans this file and the
+      merged manifest of every variant, and verifySourceBoundaries fails on any use of a
+      networking API in source.
+
+      Media access is by Storage Access Framework grant (BUILD.md section 4), which
+      needs no storage permission at all: the user picks folders and the app takes
+      persistable URI permission.
+    -->
+
+    <!--
+      Milestone 5. The night pass is a long-running worker, which on Android means a
+      foreground service: WorkManager stops an ordinary worker after ten minutes and
+      BUILD.md section 6 budgets sixty. The notification it requires is posted on a
+      minimum-importance channel (see NightWorker).
+    -->
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MEDIA_PROCESSING" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_DATA_SYNC" />
+    <!-- The morning card notification (USER_JOURNEY.md section 3). -->
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+
+    <!--
+      The permissions this app refuses, removed from the *merged* manifest.
+
+      Not defensive tidying: `verifyNoInternetPermissionMerged<Variant>` failed on all three
+      variants the first time CI ran it, which is precisely the case that guard was written
+      for and the one a scan of this file alone cannot see. Libraries declare what they might
+      need — Coil can fetch an image over HTTP, WorkManager can constrain a job on network
+      state — and the manifest merger unions those declarations into the APK. Neither
+      capability is used here: Coil only ever decodes a local file the user already has, and
+      the night pass has no network constraint (BUILD.md § 6 gates on charging, screen off,
+      battery and heat).
+
+      Without these four lines the shipped APK asks for INTERNET while the app's own screen
+      says it has no network access. `tools:node="remove"` deletes the permission from the
+      merged result rather than merely not adding it here.
+    -->
+    <uses-permission android:name="android.permission.INTERNET" tools:node="remove" />
+    <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" tools:node="remove" />
+    <uses-permission android:name="android.permission.ACCESS_WIFI_STATE" tools:node="remove" />
+    <uses-permission android:name="android.permission.CHANGE_NETWORK_STATE" tools:node="remove" />
+
+    <uses-feature android:name="android.hardware.camera" android:required="false" />
+
+    <application
+        android:name=".TrimGalleryApplication"
+        android:allowBackup="false"
+        android:icon="@mipmap/ic_launcher"
+        android:label="@string/app_name"
+        android:supportsRtl="true"
+        android:theme="@style/Theme.TrimGallery">
+
+        <!--
+          WorkManager's own service, declared with the types the night pass uses so the
+          platform accepts setForeground() from NightWorker.
+        -->
+        <service
+            android:name="androidx.work.impl.foreground.SystemForegroundService"
+            android:foregroundServiceType="mediaProcessing|dataSync"
+            tools:node="merge" />
+
+        <!--
+          Milestone 13. "Export diagnostics" (LAUNCH.md section Support) hands the user a
+          file to share themselves. The app still cannot send anything — there is no network
+          permission and the guards keep it that way — so a provider is the only way a file
+          can leave, and it leaves because the user picked a destination in the system sheet.
+
+          grantUriPermissions with no static grants: every URI is granted per share, for the
+          one file, and expires with the activity that received it.
+        -->
+        <provider
+            android:name="androidx.core.content.FileProvider"
+            android:authorities="${applicationId}.diagnostics"
+            android:exported="false"
+            android:grantUriPermissions="true">
+            <meta-data
+                android:name="android.support.FILE_PROVIDER_PATHS"
+                android:resource="@xml/diagnostics_paths" />
+        </provider>
+
+        <activity
+            android:name=".ui.MainActivity"
+            android:exported="true"
+            android:theme="@style/Theme.TrimGallery">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+        </activity>
+    </application>
+</manifest>
