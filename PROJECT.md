@@ -2090,6 +2090,11 @@ The likely cause: the workflow's prompt asks for a review but never tells the ag
 It is not evidence that a diff was reviewed. That is worse than having no reviewer, because
 a green tick invites the trust that an absent one would not.
 
+*Superseded on 2026-08-31 by #6.* Runs after that commit do post: the first one read this
+branch and filed six findings, one of them a real bug. The caution above applies to runs
+**before** #6; it is kept rather than deleted because the failure it describes is the kind
+that returns quietly, and one posting run is not yet a track record.
+
 ### What the fixed reviewer caught, on its first real run
 
 The review workflow's first run after #6 landed was against the guardrails branch itself,

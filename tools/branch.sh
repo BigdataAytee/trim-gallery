@@ -49,6 +49,13 @@ if [ $# -gt 0 ]; then
     {
         echo "# Files this branch is allowed to touch, enforced by tools/git-hooks/pre-push."
         echo "# PROJECT.md, CHANGELOG.md and this file are always allowed."
+        echo "#"
+        echo "# \`*\` matches within one path segment; \`**\` crosses slashes."
+        echo "#"
+        echo "# If this branch adds a platform implementation, ARCHITECTURE.md § 2.7 requires"
+        echo "# a JVM fake under shared/ to ship with it — so include that path here too."
+        echo "# Otherwise pre-push rejects the fake, and the easy way out is dropping a file"
+        echo "# the project requires rather than widening the scope."
         for glob in "$@"; do echo "$glob"; done
     } > "$scope_file"
     echo "declared scope:"
