@@ -53,6 +53,14 @@ fun GalleryTile(
     modifier: Modifier = Modifier,
     progress: Float? = null,
     previewing: Boolean = false,
+    /**
+     * A hold on this tile (USER_JOURNEY.md § 6, *"Viewer or long-press → Compress now"*).
+     *
+     * Null where the host has nothing to offer, which is not a hypothetical: the trash and
+     * the locked folder draw the same tile, and a long press that opened "Optimise" over a
+     * deleted file would be a button that cannot work.
+     */
+    onLongPress: ((MediaItem) -> Unit)? = null,
     overlay: @Composable BoxScope.() -> Unit = {},
     preview: @Composable (MediaItem) -> Unit = {},
     artwork: @Composable (MediaItem) -> Unit,
@@ -88,7 +96,13 @@ fun GalleryTile(
             )
             .clip(RoundedCornerShape(radius))
             .background(colors.card)
-            .pressScale { onOpen(item) },
+            .let { base ->
+                if (onLongPress == null) {
+                    base.pressScale { onOpen(item) }
+                } else {
+                    base.pressScale(onLongPress = { onLongPress(item) }, onClick = { onOpen(item) })
+                }
+            },
     ) {
         // The still stays mounted underneath the preview. Swapping it out would leave a
         // blank tile for however long the player takes to render its first frame, and the

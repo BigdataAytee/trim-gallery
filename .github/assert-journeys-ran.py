@@ -19,6 +19,7 @@ right there in the XML, so a red run should hand it over rather than describe wh
 would have been. One red cycle that names the exception beats three that do not.
 """
 
+import os
 import pathlib
 import sys
 import xml.etree.ElementTree as ElementTree
@@ -55,6 +56,16 @@ REQUIRED = {
         "theOutcomeMatchesWhatTheDeviceSaysItCanEncode",
         "anEmptyWindowIsAnEmptyWindowRatherThanACrash",
     ],
+    # Long-press to Optimise, over a faked step. The encode itself cannot run here — no
+    # hardware encoder on an ATD image — so what these prove is everything between the
+    # finger and the encoder, which is where the screen is.
+    "app.trimgallery.ui.OptimiseJourneyTest": [
+        "holdingAVideoOffersToOptimiseIt",
+        "startingItReportsWhatChanged",
+        "theRunIsRecordedSoSpaceCanShowIt",
+        "aRunThatReplacedNothingNeverOffersAnUndo",
+        "undoPutsTheOriginalBack",
+    ],
     # That the night pass can build what it runs. A missing Koin definition compiles, passes
     # every unit test, and fails at 3am in a worker with no screen — so it is asked of the
     # assembled graph on a device, which is the only place the question can be put.
@@ -73,6 +84,17 @@ REQUIRED = {
 code; short enough that ten failures do not bury the one that matters."""
 MESSAGE_CHARS = 2000
 TRACE_LINES = 40
+
+"""Where to *also* write the failure, so it survives being read from a distance.
+
+This step's output sits in the middle of a job that ends in two hundred lines of submodule
+cleanup, and reading it back through the API means guessing a tail length. Four separate
+attempts to read one failure landed one line short of it, each costing a CI round trip. The
+last step of the job prints the tail of this log, so appending here puts the diagnosis
+somewhere it cannot be missed — and `failure-summary.sh` hoists `JOURNEY:` lines into its
+summary and into the check-run annotations."""
+ALSO_APPEND_TO = os.environ.get("JOURNEY_LOG", "/tmp/smoke.log")
+JOURNEY_PREFIX = "JOURNEY: "
 
 
 def main() -> int:
@@ -122,6 +144,7 @@ def main() -> int:
             print("\n".join(trace.splitlines()[:TRACE_LINES]))
     if missing or bad:
         print(f"Read {len(reports)} report(s) under {RESULTS}.")
+        _also_append(missing, bad)
         return 1
 
     print(f"All {len(expected)} screen journeys ran and passed on the device.")
@@ -130,6 +153,32 @@ def main() -> int:
         # from being read as "everything was proved here".
         print(f"Not proved on this machine ({len(stood_down)} stood down): {', '.join(sorted(set(stood_down)))}")
     return 0
+
+
+def _also_append(missing, bad) -> None:
+    """Writes one line per problem where the job's final step will echo it.
+
+    One line each, and the first line of the message, because a diagnosis worth reading
+    from a distance has to fit in a tail and in a check annotation. The full message and
+    trace are still printed above for anyone reading this step directly.
+    """
+    # Failures first, then the ones that never ran. `failure-summary.sh` keeps the first
+    # thirty matching lines, and a suite that did not run at all can produce dozens — which
+    # would push the one real failure past the cut, which is the whole bug being fixed here.
+    lines = [
+        f"{JOURNEY_PREFIX}{name}: {outcome}: {(message or detail).strip().splitlines()[0][:400]}"
+        for name, outcome, message, detail in bad
+        if (message or detail).strip()
+    ]
+    lines += [f"{JOURNEY_PREFIX}{name} did not run at all" for name in missing]
+    if not lines:
+        return
+    try:
+        with open(ALSO_APPEND_TO, "a", encoding="utf-8") as log:
+            log.write("\n" + "\n".join(lines) + "\n")
+    except OSError as failure:
+        # Never let the reporting be the thing that fails the reporting.
+        print(f"(could not append to {ALSO_APPEND_TO}: {failure})")
 
 
 if __name__ == "__main__":

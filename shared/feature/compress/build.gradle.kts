@@ -37,7 +37,10 @@ kotlin {
             dependencies {
                 implementation(libs.kotlinx.coroutines.core)
                 api(projects.shared.core.ui)
-                implementation(projects.shared.core.domain)
+                // `api`, not `implementation`: `OptimiseFlow.State` and `CompressNow.Decision`
+                // appear in `OptimiseSheet`'s signature, so a caller cannot use this screen
+                // without seeing them.
+                api(projects.shared.core.domain)
                 api(projects.shared.core.model)
                 api(compose.runtime)
                 api(compose.foundation)

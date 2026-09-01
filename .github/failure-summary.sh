@@ -28,7 +28,10 @@ set -u
 #
 # Three of those were promoted to `::error::` annotations on a run whose actual failure was
 # a link error, which is the opposite of what the annotations are for.
-pattern='^e: |FAILURE: |What went wrong|Caused by: |> Task .* FAILED|Analysis failed|VIOLATION|misconfigured|no manifests to scan|no sources to scan|^/.*\.kts?:[0-9]+:[0-9]+ |^FAILED: |^error: |[^[:space:]]+: error: |CMake Error|ninja: error|undefined (reference|symbol)'
+# `^JOURNEY: ` is `assert-journeys-ran.py` appending its one-line diagnosis here, so that a
+# failed screen journey reaches the summary and the check annotations rather than living in
+# the middle of the log where reading it back means guessing a tail length.
+pattern='^JOURNEY: |^e: |FAILURE: |What went wrong|Caused by: |> Task .* FAILED|Analysis failed|VIOLATION|misconfigured|no manifests to scan|no sources to scan|^/.*\.kts?:[0-9]+:[0-9]+ |^FAILED: |^error: |[^[:space:]]+: error: |CMake Error|ninja: error|undefined (reference|symbol)'
 
 for log in "$@"; do
   [ -f "$log" ] || continue
