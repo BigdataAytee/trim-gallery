@@ -28,6 +28,7 @@ import app.trimgallery.core.ui.theme.TrimShape
 import app.trimgallery.core.ui.theme.TrimSpacing
 import app.trimgallery.core.ui.theme.TrimTheme
 import app.trimgallery.engine.LibraryStorage
+import app.trimgallery.engine.android.CrashReports
 import app.trimgallery.engine.android.GrantedFolders
 import app.trimgallery.engine.android.NightPass
 import app.trimgallery.engine.android.StartupGuard
@@ -75,6 +76,7 @@ fun GalleryHost(
     folders: GrantedFolders = koinInject(),
     nightPass: NightPass = koinInject(),
     guard: StartupGuard = koinInject(),
+    crashes: CrashReports = koinInject(),
 ) {
     var grants by remember { mutableStateOf(folders.grants()) }
     var items by remember { mutableStateOf(emptyList<MediaItem>()) }
@@ -163,6 +165,12 @@ fun GalleryHost(
             // still be there next launch. Letting it propagate kills the process, and
             // the next launch does the same thing, which is the loop. Caught, it
             // becomes a screen the user can act on.
+            //
+            // Written to the crash store on the way past, because the recovery screen shows
+            // what happened by reading that store — and a caught exception never reaches the
+            // uncaught handler that normally fills it. Without this line the screen would
+            // open on "No crashes recorded" for the very failure that opened it.
+            crashes.record(failed)
             scanning = false
             onStartupFailure()
         }

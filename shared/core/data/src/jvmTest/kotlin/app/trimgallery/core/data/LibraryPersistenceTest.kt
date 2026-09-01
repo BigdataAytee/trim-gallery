@@ -171,7 +171,18 @@ class LibraryPersistenceTest {
         folderGrantId = GRANT,
     )
 
-    private fun repository(): TrimRepository {
+    /**
+     * A repository over a folder that has been granted, which is the only state the app is
+     * ever in when it scans.
+     *
+     * The `recordGrants` call is not scaffolding. Every item below carries
+     * `folderGrantId = GRANT`, `media_item.folder_grant_id` references `folder_grant(id)`,
+     * and foreign keys are on here now as they always were on the phone — so without it
+     * every one of these tests inserts a row pointing at a table with nothing in it, and
+     * SQLite refuses. That is exactly the crash, and these seven tests passed straight
+     * through it for as long as the driver they ran on left the constraint off.
+     */
+    private suspend fun repository(): TrimRepository {
         var minted = 0
         val driver = testDriver()
         return TrimRepository(
@@ -182,7 +193,7 @@ class LibraryPersistenceTest {
             readSettings = { Settings() },
             readTier = { Tier.FREE },
             monthStartMs = { 0L },
-        )
+        ).apply { recordGrants(listOf(grant())) }
     }
 
     private companion object {
