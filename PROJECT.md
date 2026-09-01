@@ -2795,3 +2795,39 @@ key is where the silent failures live, so it is the part that is unit tested.
 
 This also removes one contributor to the slow loading in the same report — every visible
 video tile was reading its whole file — but not the main one, which is the SAF walk.
+
+## The crash loop (1 Sep 2026)
+
+The third field build crashed on granting a folder and then on every launch. Root cause: a
+foreign key violation, from two identities for one folder.
+
+Decisions:
+
+**The tree URI is a folder grant's only identity.** `GrantedFolders` already said so;
+`saveFolderGrant` contradicted it by minting a UUID for `id` and putting the URI in
+`platform_ref`. A scan keyed on the URI could never match a row keyed on the UUID. One
+identity now, in both places.
+
+**The row is written when the grant is taken, not when Settings is visited.** `recordGrants`
+is insert-if-missing only, so running it on every launch cannot reset a mode the user chose —
+and running it on every launch is what repairs a device already in the loop.
+
+**A test driver must not be more permissive than the device.** `AndroidDatabase` sets
+`PRAGMA foreign_keys = ON`; `JdbcSqliteDriver` does not, and SQLite defaults it off. Seven
+tests inserted rows the phone would refuse and reported success. Every test now goes through
+one helper that matches the device, and one test asserts the constraint is enforced so the
+gap cannot silently reopen.
+
+**Automatic work is bracketed, and a failure inside it is not a crash.** `StartupGuard`
+marks the span the app runs on its own initiative. The mark is written with `commit()`, not
+`apply()`, because the process may die before a queued write lands. A launch that finds the
+mark set opens the recovery screen instead of repeating the work.
+
+**Two mechanisms, because they cover different deaths.** The catch handles an exception this
+code can see, and turns it into a screen in the same launch. The persisted mark handles the
+deaths it cannot — a native crash, an OOM kill, a throw on another thread.
+
+**The recovery screen starts nothing.** It shows the trace, exports it, and releases the
+folder grant, which is the input that made the work fail. Releasing touches only the
+permission: nothing in the user's folder is written, and nothing can be — there is no write
+path outside `SafeReplacerAndroid`.

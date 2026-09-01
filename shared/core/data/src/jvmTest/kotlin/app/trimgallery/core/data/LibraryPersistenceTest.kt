@@ -1,6 +1,5 @@
 package app.trimgallery.core.data
 
-import app.cash.sqldelight.driver.jdbc.sqlite.JdbcSqliteDriver
 import app.trimgallery.core.data.db.TrimDatabase
 import app.trimgallery.core.domain.billing.Tier
 import app.trimgallery.core.model.FolderGrant
@@ -174,7 +173,7 @@ class LibraryPersistenceTest {
 
     private fun repository(): TrimRepository {
         var minted = 0
-        val driver = JdbcSqliteDriver(JdbcSqliteDriver.IN_MEMORY).also { TrimDatabase.Schema.create(it) }
+        val driver = testDriver()
         return TrimRepository(
             db = TrimDatabase(driver),
             io = Dispatchers.Unconfined,

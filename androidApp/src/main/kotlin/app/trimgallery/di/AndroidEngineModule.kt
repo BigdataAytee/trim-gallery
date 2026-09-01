@@ -39,6 +39,7 @@ import app.trimgallery.engine.android.OutputProbeAndroid
 import app.trimgallery.engine.android.PhotoCodecAndroid
 import app.trimgallery.engine.android.SafStorage
 import app.trimgallery.engine.android.SafeReplacerAndroid
+import app.trimgallery.engine.android.StartupGuard
 import app.trimgallery.engine.android.UndoBinAndroid
 import app.trimgallery.engine.android.VideoThumbnails
 import app.trimgallery.engine.android.WorkManagerScheduler
@@ -126,6 +127,9 @@ val androidEngineModule = module {
     // a tile is not worth a gigabyte of reads. Bound as a singleton because it owns the
     // permit that keeps four extractions running at once rather than one per tile.
     single { VideoThumbnails(androidContext()) }
+
+    // Whether the app's own startup work finished last time (see StartupGuard).
+    single { StartupGuard(androidContext()) }
 
     single { WorkManagerScheduler(androidContext()) }
     single<NightScheduler> { get<WorkManagerScheduler>() }

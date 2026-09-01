@@ -123,7 +123,7 @@ class SpaceReadsTest {
             estSaving = estSaving,
         )
 
-    private fun driver() = JdbcSqliteDriver(JdbcSqliteDriver.IN_MEMORY).also { TrimDatabase.Schema.create(it) }
+    private fun driver() = testDriver()
 
     private fun repository(driver: JdbcSqliteDriver = driver()): TrimRepository {
         var minted = 0

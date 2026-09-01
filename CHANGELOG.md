@@ -1,5 +1,54 @@
 # Changelog
 
+## The crash loop, and the test environment that certified it
+
+Granting a folder killed the app, and every launch afterwards killed it again. Clearing app
+data was the only way out.
+
+**The cause is a foreign key.** `media_item.folder_grant_id` references `folder_grant(id)`,
+and `AndroidDatabase` turns foreign keys on because SCHEMA.md's cascades are inert without
+them. Nothing wrote a `folder_grant` row when a folder was granted — `saveFolderGrant` only
+runs when somebody picks a mode in Settings — so the first scan inserted media rows pointing
+at an empty table and SQLite refused. The grant was already persisted by then, so the next
+launch read it, rescanned, and died the same way.
+
+Underneath it is one design error: **two identities for one folder.** `GrantedFolders` uses
+the tree URI as a grant's id and argues, in its own comment, that minting a UUID "would
+create a second identity that has to be kept in step with the first" — and then
+`saveFolderGrant` minted exactly that. A row keyed on a UUID can never match a scan keyed on
+a URI. The tree URI is now the id in both places, and `recordGrants` writes the row when the
+grant is taken rather than when someone happens to visit Settings. It runs on every launch,
+so a phone already stuck in the loop repairs itself.
+
+### Why the tests were green
+
+`JdbcSqliteDriver` does not set `PRAGMA foreign_keys = ON`, and SQLite defaults it off. Seven
+tests inserted media rows with a dangling grant id and passed, because the constraint that
+fails on a phone was not being enforced in the test.
+
+Every test now builds its database through one helper that turns foreign keys on. **A test
+environment more permissive than production does not merely miss bugs; it certifies them.**
+`scanningWithoutRecordingTheGrantIsRefused` asserts the constraint is live, so if anyone ever
+turns it off again the suite says so rather than going quietly green.
+
+### A crash loop is now impossible, not just unlikely
+
+Two mechanisms, because they fail differently.
+
+`StartupGuard` records when the app begins work it started **by itself** and when that work
+finishes. A launch that finds the mark still set does not start the work again — it opens a
+recovery screen that shows the crash, offers Export diagnostics, and lets the folder grant go.
+`commit()` rather than `apply()`, because the process is about to run the thing that may kill
+it and a write still queued when it dies is a mark that was never made.
+
+And the startup work is wrapped: an exception inside it becomes that same screen in the same
+launch, so the common case never reaches a crash at all. Cancellation is re-thrown and clears
+the mark — leaving the screen is not a failure — and everything else does not clear it,
+because it is exactly the failure the guard exists for.
+
+The screen starts nothing. "Try again anyway" is there and is never taken on the user's
+behalf.
+
 ## Video tiles show a frame, and no tile is ever black
 
 The Coil setup was not missing anything — `VideoFrameDecoder` is registered and works. The

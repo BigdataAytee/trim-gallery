@@ -64,6 +64,30 @@ class GrantedFolders(private val context: Context) {
     }
 
     /**
+     * Gives every granted folder back.
+     *
+     * The escape hatch from a crash loop: a grant the app cannot scan without dying is a
+     * grant it must be able to drop without the user going to system Settings — which they
+     * cannot reach *through the app*, because the app is not staying open long enough.
+     *
+     * Only the permission is released. Nothing in the user's folder is touched, and nothing
+     * can be: this class has no write path and `SafStorage` has no `openWrite`
+     * (ARCHITECTURE.md § 2.2). The rows in our own database are left alone too — a
+     * `folder_grant` row for a folder nobody has granted simply never joins, and re-granting
+     * the folder restores whatever mode was chosen for it.
+     */
+    fun releaseAll() {
+        context.contentResolver.persistedUriPermissions.forEach { permission ->
+            runCatching {
+                context.contentResolver.releasePersistableUriPermission(
+                    permission.uri,
+                    Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_GRANT_WRITE_URI_PERMISSION,
+                )
+            }
+        }
+    }
+
+    /**
      * The granted folders with the mode the user chose for each.
      *
      * The join this class's whole design implies: the platform says *which* folders are
