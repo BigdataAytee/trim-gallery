@@ -1,5 +1,39 @@
 # Changelog
 
+## Video tiles show a frame, and no tile is ever black
+
+The Coil setup was not missing anything — `VideoFrameDecoder` is registered and works. The
+problem is what it has to do to reach a SAF document: Coil's fetch pipeline materialises the
+stream into a temp file so `MediaMetadataRetriever` has something seekable, which means
+**copying the whole video to draw one tile**. On a real library that does not fail loudly,
+it simply never finishes, and the tile stays black.
+
+Videos now take their own path, asking for the cheapest thing first:
+
+1. `DocumentsContract.getDocumentThumbnail` — the provider usually has one already and
+   returns it without opening the video at all.
+2. `MediaMetadataRetriever` over a **file descriptor** — not a path and not a copy, so it
+   reads a header and one GOP rather than a gigabyte.
+
+Either result is cached to disk as JPEG, written to a temporary name and renamed so a
+process killed mid-write cannot leave a truncated file for the next launch to decode.
+
+Four extractions at once, no more. Each holds a hardware decoder, and a grid flung through
+two hundred tiles would otherwise ask for two hundred — the same "the foreground wins the
+hardware" concern BUILD.md § 2 raises for the night pass, pointed at ourselves.
+
+**No tile is black at any point.** Every tile, photo or video, is filled with the card
+colour before anything loads, and the picture fades in over it. A video with no obtainable
+frame stays that colour: a plain empty tile is honest, a black rectangle reads as a broken
+photograph.
+
+It deliberately does *not* keep the previous item's picture while a recycled tile loads.
+That would draw the frame of a different video with nothing on screen to say so, which is
+worse than showing nothing.
+
+The cache key is split into its own object so it can be tested without a device — five
+cases, because its failures are the silent kind: a collision draws one video's frame on
+another's tile, and an over-specific key caches nothing and re-extracts forever.
 ## The app says which build it is
 
 Twice now a field report has had to be answered by comparing APK file sizes on a release

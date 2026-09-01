@@ -2763,3 +2763,35 @@ compiled in a restricted scope with no Project API, so `providers` is unavailabl
 is a script compilation error at a `.kts` top level, which the file already records once.
 Both were hit while writing this and both fail configuration, so they are now recorded twice
 — the second time next to the code that has to obey them.
+## Why videos do not go through Coil (1 Sep 2026)
+
+The second field report said video tiles were black. The Coil configuration was correct —
+`VideoFrameDecoder` registered in the application, as STACK.md intends — and that was the
+misleading part.
+
+Decisions:
+
+**Coil draws photographs; `VideoThumbnails` draws videos.** Coil can only reach a
+`content://` document through its own fetch pipeline, which spills the stream to a temp file
+to give `MediaMetadataRetriever` something seekable. That is a whole-file copy per tile. It
+does not error, it just never finishes, which is exactly what a black tile looks like.
+
+**Ask the provider before decoding anything.** `DocumentsContract.getDocumentThumbnail`
+usually returns a thumbnail MediaStore already holds, without opening the video. The
+descriptor path is the fallback, and it is a descriptor rather than a path precisely so
+nothing is copied.
+
+**Four at a time.** Each extraction holds a hardware decoder. This is the same rule the
+codec-priority skill states for the night pass, applied to ourselves: a fling through the
+grid must not ask a phone for two hundred decoders.
+
+**A tile is never black, and never someone else's picture.** The card colour fills every
+tile before anything loads and stays if no frame can be had. A recycled tile does not keep
+the previous item's frame: drawing a different video's picture with nothing on screen to say
+so is worse than drawing nothing.
+
+**The cache key is a separate object.** Everything else in that class needs a device; the
+key is where the silent failures live, so it is the part that is unit tested.
+
+This also removes one contributor to the slow loading in the same report — every visible
+video tile was reading its whole file — but not the main one, which is the SAF walk.
