@@ -2922,3 +2922,36 @@ the image loader are wrapped and their failures surfaced.
 with nothing granted; the other ran the granted path outside the real Activity. The shipped
 configuration was the intersection and nothing tested it. When two suites split a surface,
 name the case that belongs to both.
+
+## Decoding for the metrics (1 Sep 2026)
+
+**Decoders go through `MediaCodecFactory` too.** Not because of the hardware-only rule —
+BUILD.md § 2 rule 2 bans software encoding and a software decoder is ordinary — but because
+priority is the thing decoders share with encoders, and the codec-priority skill says to set
+it on every codec in the pipeline. One door means it cannot be forgotten at a call site.
+
+**Strides are read, never assumed.** `android.media.Image.Plane` reports `rowStride` and
+`pixelStride`, and on real hardware they are rarely 1. A plane read as packed shears the
+picture or mixes U into V, and neither failure crashes — both produce a number that then
+decides whether a video may be replaced. `YuvScale`'s tests are those two mistakes written
+as assertions.
+
+**Box average, not nearest-neighbour.** Nearest is cheaper and aliases detail into noise,
+which is precisely what the metric exists to detect. A scaler with its own artefacts gets
+them attributed to the encoder.
+
+**Never upscale.** A 720p source measured at 1080p scores the scaler.
+
+**Stop at the end of the window, not the end of the file.** Seeking lands on the previous
+sync frame, so frames before the window are decoded and discarded; frames after it are never
+decoded at all. Waiting for an end-of-stream flag would decode a ten-minute clip to measure
+five seconds of it.
+
+**An unreadable source is an empty window, not an exception.** A window with no frames
+scores as unusable and the file is skipped, which is the same answer as throwing would
+eventually reach, without taking the night down on the way.
+
+**This half can be proved on the emulator and the other half cannot.** Decoding is testable
+on an ATD image; hardware encoding is not, which is why `Milestone1EncodeTest` skips itself
+there. When `ProbeEncoder` lands, its first genuine exercise is a physical device, and that
+should be stated on the pull request rather than discovered later.

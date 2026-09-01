@@ -37,6 +37,16 @@ REQUIRED = {
     # The real Activity over the real graph with a folder granted, which is what a phone
     # does on every launch after the first and what no test covered until a build shipped
     # that crashed doing it.
+    # The decoder the VMAF gate reads through. It can be proved here, unlike the encoder:
+    # an ATD image has no hardware encoder but decoding in software is ordinary.
+    "app.trimgallery.engine.android.YuvSourceAndroidTest": [
+        "decodesRealFramesAtTheRequestedWidth",
+        "thePlanesAreExactlyTheSizeTheMetricsWillReadThemAs",
+        "theFramesHoldAPictureRatherThanAnEmptyBuffer",
+        "aLaterWindowIsADifferentPictureFromTheFirst",
+        "aWidthLargerThanTheSourceIsNotUpscaled",
+        "anUnreadableFileIsAnEmptyWindowRatherThanACrash",
+    ],
     "app.trimgallery.ui.MainActivityGrantedLaunchTest": [
         "theRealActivityWithAFolderGrantedDrawsTheGrid",
         "theLaunchMarkIsClearedOnceAFrameIsDrawn",

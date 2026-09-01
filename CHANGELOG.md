@@ -1,5 +1,46 @@
 # Changelog
 
+## The decoder the quality gate reads through
+
+`YuvSource` had no implementation on any platform. `ProbeAndSearch` needs it to score
+candidate settings and `Verifier` needs it to compare an encode against its original — so
+milestone 3's search and milestone 4's VMAF gate were both written, unit tested against
+fakes, and unable to run. **The check standing between a video and a worse copy of it had
+nothing to decode with.**
+
+`YuvSourceAndroid` decodes a window with `MediaExtractor` and `MediaCodec`, keeps the frames
+whose timestamps fall inside it, and scales each plane to the measurement size.
+
+### Two details that would have been wrong quietly
+
+A decoder hands back frames in whatever layout the hardware prefers, and `rowStride` and
+`pixelStride` are rarely 1: rows are padded to alignment, and chroma commonly arrives
+interleaved with U and V sharing a buffer. **Read as if packed, such a plane produces a
+picture that is sheared or half the wrong colour — and it still scores.** `YuvScale` reads
+the strides the decoder reports, and its tests are written as those two mistakes.
+
+The resampling is a box average rather than nearest-neighbour. Dropping rows and columns
+aliases fine detail into noise, and the entire purpose of the number being computed
+downstream is to notice when detail has been lost; a scaler that invented its own artefacts
+would have them measured as the encoder's.
+
+### It is proved on a real runtime, which its sibling cannot be
+
+The instrumented test decodes the golden clip on the emulator: real `MediaCodec`, real
+extractor, real plane layouts. It asserts the planes are exactly the size the metrics will
+read them as, that the frames hold a picture rather than correctly sized zeroes, and that a
+window at two seconds is a different picture from the one at zero — which is what proves the
+seek moved, rather than scoring one file three times on its opening second.
+
+That is possible because BUILD.md § 2 rule 2 bans software *encoding*, not decoding. The
+encoder half has no such luxury: an ATD image has no hardware encoder, so `ProbeEncoder`'s
+first real exercise will be a physical device.
+
+Creating a decoder now goes through `MediaCodecFactory` like every other codec. Not for the
+hardware-only rule — a software decoder is fine — but for priority: the codec-priority skill
+is explicit that a realtime-priority decoder feeding a background encoder still holds the
+slot a foreground camera wants.
+
 ## The crash report you can reach when the app will not start
 
 Three field reports asked for a stack trace. None arrived, and the reason was structural
