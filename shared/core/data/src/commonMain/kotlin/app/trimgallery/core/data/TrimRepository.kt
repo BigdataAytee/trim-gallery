@@ -255,27 +255,6 @@ class TrimRepository(
         }
     }
 
-    private fun toFolderGrant(
-        id: String,
-        platformRef: String,
-        displayName: String?,
-        mode: String,
-        offloadRef: String?,
-        enabled: Long,
-        lastScannedAt: Long?,
-    ) = FolderGrant(
-        id = id,
-        platformRef = MediaRef(platformRef),
-        // Not `valueOf`: an unrecognised mode — a row written by a newer build, or a
-        // hand-edited database — must not throw on the way into Settings, and KEEP is the
-        // reading that can never remove a file.
-        mode = FolderMode.entries.firstOrNull { it.name == mode } ?: FolderMode.KEEP,
-        displayName = displayName,
-        offloadRef = offloadRef?.let(::MediaRef),
-        enabled = enabled == 1L,
-        lastScannedAt = lastScannedAt,
-    )
-
     // ------------------------------------------------------------- TriageStep.Sink
 
     override suspend fun stored(grants: List<FolderGrant>): List<MediaItem> = withContext(io) {
@@ -440,6 +419,28 @@ class TrimRepository(
     }
 
     // ------------------------------------------------------------------ mapping
+
+    @Suppress("LongParameterList")
+    private fun toFolderGrant(
+        id: String,
+        platformRef: String,
+        displayName: String?,
+        mode: String,
+        offloadRef: String?,
+        enabled: Long,
+        lastScannedAt: Long?,
+    ) = FolderGrant(
+        id = id,
+        platformRef = MediaRef(platformRef),
+        // Not `valueOf`: an unrecognised mode — a row written by a newer build, or a
+        // hand-edited database — must not throw on the way into Settings, and KEEP is the
+        // reading that can never remove a file.
+        mode = FolderMode.entries.firstOrNull { it.name == mode } ?: FolderMode.KEEP,
+        displayName = displayName,
+        offloadRef = offloadRef?.let(::MediaRef),
+        enabled = enabled == 1L,
+        lastScannedAt = lastScannedAt,
+    )
 
     @Suppress("LongParameterList")
     private fun toUndoEntry(
