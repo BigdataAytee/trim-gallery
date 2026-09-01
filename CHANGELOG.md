@@ -1,5 +1,60 @@
 # Changelog
 
+## Settings, and a way to reach it
+
+There was no way to change anything. The app read one folder, ran on defaults, and had no
+screen that could say otherwise — which is what "no way to optimise anything" comes down to
+first.
+
+Settings is now a screen: the granted folders with a mode each, the quality target, whether
+to wait for a full battery, and the nightly limit. It is reached from a pill over the
+top-right of the grid, and the system back gesture closes it. Two screens do not need a
+navigation library, so there is a boolean in `TrimApp` instead.
+
+### The folder modes, and which of them can lose a file
+
+They are not three equal radio buttons. *Keep originals* is always available and never
+removes anything. *Free the space* says, in the row rather than a help page, that it deletes
+originals for good after the retention period — in the warning colour, because BUILD.md § 6
+requires that consequence shown and "Free space" as a label tells nobody what it costs.
+*Move originals to another drive* names the drive it would move them to, and is refused
+outright when there is no second grant on a different volume: a folder on the same disk
+frees nothing, and offering it would be a lie about where the space came from.
+
+**The choice is stored but not yet obeyed.** The night pass still treats every folder as
+Keep, which is the safe direction — Keep never removes an original — but choosing Offload or
+Free does not change what runs tonight until the replace path reads the mode. Recorded in
+PROJECT.md rather than left to be discovered.
+
+### Where the choice lives
+
+`folder_grant` has been in SCHEMA.md since milestone 4 with `platform_ref` unique, a mode, a
+display name and an offload target — and exactly one query against it, a SELECT, with no
+writer anywhere. Nothing had ever written a row.
+
+It has a writer now, keyed on the tree URI, which is the identity the platform and the
+database already share. The platform stays the source of truth for *which* folders are
+granted — persisted URI permissions survive a cleared database and are the only thing that
+decides whether a scan succeeds — and the row says what to do with the originals inside one.
+A row left behind by a revoked grant simply never joins, so re-granting a folder restores
+the mode chosen for it.
+
+### Two things found on the way
+
+**The folder-help sheet was being drawn underneath the gallery.** Compose draws siblings in
+the order they are emitted, and the sheet was emitted first, so the grid's opaque background
+painted straight over it. The message added last week could not have been read by anybody.
+It is now emitted last, inside a Box, and both screens that ask for a folder go through one
+`rememberFolderPicker` — the alternative being two copies of the take-grant, schedule and
+help logic, one of which eventually forgets a step.
+
+**CHANGELOG.md had conflict markers committed in it**, from a merge in the ktlint change.
+Removed, keeping both sections.
+
+`DiagnosticsButton` has moved to Settings, where LAUNCH.md § Support puts it. It is one
+screen away from the gallery rather than on it, which is enough for the crash it is for: a
+viewer that dies on a tap leaves the grid rendering perfectly on the next launch.
+
 ## The night pass is scheduled
 
 `NightScheduler.schedule` was written in milestone 5 — periodic request, the four
@@ -37,7 +92,6 @@ cannot drift in.
 concrete class what WorkManager holds — a question the port has no business answering on
 iOS. The second definition resolves the first, so it is one instance.
 
-<<<<<<< HEAD
 ## The folder picker says which folders Android blocks
 
 "Can't use this folder", with nothing after it. Partly Android, partly ours.
@@ -64,11 +118,11 @@ records why and what would change the answer.
 
 `sharedTest` runs the shared modules and stops, so **androidApp's unit tests had never been
 run by CI**. A test written beside the Android code executed on no machine. The `android`
-job now runs `:androidApp:testDebugUnitTest`, and `FolderChoice`'s rule is split so the part
-worth testing is a pure function over a document id — six cases, including the one that
-matters most: `Download/Holiday` must *not* be refused, because it is the workaround the
-sheet recommends.
-=======
+job now runs `:androidApp:test`, and `FolderChoice`'s rule is split so the part worth
+testing is a pure function over a document id — six cases, including the one that matters
+most: `Download/Holiday` must *not* be refused, because it is the workaround the sheet
+recommends.
+
 ## ktlint that can actually run here
 
 Five ktlint failures reached CI over two pull requests, each a ten-minute round trip to be
@@ -89,7 +143,6 @@ Found while doing it: **`build-logic` is not linted by anything.** It is an incl
 not a subproject, so `subprojects { }` never applies ktlint to it — 85 violations sit there
 today. That is where the three build guards live. Recorded in PROJECT.md; excluded from the
 script so it agrees with CI exactly, rather than fixed in a commit about tooling.
->>>>>>> origin/main
 
 ## The viewer, and the crash that hid it
 

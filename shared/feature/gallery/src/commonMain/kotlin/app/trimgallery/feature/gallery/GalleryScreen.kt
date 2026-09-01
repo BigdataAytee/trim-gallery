@@ -82,6 +82,15 @@ fun GalleryScreen(
     preview: @Composable (MediaItem) -> Unit = {},
     /** Per-item progress for the ring, when the pipeline can say. Null means "busy". */
     progressOf: (MediaItem) -> Float? = { null },
+    /**
+     * The host's own controls over the grid — on Android, the way in to Settings.
+     *
+     * A slot rather than something the caller stacks on top of this screen, because *where*
+     * it goes in the stack is this screen's business: chrome belongs over the grid and under
+     * the viewer, and a control the host drew above everything would float over an opened
+     * photograph.
+     */
+    chrome: @Composable BoxScope.() -> Unit = {},
     artwork: @Composable (MediaItem) -> Unit,
 ) {
     val colors = TrimTheme.colors
@@ -134,6 +143,7 @@ fun GalleryScreen(
     if (items.isEmpty()) {
         Box(modifier.fillMaxSize().background(colors.page), contentAlignment = Alignment.Center) {
             emptyState()
+            chrome()
         }
         return
     }
@@ -196,6 +206,8 @@ fun GalleryScreen(
             },
             modifier = Modifier.align(Alignment.CenterEnd),
         )
+
+        chrome()
 
         open?.let { item ->
             // The grid's own order, flattened. The pager has to walk the library in the

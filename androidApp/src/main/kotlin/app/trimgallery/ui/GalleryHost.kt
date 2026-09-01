@@ -1,10 +1,9 @@
 package app.trimgallery.ui
 
-import androidx.activity.compose.rememberLauncherForActivityResult
-import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxScope
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
@@ -27,7 +26,6 @@ import app.trimgallery.core.ui.theme.TrimShape
 import app.trimgallery.core.ui.theme.TrimSpacing
 import app.trimgallery.core.ui.theme.TrimTheme
 import app.trimgallery.engine.LibraryStorage
-import app.trimgallery.engine.android.FolderChoice
 import app.trimgallery.engine.android.GrantedFolders
 import app.trimgallery.engine.android.NightPass
 import app.trimgallery.feature.gallery.GalleryScreen
@@ -48,13 +46,21 @@ import kotlin.time.Instant
  * up, not that anything is on screen. Every screen under `shared/feature` was written and
  * unit tested and none of them had ever been mounted.
  *
- * This is the smallest honest host: grant a folder, walk it, show what is in it. No
- * database, no night pass, no navigation — those arrive with the screens that need them.
+ * This is the smallest honest host: grant a folder, walk it, show what is in it. Settings
+ * is a sibling rather than a child — `TrimApp` owns which of the two is on screen — so
+ * this file still has no navigation of its own.
  */
 @UnstableApi
 @Composable
 fun GalleryHost(
     modifier: Modifier = Modifier,
+    /**
+     * Controls drawn over the grid and under the viewer — the way in to Settings.
+     *
+     * Passed down rather than stacked on top of this host, because a control drawn above
+     * everything would float over an opened photograph. `GalleryScreen` owns the order.
+     */
+    chrome: @Composable BoxScope.() -> Unit = {},
     storage: LibraryStorage = koinInject(),
     folders: GrantedFolders = koinInject(),
     nightPass: NightPass = koinInject(),
@@ -64,39 +70,7 @@ fun GalleryHost(
     var scanning by remember { mutableStateOf(false) }
     var failure by remember { mutableStateOf<String?>(null) }
 
-    // Null means one of two things the app cannot tell apart: Android refused the folder
-    // (the picker greys out "Use this folder" for the three locations in FolderChoice, so
-    // the only way out is to back away), or the user changed their mind. Either way the
-    // next screen has to be help rather than an accusation.
-    var help by remember { mutableStateOf<HelpState>(HelpState.Hidden) }
-    val picker = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocumentTree()) { uri ->
-        when {
-            uri == null -> help = HelpState.Shown(refusal = null)
-            else -> {
-                val refusal = FolderChoice.refusalFor(uri)
-                if (refusal != null) {
-                    // Reachable when a picker allows what the platform documents as
-                    // unpickable. Taking the grant would leave a folder that is stored,
-                    // looks granted, and scans nothing.
-                    help = HelpState.Shown(refusal)
-                } else {
-                    folders.take(uri)
-                    grants = folders.grants()
-                    help = HelpState.Hidden
-                    // The first moment the app has anything to work on. Until this call
-                    // existed, granting a folder scheduled nothing: NightScheduler.schedule
-                    // had no caller anywhere in the app, so the night pass had never run on
-                    // any device.
-                    nightPass.sync()
-                }
-            }
-        }
-    }
-
-    // Opening at DCIM/Camera rather than wherever the picker last was. It is a hint, not a
-    // guarantee — a device without that folder opens where it likes — but it means the
-    // ordinary path never meets a blocked folder in the first place.
-    fun choose() = picker.launch(FolderChoice.cameraFolderHint())
+    val picker = rememberFolderPicker(folders, nightPass) { grants = it }
 
     LaunchedEffect(grants) {
         if (grants.isEmpty()) {
@@ -127,36 +101,28 @@ fun GalleryHost(
         scanning = false
     }
 
-    (help as? HelpState.Shown)?.let { shown ->
-        FolderHelpSheet(
-            refusal = shown.refusal,
-            onOpenCamera = {
-                help = HelpState.Hidden
-                choose()
-            },
-            onPickAnother = {
-                help = HelpState.Hidden
-                // Deliberately no hint here: this is the escape hatch for someone whose
-                // photos are not in DCIM/Camera, and reopening at Camera every time would
-                // make it the button that does not do what it says.
-                picker.launch(null)
-            },
-        )
-    }
-
-    when {
-        grants.isEmpty() -> NoFolderYet(modifier) { choose() }
-        else -> GalleryScreen(
-            items = items,
-            processingIds = emptySet(),
-            today = Clock.System.todayIn(TimeZone.currentSystemDefault()),
-            timeZone = TimeZone.currentSystemDefault(),
-            modifier = modifier,
-            emptyState = { ScanState(scanning = scanning, failure = failure) { choose() } },
-            video = { VideoPlayer(it, modifier = Modifier.fillMaxSize()) },
-            preview = { TilePreview(it, modifier = Modifier.fillMaxSize()) },
-            artwork = { Thumbnail(it) },
-        )
+    // A Box, and the sheet last, because Compose draws siblings in the order they are
+    // emitted: the help sheet used to be emitted before the grid, which meant the grid's
+    // opaque background was painted straight over it and the sheet was never seen.
+    Box(modifier.fillMaxSize()) {
+        when {
+            grants.isEmpty() -> {
+                NoFolderYet { picker.choose() }
+                chrome()
+            }
+            else -> GalleryScreen(
+                items = items,
+                processingIds = emptySet(),
+                today = Clock.System.todayIn(TimeZone.currentSystemDefault()),
+                timeZone = TimeZone.currentSystemDefault(),
+                emptyState = { ScanState(scanning = scanning, failure = failure) { picker.choose() } },
+                video = { VideoPlayer(it, modifier = Modifier.fillMaxSize()) },
+                preview = { TilePreview(it, modifier = Modifier.fillMaxSize()) },
+                chrome = chrome,
+                artwork = { Thumbnail(it) },
+            )
+        }
+        picker.HelpSheet()
     }
 }
 
@@ -188,10 +154,10 @@ private suspend fun List<MediaItem>.sortedNewestFirst(): List<MediaItem> =
     }
 
 @Composable
-private fun NoFolderYet(modifier: Modifier = Modifier, onChoose: () -> Unit) {
+private fun NoFolderYet(onChoose: () -> Unit) {
     val colors = TrimTheme.colors
     Box(
-        modifier = modifier.fillMaxSize().background(colors.page),
+        modifier = Modifier.fillMaxSize().background(colors.page),
         contentAlignment = Alignment.Center,
     ) {
         Column(
@@ -219,10 +185,6 @@ private fun NoFolderYet(modifier: Modifier = Modifier, onChoose: () -> Unit) {
                     style = TrimTheme.typography.label.copy(color = colors.accentOn),
                 )
             }
-            // Only renders when a crash has been recorded. On the first-run screen because
-            // a crash loop may never reach the grid, and the report has to be reachable
-            // from wherever the app can still get to.
-            DiagnosticsButton()
         }
     }
 }
@@ -254,14 +216,7 @@ private fun ScanState(scanning: Boolean, failure: String?, onChoose: () -> Unit)
                 )
             }
         }
-        DiagnosticsButton()
     }
-}
-
-/** Whether the folder-help sheet is up, and what it should lead with. */
-private sealed interface HelpState {
-    data object Hidden : HelpState
-    data class Shown(val refusal: FolderChoice.Refusal?) : HelpState
 }
 
 /** How many items to find before the grid first fills in, while a scan is still walking. */

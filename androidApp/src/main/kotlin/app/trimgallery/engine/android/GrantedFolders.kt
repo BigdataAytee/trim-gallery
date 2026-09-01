@@ -4,6 +4,7 @@ import android.content.Context
 import android.content.Intent
 import android.net.Uri
 import androidx.documentfile.provider.DocumentFile
+import app.trimgallery.core.data.TrimRepository
 import app.trimgallery.core.model.FolderGrant
 import app.trimgallery.core.model.FolderMode
 import app.trimgallery.core.model.MediaRef
@@ -60,6 +61,32 @@ class GrantedFolders(private val context: Context) {
             uri,
             Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_GRANT_WRITE_URI_PERMISSION,
         )
+    }
+
+    /**
+     * The granted folders with the mode the user chose for each.
+     *
+     * The join this class's whole design implies: the platform says *which* folders are
+     * granted, the database says what to do with the originals inside them, and the tree
+     * URI is the key both sides share. A stored row for a folder that is no longer granted
+     * simply never joins — harmless, and it means re-granting restores the choice.
+     *
+     * Suspending, because it reads the database. [grants] stays synchronous for the
+     * callers that only need to know whether anything is granted at all — the scan and the
+     * night-pass scheduler — and neither of those cares about the mode.
+     *
+     * **Known gap:** the night pass therefore still treats every folder as
+     * [FolderMode.KEEP] until the replace path reads this. That is the safe direction —
+     * KEEP never removes an original — but it does mean choosing Offload or Free here does
+     * not yet change what the night pass does. Recorded in PROJECT.md.
+     */
+    suspend fun withModes(repository: TrimRepository): List<FolderGrant> = grants().map { grant ->
+        val stored = repository.folderGrant(grant.platformRef.value) ?: return@map grant
+        // The platform's name wins *when it has one*: it is read live, so a folder renamed
+        // since the row was written shows its current name. When the provider refuses a
+        // name — which [displayName] catches rather than throws — the stored one is still
+        // better than none.
+        stored.copy(displayName = grant.displayName ?: stored.displayName)
     }
 
     /** The folder's own name, for the UI. Null when the provider will not give one. */

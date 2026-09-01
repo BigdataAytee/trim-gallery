@@ -17,7 +17,8 @@ import app.trimgallery.core.ui.theme.TrimTheme
  * share sheets, permission dialogs, document pickers, biometrics — and to feed the
  * design system the platform's accessibility settings.
  *
- * The gallery grid and viewer are milestone 8; `GalleryHost` mounts them.
+ * The gallery grid and viewer are milestone 8; `TrimApp` mounts them, and owns which of
+ * the app's screens is on top.
  */
 @UnstableApi
 class MainActivity : ComponentActivity() {
@@ -31,7 +32,7 @@ class MainActivity : ComponentActivity() {
                 dark = true,
                 reduceMotion = isReduceMotionEnabled(),
             ) {
-                GalleryHost(modifier = Modifier.fillMaxSize())
+                TrimApp(modifier = Modifier.fillMaxSize())
             }
         }
     }

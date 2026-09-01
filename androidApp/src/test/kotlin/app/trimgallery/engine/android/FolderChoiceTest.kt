@@ -47,4 +47,28 @@ class FolderChoiceTest {
     fun allowsAFolderMerelyStartingWithTheWordDownload() {
         assertNull(FolderChoice.refusalForDocumentId("primary:Downloads from Anna"))
     }
+
+    @Test
+    fun readsTheVolumeOutOfADocumentId() {
+        assertEquals("primary", FolderChoice.volumeOfDocumentId("primary:DCIM/Camera"))
+        assertEquals("1A2B-3C4D", FolderChoice.volumeOfDocumentId("1A2B-3C4D:Backup"))
+    }
+
+    @Test
+    fun twoFoldersOnOneDriveShareAVolume() {
+        // What decides whether offload has anywhere to go. If these ever came back
+        // different, the app would offer to move originals to the same disk they are on
+        // and free nothing at all.
+        assertEquals(
+            FolderChoice.volumeOfDocumentId("primary:DCIM/Camera"),
+            FolderChoice.volumeOfDocumentId("primary:Pictures/Screenshots"),
+        )
+    }
+
+    @Test
+    fun reportsNoVolumeForAnIdWithoutOne() {
+        // Rather than "": two unreadable ids must not look like two drives.
+        assertNull(FolderChoice.volumeOfDocumentId("DCIM"))
+        assertNull(FolderChoice.volumeOfDocumentId(""))
+    }
 }

@@ -446,3 +446,32 @@ SELECT COUNT(*) FROM job WHERE user_initiated = 1 AND started_at >= ?;
 
 selectFolderGrants:
 SELECT * FROM folder_grant WHERE enabled = 1;
+
+-- Everything the app knows about one grant, found by the tree URI.
+--
+-- `platform_ref` rather than `id`: the platform owns which folders are granted (Android's
+-- persisted URI permissions), and the tree URI is the only identity both sides share. A
+-- row keyed on our own id would need a second lookup to answer "what did the user choose
+-- for *this* folder", and would go stale the moment a grant was revoked and re-taken.
+selectFolderGrantByRef:
+SELECT * FROM folder_grant WHERE platform_ref = ?;
+
+-- Writes what the user chose for a folder, as two statements run in one transaction.
+--
+-- Not `ON CONFLICT ... DO UPDATE`: SQLite gained upsert in 3.24 and this project's
+-- SQLDelight dialect is 3.18, which is the floor the schema is verified against rather
+-- than whatever a particular Android release happens to ship. `INSERT OR IGNORE` then
+-- `UPDATE` reaches the same end state on any version.
+--
+-- Not `INSERT OR REPLACE` either: that deletes the conflicting row and inserts a new one,
+-- which would throw away the row's id and its `last_scanned_at`.
+insertFolderGrantIfMissing:
+INSERT OR IGNORE INTO folder_grant (id, platform_ref, display_name, mode, offload_ref, enabled, last_scanned_at)
+VALUES (?, ?, ?, ?, ?, 1, NULL);
+
+-- The second half. Re-granting a folder that was revoked restores the mode chosen for it
+-- rather than silently resetting to KEEP, so `enabled` goes back to 1 here too.
+updateFolderGrant:
+UPDATE folder_grant
+SET display_name = ?, mode = ?, offload_ref = ?, enabled = 1
+WHERE platform_ref = ?;

@@ -71,6 +71,29 @@ object FolderChoice {
     }
 
     /**
+     * Which storage volume a granted tree is on, or null when the id cannot be read.
+     *
+     * The volume is the half of a document id before the colon: `primary` for internal
+     * storage, a filesystem UUID like `1A2B-3C4D` for an SD card or a USB drive. Two
+     * grants with different volumes are on different physical drives, which is the only
+     * question offload has to answer — copying an original to another folder on the *same*
+     * drive frees nothing at all.
+     */
+    fun volumeOf(tree: Uri): String? = runCatching { DocumentsContract.getTreeDocumentId(tree) }
+        .getOrNull()
+        ?.let(::volumeOfDocumentId)
+
+    /**
+     * The same rule over the document id alone, testable off a device for the reason
+     * [refusalForDocumentId] gives.
+     *
+     * An id with no colon at all has no volume to report, rather than being reported as a
+     * volume of its own: guessing here would make two unreadable ids look like two drives.
+     */
+    fun volumeOfDocumentId(documentId: String): String? =
+        documentId.substringBefore(':', missingDelimiterValue = "").ifEmpty { null }
+
+    /**
      * Where to open the picker, so the common case never meets a blocked folder.
      *
      * `EXTRA_INITIAL_URI` is a hint: a device that has no `DCIM/Camera` opens wherever it

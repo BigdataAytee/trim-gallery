@@ -2486,3 +2486,92 @@ number can appear in the section.
 **`WorkManagerScheduler` is bound as both itself and the port.** The pipeline must depend
 on `NightScheduler` alone; the diagnostics export needs to ask WorkManager a question that
 has no meaning on iOS. Two definitions, one instance.
+
+## Settings, and where a folder's mode lives (1 Sep 2026)
+
+The fourth thing the field report asked for, and the first half of it: there was no screen
+that could change anything.
+
+Decisions:
+
+**The folder's mode is keyed by tree URI, in `folder_grant`.** No new table was needed —
+`folder_grant` has been in SCHEMA.md since milestone 4, with `platform_ref TEXT NOT NULL
+UNIQUE` and columns for mode, display name and offload target — but it had exactly one
+query, a SELECT, and no writer anywhere, so no row had ever been written. The split that
+now holds: **the platform owns which folders are granted, the database owns what to do with
+the originals inside them, and the tree URI is the key both sides share.** Persisted URI
+permissions survive a cleared database and are the only thing that decides whether a scan
+succeeds, so they cannot be a mirror of our own table; and a row orphaned by a revoked grant
+is harmless, because re-granting the folder joins it again and restores the mode.
+
+**Choosing a mode is stored but does not yet change behaviour.** The night pass reads
+`GrantedFolders.grants()`, which reports `KEEP` for everything, until the replace path reads
+the stored mode. That is the safe direction and it is documented in three places rather than
+implied: Keep never removes an original, so the gap costs space, not files.
+
+**Offload is refused rather than guessed.** It needs a second granted tree on a *different*
+volume, decided by the volume half of the document id — `primary` for internal storage, a
+filesystem UUID for a card or a drive. Copying an original to another folder on the same
+disk frees nothing, so offering it would misreport where the space came from. A volume the
+app cannot read is not treated as a different drive. Where several qualify, the first wins;
+choosing between two removable drives needs a picker that does not exist yet, and it is
+recorded here rather than guessed at.
+
+**Free space is warned in the row, in the warning colour.** BUILD.md § 6 requires the
+warning; a radio button reading "Free space" tells the user nothing about what it costs.
+
+**An unrecognised mode string reads as KEEP, not an exception.** `FolderMode.valueOf` on a
+row written by a newer build would crash the settings screen; the fallback is the mode that
+cannot remove a file. There is a test that plants `ARCHIVE_TO_MARS` in the row and asserts
+the reading.
+
+**The write is `INSERT OR IGNORE` then `UPDATE`, in one transaction, not an upsert.** SQLite
+gained `ON CONFLICT ... DO UPDATE` in 3.24 and this project's SQLDelight dialect is 3.18 —
+the floor the schema is verified against, rather than whatever a given Android release
+happens to ship. `INSERT OR REPLACE` was the other tempting shortcut and is worse: it
+deletes the conflicting row and inserts a new one, throwing away the row's id and its
+`last_scanned_at`. The test that would have caught it asserts the id is unchanged across a
+second save.
+
+**Two screens, and no navigation library.** A boolean in `TrimApp` is the whole of a back
+stack of depth one, and STACK.md fixes the dependency list. It is `remember`, not
+`rememberSaveable`, so rotating in Settings returns to the photographs: `rememberSaveable`
+lives in `runtime-saveable`, which nothing on this classpath exports — `compose.runtime`,
+`compose.foundation` and `compose.animation` all omit it — and keeping the flag across a
+configuration change means adding a dependency. Follow-up, not a silent addition.
+
+**Settings is reached from a pill over the grid, not a toolbar.** BUILD.md § 9 wants the
+photographs edge to edge, and a permanent bar spends a strip of every screen on a control
+used twice a month.
+
+### Two defects this uncovered
+
+**The folder-help sheet was drawn underneath the gallery.** Compose draws siblings in
+emission order, and `GalleryHost` emitted the sheet before the screen; the grid's opaque
+background painted over it. The message shipped in the previous change could never have been
+read. Fixed by emitting it last inside a Box, and by moving the whole picker — take the
+grant, schedule the night pass, show the sheet — into one `rememberFolderPicker` that both
+screens use, so the second copy cannot drift from the first.
+
+**CHANGELOG.md had merge conflict markers committed in it.** Landed in the ktlint change and
+survived two reviews. Removed, keeping both sections. Nothing in CI reads the changelog,
+which is exactly why it went unnoticed.
+
+**Every folder defaults to Keep, which BUILD.md § 6 does not say.** The spec makes
+*Offload* the default where external storage exists and *Free space* the default
+otherwise — so on a phone with no SD card, a folder nobody has configured would delete its
+originals thirty days after each replace. That is defensible as a product decision and it is
+not one to make silently on the user's behalf inside a change about a settings screen, so
+the shipped default is Keep for everything and this paragraph is the flag. It costs space,
+never files, and it costs nothing at all today: nothing acts on the mode yet. **Open for the
+owner to decide** before the replace path starts reading modes.
+
+### Still open after this
+
+- Whether Offload/Free should be the default per BUILD.md § 6, above.
+- The Space screen and Compress now — the rest of the fourth item.
+- ~~`shared/core/data` has no database test.~~ It does now: the in-memory JDBC driver was
+  already declared in `jvmTest` and had never been used, so `FolderGrantStoreTest` runs six
+  cases against the shipped schema. It is the first test in this project to touch a
+  database at all.
+- Choosing *which* drive offload uses, when more than one qualifies.

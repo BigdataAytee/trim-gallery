@@ -4,6 +4,7 @@ import app.trimgallery.core.data.db.TrimDatabase
 import app.trimgallery.core.domain.billing.Tier
 import app.trimgallery.core.model.FaceEmbedding
 import app.trimgallery.core.model.FolderGrant
+import app.trimgallery.core.model.FolderMode
 import app.trimgallery.core.model.GeoPoint
 import app.trimgallery.core.model.Label
 import app.trimgallery.core.model.MediaItem
@@ -212,6 +213,48 @@ class TrimRepository(
         }
     }
 
+    // ------------------------------------------------------------- folder grants
+
+    /**
+     * What the user chose for a granted folder, or null if they have never said.
+     *
+     * Keyed on the tree URI, because that is the identity the platform and this database
+     * share. The platform decides *which* folders are granted; this row only carries what
+     * to do with the originals inside one.
+     */
+    suspend fun folderGrant(platformRef: String): FolderGrant? = withContext(io) {
+        queries.selectFolderGrantByRef(platformRef, ::toFolderGrant).executeAsOneOrNull()
+    }
+
+    /**
+     * Records what the user chose. Upserts on the tree URI.
+     *
+     * A grant revoked in system Settings leaves this row behind, deliberately: re-granting
+     * the same folder restores the mode rather than silently resetting it to KEEP, which
+     * is the behaviour somebody who granted, revoked and re-granted would expect.
+     */
+    suspend fun saveFolderGrant(grant: FolderGrant): Unit = withContext(io) {
+        queries.transaction {
+            // Insert-or-ignore then update, in that order: the insert is a no-op when the
+            // folder already has a row, and the update then carries the choice in either
+            // case. An existing row keeps the id it was minted with, and keeps whatever
+            // `last_scanned_at` the scanner has written.
+            queries.insertFolderGrantIfMissing(
+                id = grant.id.ifEmpty { newId() },
+                platform_ref = grant.platformRef.value,
+                display_name = grant.displayName,
+                mode = grant.mode.name,
+                offload_ref = grant.offloadRef?.value,
+            )
+            queries.updateFolderGrant(
+                display_name = grant.displayName,
+                mode = grant.mode.name,
+                offload_ref = grant.offloadRef?.value,
+                platform_ref = grant.platformRef.value,
+            )
+        }
+    }
+
     // ------------------------------------------------------------- TriageStep.Sink
 
     override suspend fun stored(grants: List<FolderGrant>): List<MediaItem> = withContext(io) {
@@ -376,6 +419,28 @@ class TrimRepository(
     }
 
     // ------------------------------------------------------------------ mapping
+
+    @Suppress("LongParameterList")
+    private fun toFolderGrant(
+        id: String,
+        platformRef: String,
+        displayName: String?,
+        mode: String,
+        offloadRef: String?,
+        enabled: Long,
+        lastScannedAt: Long?,
+    ) = FolderGrant(
+        id = id,
+        platformRef = MediaRef(platformRef),
+        // Not `valueOf`: an unrecognised mode — a row written by a newer build, or a
+        // hand-edited database — must not throw on the way into Settings, and KEEP is the
+        // reading that can never remove a file.
+        mode = FolderMode.entries.firstOrNull { it.name == mode } ?: FolderMode.KEEP,
+        displayName = displayName,
+        offloadRef = offloadRef?.let(::MediaRef),
+        enabled = enabled == 1L,
+        lastScannedAt = lastScannedAt,
+    )
 
     @Suppress("LongParameterList")
     private fun toUndoEntry(
