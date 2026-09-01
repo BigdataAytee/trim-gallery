@@ -2548,8 +2548,18 @@ screens use, so the second copy cannot drift from the first.
 survived two reviews. Removed, keeping both sections. Nothing in CI reads the changelog,
 which is exactly why it went unnoticed.
 
+**Every folder defaults to Keep, which BUILD.md § 6 does not say.** The spec makes
+*Offload* the default where external storage exists and *Free space* the default
+otherwise — so on a phone with no SD card, a folder nobody has configured would delete its
+originals thirty days after each replace. That is defensible as a product decision and it is
+not one to make silently on the user's behalf inside a change about a settings screen, so
+the shipped default is Keep for everything and this paragraph is the flag. It costs space,
+never files, and it costs nothing at all today: nothing acts on the mode yet. **Open for the
+owner to decide** before the replace path starts reading modes.
+
 ### Still open after this
 
+- Whether Offload/Free should be the default per BUILD.md § 6, above.
 - The Space screen and Compress now — the rest of the fourth item.
 - `shared/core/data` has no database test: an in-memory SQLDelight driver is a dependency,
   so the upsert's behaviour (keeps the row id, updates the mode) is unproven by a test.
