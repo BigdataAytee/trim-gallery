@@ -40,6 +40,7 @@ import app.trimgallery.engine.android.PhotoCodecAndroid
 import app.trimgallery.engine.android.SafStorage
 import app.trimgallery.engine.android.SafeReplacerAndroid
 import app.trimgallery.engine.android.UndoBinAndroid
+import app.trimgallery.engine.android.VideoThumbnails
 import app.trimgallery.engine.android.WorkManagerScheduler
 import kotlinx.coroutines.Dispatchers
 import kotlinx.datetime.LocalDate
@@ -119,6 +120,13 @@ val androidEngineModule = module {
     // not know what schedules it; the diagnostics export asks the concrete class what
     // WorkManager currently holds, which is a question the port has no business answering
     // on iOS. Same instance either way — the second definition resolves the first.
+    // --- The grid's video frames --------------------------------------------
+    //
+    // Not a Coil component: Coil can only reach a `content://` document by copying it, and
+    // a tile is not worth a gigabyte of reads. Bound as a singleton because it owns the
+    // permit that keeps four extractions running at once rather than one per tile.
+    single { VideoThumbnails(androidContext()) }
+
     single { WorkManagerScheduler(androidContext()) }
     single<NightScheduler> { get<WorkManagerScheduler>() }
 
