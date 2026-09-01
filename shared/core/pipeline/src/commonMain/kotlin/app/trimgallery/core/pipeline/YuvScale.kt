@@ -46,33 +46,63 @@ object YuvScale {
         dstW: Int,
         dstH: Int,
     ) {
-        if (dstW <= 0 || dstH <= 0 || srcW <= 0 || srcH <= 0) return
+        if (srcW <= 0 || srcH <= 0) return
+        if (dstW <= 0 || dstH <= 0) return
 
         for (dy in 0 until dstH) {
-            val y0 = dy * srcH / dstH
-            val y1 = (((dy + 1) * srcH + dstH - 1) / dstH).coerceAtMost(srcH).coerceAtLeast(y0 + 1)
+            val top = dy * srcH / dstH
+            val bottom = boxEnd(dy, srcH, dstH, top)
 
             for (dx in 0 until dstW) {
-                val x0 = dx * srcW / dstW
-                val x1 = (((dx + 1) * srcW + dstW - 1) / dstW).coerceAtMost(srcW).coerceAtLeast(x0 + 1)
-
-                var total = 0
-                var count = 0
-                for (sy in y0 until y1) {
-                    val row = sy * rowStride
-                    for (sx in x0 until x1) {
-                        val index = row + sx * pixelStride
-                        // A short final row is a truncated buffer, not a reason to crash:
-                        // the frames this runs on come from a decoder on someone's phone.
-                        if (index < src.size) {
-                            total += src[index].toInt() and BYTE_MASK
-                            count++
-                        }
-                    }
-                }
-                dst[dstOffset + dy * dstW + dx] = if (count == 0) 0 else (total / count).toByte()
+                val left = dx * srcW / dstW
+                val right = boxEnd(dx, srcW, dstW, left)
+                dst[dstOffset + dy * dstW + dx] = mean(src, rowStride, pixelStride, left, right, top, bottom)
             }
         }
+    }
+
+    /**
+     * The exclusive end of the source box a destination pixel covers, never empty.
+     *
+     * Rounded up so that no source row or column falls between two destination pixels and is
+     * simply never read — over a whole plane that is a subtle sharpening, which the metric
+     * downstream would attribute to the encoder.
+     */
+    private fun boxEnd(index: Int, srcSize: Int, dstSize: Int, start: Int): Int =
+        (((index + 1) * srcSize + dstSize - 1) / dstSize).coerceAtMost(srcSize).coerceAtLeast(start + 1)
+
+    /**
+     * The mean of one box, read through the decoder's own strides.
+     *
+     * Its own function because the alternative is four nested loops in [plane], and because
+     * "the average of the source pixels this destination pixel covers" is the whole idea —
+     * worth a name rather than worth reconstructing from indices.
+     */
+    @Suppress("LongParameterList")
+    private fun mean(
+        src: ByteArray,
+        rowStride: Int,
+        pixelStride: Int,
+        left: Int,
+        right: Int,
+        top: Int,
+        bottom: Int,
+    ): Byte {
+        var total = 0
+        var count = 0
+        for (sy in top until bottom) {
+            val row = sy * rowStride
+            for (sx in left until right) {
+                val index = row + sx * pixelStride
+                // A short final row is a truncated buffer, not a reason to crash: these
+                // frames come from a decoder on someone's phone.
+                if (index < src.size) {
+                    total += src[index].toInt() and BYTE_MASK
+                    count++
+                }
+            }
+        }
+        return if (count == 0) 0 else (total / count).toByte()
     }
 
     private const val BYTE_MASK = 0xFF
