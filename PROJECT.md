@@ -3017,3 +3017,46 @@ eventually reach, without taking the night down on the way.
 on an ATD image; hardware encoding is not, which is why `Milestone1EncodeTest` skips itself
 there. When `ProbeEncoder` lands, its first genuine exercise is a physical device, and that
 should be stated on the pull request rather than discovered later.
+
+
+## The probe encoder (1 Sep 2026)
+
+**The probe carries the codec and the frame rate, because a probe that does not match the
+encode it stands in for measures the wrong thing.** `ProbeEncoder.encodeWindow` took a
+window and a setting and nothing else, so it could not know whether the file was going out
+as HEVC or AV1 — and the two do not sit on the same rate-quality curve, so a bitrate
+bisected on one means something else on the other. Frame rate is the same defect in another
+form: a bitrate is bits per second, so the same number is half as many bits per frame at 60
+fps as at 30. Both are now arguments, threaded from the same `CodecChoice` decision that
+configures the final encode. Nothing was failing — the search returned a plausible number
+and the file would have been encoded at the wrong quality.
+
+**A probe encodes and decodes in one loop, with no muxer and no temp file.** XPSNR compares
+pictures, so the return value has to be pixels; the encoder's output goes straight into a
+decoder rather than through a container. Twelve probes a file times a write, a read and a
+container parse is a cost paid for nothing, when the input is already in memory.
+
+**No hardware encoder means an empty window.** That is the whole error path. The empty
+window scores as unusable, the search ends in `NotReachable`, and the file is skipped with a
+reason the user can read — which is also what makes the hardware-only rule testable on a
+machine that has no hardware encoder, because the *correct* behaviour there is observable
+rather than absent.
+
+**Frames are padded to the encoder's alignment and cropped back.** Some encoders refuse a
+width that is not a multiple of 16, and configuring one that way throws rather than rounding.
+The padding replicates the edge instead of filling with black: a hard border costs real bits,
+and those bits would come out of the budget being measured.
+
+**A codec that throws mid-probe is logged, not swallowed.** The file is skipped either way,
+but a device whose encoder refuses a shape it advertised is a real finding, and the only
+symptom otherwise is a library where every video quietly lands in the Skipped list.
+
+**The journey checker now distinguishes "not required here" from "skipped".** It rejected any
+skipped test in a required suite, which left two bad options for a suite holding assertions
+that need a hardware encoder: a CI run that is always red, or a suite that pretends. It now
+judges only the tests it names, and prints the ones that stood down — so a green tick never
+reads as "everything was proved here".
+
+**`NightRun.Step` stays unbound for one more change.** Every part it needs now exists and is
+bound. Binding it is the moment the app starts replacing files unattended at 3am, and that
+deserves a change that does only that and can be reviewed as such.

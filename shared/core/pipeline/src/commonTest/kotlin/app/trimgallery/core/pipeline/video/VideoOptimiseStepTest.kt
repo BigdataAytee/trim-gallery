@@ -298,7 +298,12 @@ class VideoOptimiseStepTest {
     }
 
     private class FakeProbeEncoder(private val bitrates: Bitrates) : ProbeEncoder {
-        override suspend fun encodeWindow(yuv: YuvWindow, setting: Setting): YuvWindow {
+        override suspend fun encodeWindow(
+            yuv: YuvWindow,
+            setting: Setting,
+            codec: VideoCodec,
+            fps: Double,
+        ): YuvWindow {
             bitrates.probe = setting.bitrate
             return yuv
         }

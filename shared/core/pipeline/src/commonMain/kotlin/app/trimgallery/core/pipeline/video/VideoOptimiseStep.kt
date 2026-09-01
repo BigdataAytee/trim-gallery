@@ -261,6 +261,10 @@ class VideoOptimiseStep(
         val outcome = try {
             probe.run(
                 item = item,
+                // The same codec the file will be encoded in, a few lines below. The search
+                // and the encode reading different curves is the bug this argument exists
+                // to make impossible.
+                codec = codec,
                 threshold = CodecLadder.xpsnrThreshold(codec, settings.qualityTarget),
                 fallback = fallback,
                 prediction = facts.prediction(key),

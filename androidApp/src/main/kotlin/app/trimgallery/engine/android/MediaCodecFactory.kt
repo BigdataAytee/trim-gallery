@@ -9,12 +9,14 @@ import android.os.Build
 import androidx.media3.common.MimeTypes
 import androidx.media3.common.util.UnstableApi
 import androidx.media3.transformer.EncoderSelector
+import app.trimgallery.engine.BitrateMode
 import app.trimgallery.engine.CodecCaps
 import app.trimgallery.engine.CodecFactory
 import app.trimgallery.engine.EncodeSpec
 import app.trimgallery.engine.EncoderCaps
 import app.trimgallery.engine.HwEncoder
 import app.trimgallery.engine.PerformancePoint
+import app.trimgallery.engine.VideoCodec
 import com.google.common.collect.ImmutableList
 
 /**
@@ -137,6 +139,86 @@ class MediaCodecFactory(private val context: Context) : CodecFactory {
     }
 
     /**
+     * A started **hardware** encoder for one probe window, and the only door to one.
+     *
+     * Separate from [encoder] because it produces a different thing. That one hands back a
+     * Media3 `Transformer` export — file in, file out, audio transmuxed, muxed to MP4 —
+     * which is what the final encode needs and is far more than a probe does. A probe has a
+     * buffer of YUV already in memory and wants an elementary stream back; running it
+     * through a muxer and a temp file would add a write, a read and a container per probe,
+     * twelve times a file.
+     *
+     * Hardware-only, with no fallback: [hardwareEncodersFor] is the same filter the final
+     * encode goes through, so a device that cannot encode this format in hardware gets null
+     * here and the file is skipped. BUILD.md § 2 rule 2 permits nothing else.
+     *
+     * @return null when no hardware encoder on this device takes this format at this size,
+     *   or when configuring one failed. Never a software encoder.
+     */
+    fun probeEncoder(spec: EncodeSpec, background: Boolean = true): Probe? {
+        val mimeType = mimeTypeOf(spec.codec)
+        val info = hardwareEncodersFor(mimeType).firstOrNull() ?: return null
+        val video = info.getCapabilitiesForType(mimeType)?.videoCapabilities ?: return null
+
+        // Rounded up to what the encoder will accept. Most take any even size; some want
+        // multiples of 16, and asking for 1278 wide there is a configure that throws.
+        val width = align(spec.width, video.widthAlignment)
+        val height = align(spec.height, video.heightAlignment)
+        if (!runCatching { video.isSizeSupported(width, height) }.getOrDefault(false)) return null
+
+        val format = probeFormat(mimeType, width, height, spec, info, background)
+        return runCatching {
+            val codec = MediaCodec.createByCodecName(info.name)
+            codec.configure(format, null, null, MediaCodec.CONFIGURE_FLAG_ENCODE)
+            codec.start()
+            Probe(codec, width, height)
+        }.getOrNull()
+    }
+
+    /**
+     * A started hardware encoder, with the frame size it actually accepted.
+     *
+     * The size is returned rather than assumed because [probeEncoder] may have rounded it
+     * up to the encoder's alignment, and a caller that filled its input buffers at the size
+     * it asked for would shear every frame by the difference.
+     */
+    class Probe(val codec: MediaCodec, val width: Int, val height: Int)
+
+    @Suppress("LongParameterList")
+    private fun probeFormat(
+        mimeType: String,
+        width: Int,
+        height: Int,
+        spec: EncodeSpec,
+        info: MediaCodecInfo,
+        background: Boolean,
+    ): MediaFormat = MediaFormat.createVideoFormat(mimeType, width, height).apply {
+        // The one colour format every device must accept as a three-plane `Image`, which is
+        // what `getInputImage` needs. Anything else means guessing at a device's private
+        // plane layout.
+        setInteger(MediaFormat.KEY_COLOR_FORMAT, MediaCodecInfo.CodecCapabilities.COLOR_FormatYUV420Flexible)
+        setInteger(MediaFormat.KEY_BIT_RATE, spec.setting.bitrate)
+        // An integer, deliberately: encoders read KEY_FRAME_RATE as one and a float here is
+        // an IllegalArgumentException at configure time on some devices.
+        setInteger(MediaFormat.KEY_FRAME_RATE, spec.fps.toInt().coerceAtLeast(1))
+        setFloat(MediaFormat.KEY_I_FRAME_INTERVAL, spec.gopSeconds)
+        setInteger(KEY_PRIORITY, if (background) PRIORITY_BACKGROUND else PRIORITY_REALTIME)
+
+        // Pre-checked, per ARCHITECTURE.md § 13: fall back to VBR where CQ is not offered,
+        // never to software. The search runs on VBR anyway; this is here so that a caller
+        // asking for CQ on a device that lacks it gets a working encode rather than a throw.
+        val cqSupported = info.getCapabilitiesForType(mimeType)?.encoderCapabilities
+            ?.isBitrateModeSupported(MediaCodecInfo.EncoderCapabilities.BITRATE_MODE_CQ) ?: false
+        val cq = spec.setting.cq
+        if (spec.setting.mode == BitrateMode.CQ && cqSupported && cq != null) {
+            setInteger(MediaFormat.KEY_BITRATE_MODE, MediaCodecInfo.EncoderCapabilities.BITRATE_MODE_CQ)
+            setInteger(MediaFormat.KEY_QUALITY, cq)
+        } else {
+            setInteger(MediaFormat.KEY_BITRATE_MODE, MediaCodecInfo.EncoderCapabilities.BITRATE_MODE_VBR)
+        }
+    }
+
+    /**
      * An [EncoderSelector] that can only ever offer hardware encoders.
      *
      * Returning an empty list is the correct outcome on a device with no hardware
@@ -206,4 +288,21 @@ class MediaCodecFactory(private val context: Context) : CodecFactory {
         /** Named for readability at the call site; see [MediaFormat.KEY_PRIORITY]. */
         const val KEY_PRIORITY: String = MediaFormat.KEY_PRIORITY
     }
+}
+
+/**
+ * Rounds a frame dimension up to what an encoder will accept.
+ *
+ * Top-level rather than a method for a reason that is not style: `MediaCodecFactory` is the
+ * one class in the app allowed to create a codec, and every helper added to it makes that
+ * responsibility harder to read. Neither this nor [mimeTypeOf] touches a codec.
+ */
+private fun align(value: Int, alignment: Int): Int {
+    val step = alignment.coerceAtLeast(1)
+    return ((value + step - 1) / step) * step
+}
+
+private fun mimeTypeOf(codec: VideoCodec): String = when (codec) {
+    VideoCodec.HEVC -> MimeTypes.VIDEO_H265
+    VideoCodec.AV1 -> MimeTypes.VIDEO_AV1
 }

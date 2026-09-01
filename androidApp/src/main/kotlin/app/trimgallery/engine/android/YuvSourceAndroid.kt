@@ -1,13 +1,11 @@
 package app.trimgallery.engine.android
 
 import android.content.Context
-import android.media.Image
 import android.media.MediaCodec
 import android.media.MediaExtractor
 import android.media.MediaFormat
 import android.net.Uri
 import app.trimgallery.core.model.MediaRef
-import app.trimgallery.core.pipeline.YuvScale
 import app.trimgallery.engine.Ms
 import app.trimgallery.engine.TempFile
 import app.trimgallery.engine.YuvSource
@@ -99,7 +97,7 @@ class YuvSourceAndroid(private val context: Context, private val codecs: MediaCo
     ): YuvWindow {
         val startUs = start * US_PER_MS
         val endUs = (start + len) * US_PER_MS
-        val frames = Frames(outWidth, outHeight)
+        val frames = YuvFrames(outWidth, outHeight)
         val info = MediaCodec.BufferInfo()
         var fed = false
         var drained = false
@@ -142,66 +140,6 @@ class YuvSourceAndroid(private val context: Context, private val codecs: MediaCo
             }
         }
         return frames.window()
-    }
-
-    /** Collects scaled frames, one plane at a time, into the buffers the metrics take. */
-    private class Frames(private val width: Int, private val height: Int) {
-        private val luma = ArrayList<ByteArray>()
-        private val blue = ArrayList<ByteArray>()
-        private val red = ArrayList<ByteArray>()
-
-        private val chromaWidth get() = (width + 1) / 2
-        private val chromaHeight get() = (height + 1) / 2
-
-        fun add(image: Image) {
-            try {
-                luma += scaled(image.planes[0], image.width, image.height, width, height)
-                blue += scaled(image.planes[1], image.width / 2, image.height / 2, chromaWidth, chromaHeight)
-                red += scaled(image.planes[2], image.width / 2, image.height / 2, chromaWidth, chromaHeight)
-            } finally {
-                image.close()
-            }
-        }
-
-        @Suppress("LongParameterList")
-        private fun scaled(plane: Image.Plane, srcW: Int, srcH: Int, dstW: Int, dstH: Int): ByteArray {
-            val buffer = plane.buffer
-            val bytes = ByteArray(buffer.remaining())
-            buffer.get(bytes)
-            val out = ByteArray(dstW * dstH)
-            YuvScale.plane(
-                src = bytes,
-                rowStride = plane.rowStride,
-                pixelStride = plane.pixelStride,
-                srcW = srcW,
-                srcH = srcH,
-                dst = out,
-                dstOffset = 0,
-                dstW = dstW,
-                dstH = dstH,
-            )
-            return out
-        }
-
-        fun window() = YuvWindow(
-            width = width,
-            height = height,
-            frameCount = luma.size,
-            y = luma.flatten(),
-            u = blue.flatten(),
-            v = red.flatten(),
-        )
-
-        /** Frames end to end, which is the layout the native metric functions read. */
-        private fun List<ByteArray>.flatten(): ByteArray {
-            val out = ByteArray(sumOf { it.size })
-            var offset = 0
-            forEach { frame ->
-                frame.copyInto(out, offset)
-                offset += frame.size
-            }
-            return out
-        }
     }
 
     private fun videoTrackOf(extractor: MediaExtractor): Int? = (0 until extractor.trackCount)

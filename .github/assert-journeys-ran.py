@@ -47,6 +47,14 @@ REQUIRED = {
         "aWidthLargerThanTheSourceIsNotUpscaled",
         "anUnreadableFileIsAnEmptyWindowRatherThanACrash",
     ],
+    # The encoder half of the search. Only the two tests that can run on any machine are
+    # required: the rest need a hardware encoder, which an ATD image does not have, and
+    # BUILD.md rule 2 forbids the software one. They are reported as not-run rather than
+    # required, so a green CI run never implies an encode was proved here.
+    "app.trimgallery.engine.android.ProbeEncoderAndroidTest": [
+        "theOutcomeMatchesWhatTheDeviceSaysItCanEncode",
+        "anEmptyWindowIsAnEmptyWindowRatherThanACrash",
+    ],
     "app.trimgallery.ui.MainActivityGrantedLaunchTest": [
         "theRealActivityWithAFolderGrantedDrawsTheGrid",
         "theLaunchMarkIsClearedOnceAFrameIsDrawn",
@@ -66,24 +74,35 @@ def main() -> int:
         print(f"No instrumentation results under {RESULTS}. The journeys did not run.")
         return 1
 
-    ran, bad = set(), []
+    expected = [
+        f"{suite.rsplit('.', 1)[-1]}.{name}"
+        for suite, names in REQUIRED.items()
+        for name in names
+    ]
+    required = set(expected)
+
+    ran, bad, stood_down = set(), [], []
     for report in reports:
         for case in ElementTree.parse(report).iter("testcase"):
             suite = case.get("classname")
             if suite not in REQUIRED:
                 continue
             name = f"{suite.rsplit('.', 1)[-1]}.{case.get('name', '')}"
+            # A required suite may hold a test this machine cannot run — the encode
+            # assertions need a hardware encoder, and an ATD image has none. Requiring those
+            # would leave two bad options: a CI run that is always red, or a suite that
+            # pretends to prove an encode it never performed. So they are named as not
+            # required and *listed* below instead, and the run says which ones stood down.
+            if name not in required:
+                if case.find("skipped") is not None:
+                    stood_down.append(name)
+                continue
             ran.add(name)
             for outcome in ("failure", "error", "skipped"):
                 node = case.find(outcome)
                 if node is not None:
                     bad.append((name, outcome, node.get("message", ""), (node.text or "")))
 
-    expected = [
-        f"{suite.rsplit('.', 1)[-1]}.{name}"
-        for suite, names in REQUIRED.items()
-        for name in names
-    ]
     missing = [name for name in expected if name not in ran]
     if missing:
         print(f"These journeys did not run at all: {', '.join(missing)}")
@@ -99,6 +118,10 @@ def main() -> int:
         return 1
 
     print(f"All {len(expected)} screen journeys ran and passed on the device.")
+    if stood_down:
+        # Not a failure, and not silence either: this is the line that keeps a green tick
+        # from being read as "everything was proved here".
+        print(f"Not proved on this machine ({len(stood_down)} stood down): {', '.join(sorted(set(stood_down)))}")
     return 0
 
 
