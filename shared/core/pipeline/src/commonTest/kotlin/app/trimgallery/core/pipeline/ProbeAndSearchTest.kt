@@ -54,9 +54,18 @@ class ProbeAndSearchTest {
     /** Wires the encoder's setting through to the scorer, as the real pipeline does. */
     private class RecordingEncoder(private val scorer: FakeScorer) : ProbeEncoder {
         val encodes = mutableListOf<Setting>()
+        val codecs = mutableListOf<VideoCodec>()
+        val rates = mutableListOf<Double>()
 
-        override suspend fun encodeWindow(yuv: YuvWindow, setting: Setting): YuvWindow {
+        override suspend fun encodeWindow(
+            yuv: YuvWindow,
+            setting: Setting,
+            codec: VideoCodec,
+            fps: Double,
+        ): YuvWindow {
             encodes += setting
+            codecs += codec
+            rates += fps
             scorer.lastSetting = setting
             return yuv
         }
@@ -81,6 +90,7 @@ class ProbeAndSearchTest {
 
         val result = ProbeAndSearch(source, encoder, scorer).run(
             item = item(),
+            codec = VideoCodec.HEVC,
             threshold = 40.0,
             fallback = fallback,
             prediction = null,
@@ -99,6 +109,7 @@ class ProbeAndSearchTest {
 
         val result = ProbeAndSearch(source, encoder, scorer).run(
             item = item(durationMs = 600_000),
+            codec = VideoCodec.HEVC,
             threshold = 40.0,
             fallback = fallback,
             prediction = null,
@@ -127,6 +138,7 @@ class ProbeAndSearchTest {
         val scorer = FakeScorer(3_300_000)
         ProbeAndSearch(source, RecordingEncoder(scorer), scorer).run(
             item = item(width = 3840, height = 2160),
+            codec = VideoCodec.HEVC,
             threshold = 40.0,
             fallback = fallback,
             prediction = null,
@@ -150,6 +162,7 @@ class ProbeAndSearchTest {
         val scorer = FakeScorer(3_300_000)
         ProbeAndSearch(source, RecordingEncoder(scorer), scorer).run(
             item = item(width = 854, height = 480),
+            codec = VideoCodec.HEVC,
             threshold = 40.0,
             fallback = fallback,
             prediction = null,
@@ -174,6 +187,7 @@ class ProbeAndSearchTest {
             val scorer = FakeScorer(3_300_000)
             ProbeAndSearch(source, RecordingEncoder(scorer), scorer).run(
                 item = item(width = w, height = h),
+                codec = VideoCodec.HEVC,
                 threshold = 40.0,
                 fallback = fallback,
                 prediction = null,
@@ -187,7 +201,7 @@ class ProbeAndSearchTest {
         // The end-to-end payoff of the predictor table.
         val scorer = FakeScorer(4_800_000)
         val withoutPrediction = ProbeAndSearch(FakeYuvSource(), RecordingEncoder(scorer), scorer)
-            .run(item(), 40.0, fallback, prediction = null).probes
+            .run(item(), VideoCodec.HEVC, 40.0, fallback, prediction = null).probes
 
         val scorer2 = FakeScorer(4_800_000)
         val entry = Predictor.Entry(
@@ -196,7 +210,7 @@ class ProbeAndSearchTest {
             samples = Predictor.CONFIDENT_SAMPLES,
         )
         val withPrediction = ProbeAndSearch(FakeYuvSource(), RecordingEncoder(scorer2), scorer2)
-            .run(item(), 40.0, fallback, prediction = entry).probes
+            .run(item(), VideoCodec.HEVC, 40.0, fallback, prediction = entry).probes
 
         assertTrue(
             withPrediction < withoutPrediction,
@@ -211,6 +225,7 @@ class ProbeAndSearchTest {
         val scorer = FakeScorer(3_300_000)
         val result = ProbeAndSearch(source, RecordingEncoder(scorer), scorer).run(
             item = item().copy(duration = null),
+            codec = VideoCodec.HEVC,
             threshold = 40.0,
             fallback = fallback,
             prediction = null,
@@ -224,11 +239,52 @@ class ProbeAndSearchTest {
         val scorer = FakeScorer(cutoffBps = 400_000_000)
         val result = ProbeAndSearch(FakeYuvSource(), RecordingEncoder(scorer), scorer).run(
             item(),
+            codec = VideoCodec.HEVC,
             threshold = 40.0,
             fallback = fallback,
             prediction = null,
         )
         assertIs<SettingSearch.Outcome.NotReachable>(result.outcome)
         assertTrue(result.probes > 0)
+    }
+
+    @Test
+    fun `the probe encodes in the codec the file will be encoded in, at the file's own rate`() = runTest {
+        // A search run on HEVC that hands its winning bitrate to an AV1 encode has bisected
+        // the wrong rate-quality curve, and nothing downstream would notice: the number is
+        // plausible, the encode succeeds, and the file comes out at the wrong quality.
+        val scorer = FakeScorer(3_300_000)
+        val encoder = RecordingEncoder(scorer)
+
+        ProbeAndSearch(FakeYuvSource(), encoder, scorer).run(
+            item = item().copy(fps = 60.0),
+            codec = VideoCodec.AV1,
+            threshold = 40.0,
+            fallback = fallback,
+            prediction = null,
+        )
+
+        assertTrue(encoder.codecs.isNotEmpty())
+        assertTrue(encoder.codecs.all { it == VideoCodec.AV1 }, "probed in ${encoder.codecs.distinct()}")
+        assertTrue(encoder.rates.all { it == 60.0 }, "probed at ${encoder.rates.distinct()} fps")
+    }
+
+    @Test
+    fun `a file whose container gave no frame rate is probed at a stated assumption`() = runTest {
+        // Not a skip: a missing frame rate is common in older containers. It is a guess, and
+        // the guess is 30 rather than zero, because a bitrate divided by no frames at all is
+        // not a measurement.
+        val scorer = FakeScorer(3_300_000)
+        val encoder = RecordingEncoder(scorer)
+
+        ProbeAndSearch(FakeYuvSource(), encoder, scorer).run(
+            item = item().copy(fps = null),
+            codec = VideoCodec.HEVC,
+            threshold = 40.0,
+            fallback = fallback,
+            prediction = null,
+        )
+
+        assertTrue(encoder.rates.all { it == 30.0 }, "probed at ${encoder.rates.distinct()} fps")
     }
 }

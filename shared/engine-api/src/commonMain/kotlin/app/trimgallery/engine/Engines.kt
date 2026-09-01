@@ -38,9 +38,28 @@ interface HwEncoder {
     suspend fun encode(input: MediaRef, out: TempFile, onProgress: (Float) -> Unit): EncodeOutcome
 }
 
-/** Encodes a single probe window during the search. Milestone 3. */
+/**
+ * Encodes a single probe window during the search, and hands back what a player would see.
+ *
+ * The return value is the *decoded* result, not a bitstream: the search scores XPSNR
+ * between the source window and this, so the only useful answer is pixels. An
+ * implementation therefore encodes and then decodes its own output.
+ *
+ * [codec] and [fps] are here because a probe that does not match the encode it is standing
+ * in for measures the wrong thing. `CodecChoice` picks HEVC or AV1 per file, and the two
+ * are not interchangeable at a given bitrate — a search run on HEVC that hands its winning
+ * number to an AV1 encode has bisected the wrong curve. Frame rate matters for the same
+ * reason: a bitrate is bits per second, so the same number is half as many bits per frame
+ * at 60 fps as at 30, and probing at a nominal rate would mis-price every high-frame-rate
+ * clip on the device.
+ *
+ * A window that could not be encoded in hardware comes back with `frameCount == 0`. That is
+ * not an error path bolted on: BUILD.md § 2 rule 2 has no software fallback, so "this
+ * device cannot encode this" has to be expressible, and an empty window scores as unusable,
+ * which ends the search in `NotReachable` and skips the file with a reason.
+ */
 interface ProbeEncoder {
-    suspend fun encodeWindow(yuv: YuvWindow, setting: Setting): YuvWindow
+    suspend fun encodeWindow(yuv: YuvWindow, setting: Setting, codec: VideoCodec, fps: Double): YuvWindow
 }
 
 /** Decodes probe windows. Windows are decoded once and cached (PROJECT.md § Speed). */

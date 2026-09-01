@@ -5,6 +5,7 @@ import app.trimgallery.engine.BitrateMode
 import app.trimgallery.engine.ProbeEncoder
 import app.trimgallery.engine.QualityScorer
 import app.trimgallery.engine.Setting
+import app.trimgallery.engine.VideoCodec
 import app.trimgallery.engine.YuvSource
 import app.trimgallery.engine.YuvWindow
 
@@ -30,6 +31,10 @@ class ProbeAndSearch(
     data class Result(val outcome: SettingSearch.Outcome, val windowsDecoded: Int, val probes: Int)
 
     /**
+     * @param codec the codec this file will actually be encoded in, chosen by `CodecChoice`.
+     *   The probe encodes in the same one: a number bisected on HEVC's rate-quality curve
+     *   means something else on AV1's, and handing it over as if it did not would be a
+     *   search that measured one encoder to configure a different one.
      * @param threshold the XPSNR value calibrated to VMAF 95 for this bucket.
      * @param prediction the predictor entry for this file's family, if any.
      *
@@ -40,6 +45,7 @@ class ProbeAndSearch(
      */
     suspend fun run(
         item: MediaItem,
+        codec: VideoCodec,
         threshold: Double,
         fallback: SettingSearch.Bounds,
         prediction: Predictor.Entry?,
@@ -65,7 +71,7 @@ class ProbeAndSearch(
         val bounds = Predictor.bounds(prediction, fallback)
 
         val outcome = search.search(bounds, threshold) { bitrateBps ->
-            scoreAt(references, Setting(bitrate = bitrateBps, mode = BitrateMode.VBR))
+            scoreAt(references, Setting(bitrate = bitrateBps, mode = BitrateMode.VBR), codec, fpsOf(item))
         }
 
         return Result(
@@ -86,14 +92,28 @@ class ProbeAndSearch(
      * windows and can reject — is the place to catch a file that holds up badly in one
      * part.
      */
-    private suspend fun scoreAt(references: List<YuvWindow>, setting: Setting): Double {
+    private suspend fun scoreAt(
+        references: List<YuvWindow>,
+        setting: Setting,
+        codec: VideoCodec,
+        fps: Double,
+    ): Double {
         var total = 0.0
         for (reference in references) {
-            val encoded = probeEncoder.encodeWindow(reference, setting)
+            val encoded = probeEncoder.encodeWindow(reference, setting, codec, fps)
             total += scorer.xpsnr(reference, encoded)
         }
         return total / references.size
     }
+
+    /**
+     * The file's frame rate, or the commonest one when the container did not say.
+     *
+     * A guess rather than a refusal, because a missing frame rate is not a reason to skip a
+     * file — but it is recorded as a guess here rather than defaulted inside the encoder,
+     * where a reader would have to go looking for why a 60 fps clip was probed at 30.
+     */
+    private fun fpsOf(item: MediaItem): Double = item.fps?.takeIf { it > 0.0 } ?: ASSUMED_FPS
 
     /**
      * Width that puts the window at [WindowPlan.SCORING_HEIGHT], preserving aspect.
@@ -106,5 +126,10 @@ class ProbeAndSearch(
         if (item.height <= WindowPlan.SCORING_HEIGHT) return item.width and 1.inv()
         val scaled = item.width * WindowPlan.SCORING_HEIGHT / item.height
         return (scaled and 1.inv()).coerceAtLeast(2)
+    }
+
+    private companion object {
+        /** What a phone camera writes when nothing says otherwise. */
+        const val ASSUMED_FPS = 30.0
     }
 }

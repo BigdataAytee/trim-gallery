@@ -6,6 +6,7 @@ import app.trimgallery.core.data.DataStoreSettings
 import app.trimgallery.core.data.TrimRepository
 import app.trimgallery.core.domain.billing.Tier
 import app.trimgallery.core.model.Uuid7
+import app.trimgallery.core.pipeline.ProbeAndSearch
 import app.trimgallery.core.pipeline.TriageStep
 import app.trimgallery.core.pipeline.index.IndexStep
 import app.trimgallery.core.pipeline.night.NightFacts
@@ -21,6 +22,7 @@ import app.trimgallery.engine.MetadataCopier
 import app.trimgallery.engine.NightScheduler
 import app.trimgallery.engine.OutputProbe
 import app.trimgallery.engine.PhotoCodec
+import app.trimgallery.engine.ProbeEncoder
 import app.trimgallery.engine.QualityScorer
 import app.trimgallery.engine.Replacer
 import app.trimgallery.engine.SettingsStore
@@ -38,6 +40,7 @@ import app.trimgallery.engine.android.NightPass
 import app.trimgallery.engine.android.NightWorker
 import app.trimgallery.engine.android.OutputProbeAndroid
 import app.trimgallery.engine.android.PhotoCodecAndroid
+import app.trimgallery.engine.android.ProbeEncoderAndroid
 import app.trimgallery.engine.android.SafStorage
 import app.trimgallery.engine.android.SafeReplacerAndroid
 import app.trimgallery.engine.android.StartupGuard
@@ -74,6 +77,15 @@ val androidEngineModule = module {
     // Milestone 3 and 4's missing half. Both the search and the VMAF gate need to decode,
     // and until now nothing on either platform could.
     single<YuvSource> { YuvSourceAndroid(androidContext(), get()) }
+
+    // The other half of the search: encode one cached window at one candidate setting and
+    // hand back the decoded result. Hardware only — a device with no hardware encoder gets
+    // an empty window, the search ends in `NotReachable`, and the file is skipped with a
+    // reason. There is no software path to fall into (BUILD.md § 2 rule 2).
+    single<ProbeEncoder> { ProbeEncoderAndroid(get()) }
+
+    // Now that both engines exist, the search itself can be assembled.
+    single { ProbeAndSearch(yuvSource = get(), probeEncoder = get(), scorer = get()) }
 
     // Milestone 2. XPSNR and VMAF over the native C ABI; the pipeline never sees JNI.
     single<QualityScorer> { NativeQualityScorer() }
@@ -221,21 +233,14 @@ val androidEngineModule = module {
     // VerifyPass, the Replacer and Predictor.learn into the chain ARCHITECTURE.md § 7
     // describes, with the safety gates asserted in `VideoOptimiseStepTest`.
     //
-    // **It is deliberately not bound yet, and `NightRun.Step` still has no binding.**
-    // Two engine-api ports have no implementation on any platform:
+    // Both engines it was waiting for now exist: `YuvSourceAndroid` decodes the probe
+    // windows and the encoded output, and `ProbeEncoderAndroid` encodes one window at one
+    // setting. Both are bound above, and `ProbeAndSearch` with them.
     //
-    //   * `YuvSource`    — decodes a probe window to YUV, and decodes the *output* back for
-    //                      the VMAF comparison
-    //   * `ProbeEncoder` — encodes one cached window at one setting during the search
-    //
-    // Nothing implements either, on Android or iOS. That is not a detail of the search: the
-    // verifier needs `YuvSource` too, so the VMAF gate — the check that stands between a
-    // user's video and a worse copy of it — has never had a platform implementation either.
-    //
-    // Binding the step over `get()` calls for types nobody provides would move the failure
-    // from "this is not wired" to "the night pass throws at 3am", which is strictly worse.
-    // So it stays unbound until those two engines exist and have been run against a real
-    // encoder. Recorded in PROJECT.md and STATUS.md.
+    // **`VideoOptimiseStep` and `NightRun.Step` are still deliberately unbound**, and that
+    // is now one decision rather than a missing part: binding `NightRun.Step` is the moment
+    // this app starts replacing a user's files unattended at 3am, and it belongs in a change
+    // that does only that and can be reviewed as such. Next PR. Recorded in PROJECT.md.
     //
     // --- Milestone 9: the index ------------------------------------------------
     //

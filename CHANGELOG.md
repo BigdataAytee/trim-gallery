@@ -1,5 +1,59 @@
 # Changelog
 
+## The encoder half of the search
+
+`ProbeEncoder` was the last engine with no implementation on any platform. The search asks
+"how good does this file look at 4 Mbps?", and the only way to answer is to encode at 4 Mbps
+and measure — so milestone 3's search, complete and unit tested against fakes, could not run
+a single probe. `ProbeEncoderAndroid` is that half.
+
+It encodes one cached window at one candidate setting and hands back the **decoded** result,
+because XPSNR compares pictures and a bitstream is not an answer. Encoder and decoder are
+pumped in one loop: no muxer, no container, no temp file. A search does about twelve probes
+per file, and writing and re-reading an MP4 for each of them would add a write, a read and a
+container parse twelve times over to answer a question that has its input already in memory.
+
+### The search was measuring the wrong encoder
+
+Building this exposed a real defect in code that was already merged and green. `ProbeEncoder`
+took a window and a setting and nothing else — so the probe had no way to know which codec
+the file was going to be encoded in. `CodecChoice` picks HEVC or AV1 per file, and the two do
+not sit on the same rate-quality curve: a bitrate bisected on HEVC means something else on
+AV1. Nothing would have failed. The search would have returned a plausible number and the
+file would have been encoded at the wrong quality.
+
+Frame rate had the same hole. A bitrate is bits per *second*, so the same number is half as
+many bits per frame at 60 fps as at 30, and a probe run at a nominal rate mis-prices every
+high-frame-rate clip on the device. Both are now arguments, threaded from the same
+`CodecChoice` decision that configures the final encode, with tests that assert the probe
+encodes in the codec the file will be encoded in, at the file's own rate.
+
+### Hardware only, and what that means when there is none
+
+The encoder comes from `MediaCodecFactory.probeEncoder`, which offers hardware encoders and
+nothing else. When a device has no hardware encoder for the codec, the probe returns an
+**empty window**: it scores as unusable, the search ends in `NotReachable`, and the file is
+skipped with a reason the user can read. That is the whole of the error path — there is no
+software branch to fall into (BUILD.md § 2 rule 2).
+
+Frames are padded out to the encoder's alignment on the way in and cropped back on the way
+out, because some encoders will not take 1278 pixels wide and configuring one that way throws
+rather than rounding. The padding replicates the edge rather than filling with black: a hard
+black border costs real bits, and those bits would come out of the budget being measured.
+
+### What the emulator can and cannot prove
+
+An ATD image has no hardware encoder at all, so **no test here claims an encode was performed
+in CI.** What it does assert is the rule itself: the outcome must match what the device says
+it can do — an empty window where there is no hardware encoder, real frames where there is.
+A CI machine that lacks the hardware is exactly the machine where a software fallback would
+be tempting and would go unnoticed.
+
+The encode assertions — same size as the source, a picture rather than the input handed back,
+and more bitrate landing closer to the source — stand down on that image. They are named as
+*not required* in the journey checker rather than pretended over, and the checker now prints
+which tests stood down, so a green tick never reads as "everything was proved here".
+
 ## The decoder the quality gate reads through
 
 `YuvSource` had no implementation on any platform. `ProbeAndSearch` needs it to score
