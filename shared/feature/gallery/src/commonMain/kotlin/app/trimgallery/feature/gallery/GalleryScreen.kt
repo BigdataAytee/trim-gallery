@@ -10,10 +10,12 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.GridItemSpan
+import androidx.compose.foundation.lazy.grid.LazyGridState
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.rememberLazyGridState
 import androidx.compose.foundation.text.BasicText
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateMapOf
@@ -21,18 +23,22 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.unit.dp
 import app.trimgallery.core.model.MediaItem
+import app.trimgallery.core.model.MediaKind
 import app.trimgallery.core.ui.grid.DateSections
 import app.trimgallery.core.ui.grid.FastScroll
 import app.trimgallery.core.ui.grid.GridZoom
 import app.trimgallery.core.ui.motion.HeroGeometry
 import app.trimgallery.core.ui.motion.arrival
 import app.trimgallery.core.ui.theme.TrimTheme
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.launch
 import kotlinx.datetime.LocalDate
 import kotlinx.datetime.TimeZone
@@ -68,6 +74,14 @@ fun GalleryScreen(
      * kind is not video never reach it.
      */
     video: @Composable (MediaItem) -> Unit = {},
+    /**
+     * A muted, silent preview drawn over a video tile the grid has settled on
+     * (BUILD.md § 9, "video tiles autoplay muted on dwell"). A slot for the same reason
+     * [artwork] and [video] are: this module names no player.
+     */
+    preview: @Composable (MediaItem) -> Unit = {},
+    /** Per-item progress for the ring, when the pipeline can say. Null means "busy". */
+    progressOf: (MediaItem) -> Float? = { null },
     artwork: @Composable (MediaItem) -> Unit,
 ) {
     val colors = TrimTheme.colors
@@ -88,6 +102,31 @@ fun GalleryScreen(
     // The scrubber only appears while the grid is moving (BUILD.md § 9: chrome fades
     // when idle). A permanent bar over the photographs would be the opposite.
     val scrolling by remember { derivedStateOf { gridState.isScrollInProgress } }
+
+    // Which video tile previews: the one nearest the middle of the viewport, and only once
+    // the grid has been still for a moment.
+    //
+    // Nearest-the-middle rather than first-visible because the eye is in the middle of the
+    // screen, and first-visible is usually the row half cut off by the top edge. One at a
+    // time because each preview is a decoder; a grid that starts a player per visible video
+    // would hold six on a screen that shows six.
+    //
+    // `collectLatest` is doing the real work: any scroll cancels the pending delay, so the
+    // preview only ever starts after the grid has actually settled rather than flickering
+    // through every tile that passes the middle during a fling.
+    val videoIds = remember(items) { items.filter { it.kind == MediaKind.VIDEO }.map { it.id }.toSet() }
+    var previewId by remember { mutableStateOf<String?>(null) }
+    LaunchedEffect(gridState, items) {
+        snapshotFlow { gridState.isScrollInProgress to centreVideoKey(gridState, videoIds) }
+            .collectLatest { (moving, candidate) ->
+                if (moving || candidate == null) {
+                    previewId = null
+                } else {
+                    delay(DWELL_MS)
+                    previewId = candidate
+                }
+            }
+    }
     val thumbFraction by remember {
         derivedStateOf { FastScroll.fractionOf(sections, gridState.firstVisibleItemIndex) }
     }
@@ -127,6 +166,9 @@ fun GalleryScreen(
                         GalleryTile(
                             item = mediaItem,
                             processing = mediaItem.id in processingIds,
+                            progress = progressOf(mediaItem),
+                            previewing = previewId == mediaItem.id && mediaItem.kind == MediaKind.VIDEO,
+                            preview = preview,
                             onOpen = { open = it },
                             onBounds = { rect -> bounds[mediaItem.id] = rect },
                             modifier = Modifier
@@ -177,6 +219,33 @@ fun GalleryScreen(
         }
     }
 }
+
+/**
+ * The key of the visible video tile nearest the middle of the viewport, or null.
+ *
+ * Distance is measured between centres rather than to the top edge, so a tall row half off
+ * the bottom does not beat one fully on screen. Headers span the row and are not items, so
+ * they are skipped by [videoIds] rather than by parsing their key.
+ */
+private fun centreVideoKey(state: LazyGridState, videoIds: Set<String>): String? {
+    if (videoIds.isEmpty()) return null
+    val layout = state.layoutInfo
+    val middle = layout.viewportSize.height / 2
+    return layout.visibleItemsInfo
+        .asSequence()
+        .filter { it.key is String && it.key in videoIds }
+        .minByOrNull { kotlin.math.abs((it.offset.y + it.size.height / 2) - middle) }
+        ?.key as? String
+}
+
+/**
+ * How long the grid must be still before a preview starts.
+ *
+ * Long enough that a flick through the library does not start and stop a player for every
+ * video that crosses the middle; short enough that stopping to look at something feels
+ * like it responded rather than lagged.
+ */
+private const val DWELL_MS = 400L
 
 @Composable
 private fun SectionHeader(label: String) {
