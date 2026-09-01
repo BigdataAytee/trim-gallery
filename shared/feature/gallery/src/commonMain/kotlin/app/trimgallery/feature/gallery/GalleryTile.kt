@@ -17,6 +17,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.layout.boundsInWindow
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.unit.dp
 import app.trimgallery.core.model.MediaItem
 import app.trimgallery.core.ui.motion.HeroGeometry
@@ -62,6 +63,7 @@ fun GalleryTile(
 
     Box(
         modifier = modifier
+            .testTag(GalleryTestTags.tile(item.id))
             .fillMaxWidth()
             .aspectRatio(1f)
             .onGloballyPositioned { coordinates ->

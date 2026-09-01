@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+
+    <!--
+      A bare host for the emulator UI tests, and only in the `smoke` variant.
+
+      A Compose test that drives a screen needs an Activity to put it in, and the app's own
+      MainActivity is not that: it calls setContent itself in onCreate, so a test cannot set
+      its own content there without composing the app twice. androidx.activity's plain
+      ComponentActivity is exactly the empty host wanted, but an Activity can only be
+      launched if some merged manifest declares it — which is why the androidx artifact
+      published for this (ui-test-manifest) does nothing but add this one line.
+
+      It is declared here rather than in src/main so it exists in no build a person can
+      install. `smoke` is the CI-only variant (see build.gradle.kts): it is never published,
+      `release` is what ships, and `debug` is what a field tester gets. Not exported, so
+      nothing outside the app could start it even in the variant that has it.
+    -->
+    <application>
+        <activity
+            android:name="androidx.activity.ComponentActivity"
+            android:exported="false" />
+    </application>
+
+</manifest>

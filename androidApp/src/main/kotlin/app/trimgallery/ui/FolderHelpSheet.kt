@@ -31,7 +31,7 @@ import app.trimgallery.engine.android.FolderChoice
  * works. Copy per DESIGN_SYSTEM.md: short, concrete, and never alarmed.
  */
 @Composable
-fun FolderHelpSheet(refusal: FolderChoice.Refusal?, onOpenCamera: () -> Unit, onPickAnother: () -> Unit) {
+fun FolderHelpSheet(refusal: FolderChoice.Refusal?, onChoose: () -> Unit) {
     val colors = TrimTheme.colors
 
     Box(
@@ -69,22 +69,20 @@ fun FolderHelpSheet(refusal: FolderChoice.Refusal?, onOpenCamera: () -> Unit, on
                 style = TrimTheme.typography.body.copy(color = colors.muted),
             )
 
+            // One button, since the picker no longer opens anywhere in particular. There
+            // used to be two — "Open DCIM/Camera" and "Choose a different folder" — and the
+            // first only differed because it passed an initial-URI hint. That hint is gone,
+            // so keeping the button would be a label describing something the app no longer
+            // does.
             Box(
                 modifier = Modifier
-                    .pressScale(onOpenCamera)
+                    .pressScale(onChoose)
                     .background(colors.accent, RoundedCornerShape(TrimShape.BUTTON_DP.dp))
                     .padding(horizontal = TrimSpacing.CARD_PADDING_DP.dp, vertical = BUTTON_V_DP.dp),
             ) {
                 BasicText(
-                    text = "Open DCIM/Camera",
+                    text = "Choose a folder",
                     style = TrimTheme.typography.label.copy(color = colors.accentOn),
-                )
-            }
-
-            Box(modifier = Modifier.pressScale(onPickAnother).padding(vertical = BUTTON_V_DP.dp)) {
-                BasicText(
-                    text = "Choose a different folder",
-                    style = TrimTheme.typography.label.copy(color = colors.accent),
                 )
             }
         }
