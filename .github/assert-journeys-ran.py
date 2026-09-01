@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Fail unless every screen journey actually ran on the emulator.
+"""Fail unless every screen journey actually ran on the emulator, and say why if not.
 
 A passing Gradle task is weaker evidence than it looks. `pixelSmokeAndroidTest` is green
 when it runs zero tests, when a filter excludes a class, when the androidTest component was
@@ -11,6 +11,12 @@ So this reads the instrumentation's own result XML back and requires each journe
 present, and to have neither failed, errored nor skipped. It is deliberately explicit about
 which tests it expects: adding a journey means naming it here, and a journey deleted by
 accident fails the build rather than shrinking the suite in silence.
+
+It also **prints the failure**. Gradle's own summary says only "There were failing tests,
+see the report at file:///..." — a path on a machine that no longer exists — and the report
+is uploaded to an artifact store that some environments cannot reach. The stack trace is
+right there in the XML, so a red run should hand it over rather than describe where it
+would have been. One red cycle that names the exception beats three that do not.
 """
 
 import pathlib
@@ -38,6 +44,12 @@ REQUIRED = {
 }
 
 
+"""How much of a failure to print. Enough to name the exception and the frames in our own
+code; short enough that ten failures do not bury the one that matters."""
+MESSAGE_CHARS = 2000
+TRACE_LINES = 40
+
+
 def main() -> int:
     reports = sorted(RESULTS.rglob("*.xml"))
     if not reports:
@@ -53,8 +65,9 @@ def main() -> int:
             name = f"{suite.rsplit('.', 1)[-1]}.{case.get('name', '')}"
             ran.add(name)
             for outcome in ("failure", "error", "skipped"):
-                if case.find(outcome) is not None:
-                    bad.append(f"{name}: {outcome}")
+                node = case.find(outcome)
+                if node is not None:
+                    bad.append((name, outcome, node.get("message", ""), (node.text or "")))
 
     expected = [
         f"{suite.rsplit('.', 1)[-1]}.{name}"
@@ -64,8 +77,13 @@ def main() -> int:
     missing = [name for name in expected if name not in ran]
     if missing:
         print(f"These journeys did not run at all: {', '.join(missing)}")
-    if bad:
-        print(f"These journeys did not pass: {', '.join(bad)}")
+    for name, outcome, message, detail in bad:
+        print(f"\n--- {name}: {outcome} " + "-" * 40)
+        if message:
+            print(message.strip()[:MESSAGE_CHARS])
+        trace = detail.strip()
+        if trace:
+            print("\n".join(trace.splitlines()[:TRACE_LINES]))
     if missing or bad:
         print(f"Read {len(reports)} report(s) under {RESULTS}.")
         return 1

@@ -23,8 +23,6 @@ import app.trimgallery.core.ui.motion.pressScale
 import app.trimgallery.core.ui.theme.TrimShape
 import app.trimgallery.core.ui.theme.TrimSpacing
 import app.trimgallery.core.ui.theme.TrimTheme
-import app.trimgallery.engine.android.StartupGuard
-import org.koin.compose.koinInject
 
 /**
  * The app's three screens, and which of them is on top.
@@ -46,14 +44,18 @@ import org.koin.compose.koinInject
  */
 @UnstableApi
 @Composable
-fun TrimApp(modifier: Modifier = Modifier, guard: StartupGuard = koinInject()) {
+fun TrimApp(startInRecovery: Boolean = false, modifier: Modifier = Modifier) {
     var screen by remember { mutableStateOf(Screen.GALLERY) }
 
-    // Set before the first frame, from a flag the previous process left behind, and set
-    // again if this launch's own startup work fails. Either way the gallery is not started:
-    // the work that failed is the work the app does by itself, so trying it again is the
-    // loop rather than a retry.
-    var recovering by remember { mutableStateOf(guard.previousRunFailed) }
+    // Passed in rather than read here, and that is deliberate. The answer depends on being
+    // asked before this launch marks itself, which only `MainActivity` is in a position to
+    // do — a composable that resolved the guard and asked would be asking after the mark was
+    // already set, and would send every launch to the recovery screen.
+    //
+    // Set again if this launch's own startup work fails. Either way the gallery is not
+    // restarted: the work that failed is work the app does by itself, so trying it again is
+    // the loop rather than a retry.
+    var recovering by remember { mutableStateOf(startInRecovery) }
 
     // The system back gesture returns to the photographs rather than closing the app. Only
     // off the gallery — disabled, the gesture falls through to the Activity, which is what

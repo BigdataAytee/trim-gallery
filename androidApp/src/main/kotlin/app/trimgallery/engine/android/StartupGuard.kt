@@ -51,14 +51,20 @@ class StartupGuard(context: Context) {
     private val preferences = context.getSharedPreferences(FILE, Context.MODE_PRIVATE)
 
     /**
-     * Whether the previous run died before it had drawn anything, or inside its own
-     * startup work.
+     * Whether either mark is set right now.
      *
-     * Read once, at construction, before either mark can be overwritten — otherwise the
-     * answer would depend on when it was asked. Construction therefore has to happen before
-     * [beginLaunch], which is why `MainActivity` resolves this first thing in `onCreate`.
+     * A function reading the file, not a value captured at construction. The first version
+     * was the latter, and it hid an ordering rule in plain sight: the answer was only
+     * correct if the object happened to be built before [beginLaunch] wrote to it. This is
+     * a Koin singleton, so "when it was first constructed" is a property of whatever
+     * resolved it first — which is not a thing the caller can see, and in the instrumented
+     * tests it was a different class in a different file.
+     *
+     * So the read is explicit and the caller decides when. `MainActivity` asks **before**
+     * marking, and hands the answer to the composition; nothing downstream has to know that
+     * asking later would give a different answer.
      */
-    val previousRunFailed: Boolean =
+    fun previousRunFailed(): Boolean =
         preferences.getBoolean(LAUNCH_KEY, false) || preferences.getBoolean(WORK_KEY, false)
 
     /** About to build the screen. Cleared by [completeLaunch] when a frame has been drawn. */

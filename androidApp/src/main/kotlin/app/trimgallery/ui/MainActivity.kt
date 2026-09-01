@@ -35,14 +35,15 @@ class MainActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
 
-        // Resolved first, and read before it is written: `previousRunFailed` is computed at
-        // construction, so anything that constructs the guard after `beginLaunch` would get
-        // the answer for this launch rather than the last one.
+        // Asked before it is marked, and the order is the whole of it: `beginLaunch` sets the
+        // mark this launch is judged by, so reading afterwards would report on this launch
+        // rather than the last one.
         //
         // `runCatching`, because resolving from the graph is one of the things that can
         // fail — and a guard that threw while trying to record that the launch might throw
         // would be a joke at the user's expense.
         val guard = runCatching { get<StartupGuard>() }.getOrNull()
+        val previousLaunchFailed = guard?.previousRunFailed() == true
         guard?.beginLaunch()
         guard?.let(::clearTheMarkOnFirstFrame)
 
@@ -65,7 +66,10 @@ class MainActivity : ComponentActivity() {
                 dark = true,
                 reduceMotion = isReduceMotionEnabled(),
             ) {
-                TrimApp(modifier = Modifier.fillMaxSize())
+                TrimApp(
+                    startInRecovery = previousLaunchFailed,
+                    modifier = Modifier.fillMaxSize(),
+                )
             }
         }
     }

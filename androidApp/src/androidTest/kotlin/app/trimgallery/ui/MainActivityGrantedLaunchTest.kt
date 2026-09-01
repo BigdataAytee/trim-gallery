@@ -109,7 +109,7 @@ class MainActivityGrantedLaunchTest {
 
         assertFalse(
             "a launch that drew a frame must not look like a failure to the next one",
-            StartupGuard(app).previousRunFailed,
+            StartupGuard(app).previousRunFailed(),
         )
     }
 

@@ -197,9 +197,9 @@ class GalleryJourneyTest {
 
         // Then let the walk through, and require the startup work to come back. The mark is
         // cleared only by work that finished; still set, it *is* the crash loop.
-        await("the second launch starts its own work") { StartupGuard(app).previousRunFailed }
+        await("the second launch starts its own work") { StartupGuard(app).previousRunFailed() }
         walk.complete(Unit)
-        await("the second launch's startup work to finish") { !StartupGuard(app).previousRunFailed }
+        await("the second launch's startup work to finish") { !StartupGuard(app).previousRunFailed() }
         runBlocking { assertEquals("a rescan must not duplicate rows", 2, repository.gallery().size) }
     }
 
@@ -223,7 +223,7 @@ class GalleryJourneyTest {
 
         assertTrue(
             "the mark must stay set, or the next launch runs the work that just died",
-            StartupGuard(app).previousRunFailed,
+            StartupGuard(app).previousRunFailed(),
         )
     }
 
