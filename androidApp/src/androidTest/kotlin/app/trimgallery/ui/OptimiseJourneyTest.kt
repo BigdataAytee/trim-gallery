@@ -13,11 +13,11 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.test.assertCountEquals
 import androidx.compose.ui.test.assertIsDisplayed
+import androidx.compose.ui.test.assertTextEquals
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.compose.ui.test.longClick
 import androidx.compose.ui.test.onAllNodesWithTag
 import androidx.compose.ui.test.onNodeWithTag
-import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.onRoot
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performTouchInput
@@ -119,7 +119,7 @@ class OptimiseJourneyTest {
 
         awaitTag(OptimiseTestTags.SUMMARY)
         // The sentence the whole screen exists to say, checked by its words on purpose.
-        compose.onNodeWithText("Now 165 MB (was 380 MB)").assertIsDisplayed()
+        assertSummarySays("Now 165 MB (was 380 MB)")
         compose.onNodeWithTag(OptimiseTestTags.UNDO).assertIsDisplayed()
         assertEquals("exactly one optimise per tap", 1, step.calls)
     }
@@ -300,6 +300,26 @@ class OptimiseJourneyTest {
         override fun newJobId(): String = "job-${minted++}"
         override fun startOfTodayMs(): Long = 0L
         override fun now(): Instant = Clock.System.now()
+    }
+
+    /**
+     * The summary node, on screen, saying exactly this.
+     *
+     * Asked of the tagged node rather than by searching for the words, which is both a
+     * stronger claim — *this* node says it, not some node somewhere — and free of the
+     * merged-semantics question that a text search has to answer. The tree is printed on
+     * failure because the first version of this assertion failed with "is not displayed"
+     * and no way to tell whether the node was off screen, zero-sized or clipped; a test
+     * that cannot say which is a test that costs a CI cycle to ask again.
+     */
+    private fun assertSummarySays(text: String) {
+        val summary = compose.onNodeWithTag(OptimiseTestTags.SUMMARY)
+        try {
+            summary.assertIsDisplayed()
+            summary.assertTextEquals(text)
+        } catch (failure: AssertionError) {
+            fail("the summary did not say \"$text\": ${failure.message}\n${compose.onRoot().printToString()}")
+        }
     }
 
     private fun awaitTag(tag: String) {
