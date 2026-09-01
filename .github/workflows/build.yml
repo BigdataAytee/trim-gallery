@@ -372,7 +372,10 @@ jobs:
               --notes "$notes"
           fi
 
-          echo "Published: ${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/releases/latest"
+          # The tag URL, not /releases/latest: that one skips pre-releases and redirects to
+          # the releases index, so it points at everything except the build just published.
+          echo "Published: ${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/releases/tag/latest"
+          echo "Direct: ${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/releases/download/latest/trim-gallery-debug.apk"
 
   smoke:
     name: App launches on a device
