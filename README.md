@@ -190,10 +190,17 @@ Three guardrails, each of which exists because the thing it prevents already hap
 
 ## Get the APK
 
-**https://github.com/BigdataAytee/trim-gallery/releases/latest** — one tap, no sign-in, no
-zip. Every green run on `main` republishes `trim-gallery-debug.apk` there, to a rolling
-pre-release tagged `latest`, so that URL is always the newest build and the download link
-never changes.
+**[Download the newest build](https://github.com/BigdataAytee/trim-gallery/releases/download/latest/trim-gallery-debug.apk)**
+— one tap, no sign-in, no zip. Or the
+[release page](https://github.com/BigdataAytee/trim-gallery/releases/tag/latest) for what
+is in it. Every green run on `main` republishes `trim-gallery-debug.apk` to a rolling
+pre-release tagged `latest`, replacing the asset in place, so both links are always the
+newest build and neither ever changes.
+
+> Not `/releases/latest`. That URL skips pre-releases and lands on the releases index
+> instead — which is what this section said for one commit, until it was tried. The build
+> stays a pre-release, because a debug, never-field-tested APK should not present as a
+> release; the two links above do not care about the flag.
 
 The same APK is also an Actions artifact called `apk` on each run, which is the copy to
 reach for when you want the one from a *particular* commit rather than the newest — though
