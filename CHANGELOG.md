@@ -1,5 +1,24 @@
 # Changelog
 
+## The folder picker opens where the system opens it
+
+It used to pass `EXTRA_INITIAL_URI` pointing at `DCIM/Camera`, on the reasoning that the
+ordinary path would then never meet one of the three folders Android blocks. What that
+actually did was drop the user *inside* one folder: the hint sets where the picker starts,
+and starting deep is indistinguishable from being trapped there for anyone whose photographs
+live somewhere else.
+
+The hint is gone. The help sheet already covers the blocked-folder case, and it does it after
+the fact — when the user has actually hit it — rather than by narrowing what they can choose
+in advance.
+
+The sheet loses a button with it. There were two, "Open DCIM/Camera" and "Choose a different
+folder", and the first only differed because it passed the hint. Keeping it would be a label
+describing something the app no longer does, so there is one button now: "Choose a folder".
+
+`FolderChoice.cameraFolderHint` and the two constants that fed it are deleted rather than
+left unused.
+
 ## Video tiles show a frame, and no tile is ever black
 
 The Coil setup was not missing anything — `VideoFrameDecoder` is registered and works. The

@@ -23,8 +23,6 @@ object FolderChoice {
     /** Why a tree cannot be used, or null when it can. */
     enum class Refusal { STORAGE_ROOT, DOWNLOADS, REMOVABLE_ROOT }
 
-    private const val EXTERNAL_STORAGE_AUTHORITY = "com.android.externalstorage.documents"
-
     /** Android's own name for the primary volume in a document id. */
     private const val PRIMARY = "primary"
 
@@ -93,19 +91,5 @@ object FolderChoice {
     fun volumeOfDocumentId(documentId: String): String? =
         documentId.substringBefore(':', missingDelimiterValue = "").ifEmpty { null }
 
-    /**
-     * Where to open the picker, so the common case never meets a blocked folder.
-     *
-     * `EXTRA_INITIAL_URI` is a hint: a device that has no `DCIM/Camera` opens wherever it
-     * likes rather than failing, which is why this is an improvement to the odds and not a
-     * guarantee. Camera rather than DCIM itself because that is where the photographs
-     * actually are on every phone this app is for.
-     */
-    fun cameraFolderHint(): Uri = DocumentsContract.buildDocumentUri(
-        EXTERNAL_STORAGE_AUTHORITY,
-        "$PRIMARY:$CAMERA_DIR",
-    )
-
     const val DOWNLOAD_DIR = "Download"
-    const val CAMERA_DIR = "DCIM/Camera"
 }

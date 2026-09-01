@@ -37,12 +37,19 @@ class FolderPicker internal constructor(private val launch: (Uri?) -> Unit, priv
     }
 
     /**
-     * Opens the picker at DCIM/Camera.
+     * Opens the picker wherever the system opens it.
      *
-     * A hint, not a guarantee — a device without that folder opens where it likes — but it
-     * means the ordinary path never meets a folder Android blocks in the first place.
+     * **No initial-URI hint.** It used to open at DCIM/Camera, on the reasoning that the
+     * ordinary path would then never meet a folder Android blocks. What it actually did was
+     * drop the user *inside* one folder with no way up: `EXTRA_INITIAL_URI` sets where the
+     * picker starts, and starting deep is indistinguishable from being trapped there for
+     * anyone whose photographs live somewhere else.
+     *
+     * The help sheet already covers the case the hint was guarding against, and it does it
+     * after the fact, when the user has actually hit it, rather than by narrowing what they
+     * can choose in advance.
      */
-    fun choose() = launch(FolderChoice.cameraFolderHint())
+    fun choose() = launch(null)
 
     /** The sheet. Emits nothing unless the last attempt came back with nothing usable. */
     @Composable
@@ -50,16 +57,9 @@ class FolderPicker internal constructor(private val launch: (Uri?) -> Unit, priv
         val shown = help.value as? Help.Shown ?: return
         FolderHelpSheet(
             refusal = shown.refusal,
-            onOpenCamera = {
+            onChoose = {
                 help.value = Help.Hidden
                 choose()
-            },
-            onPickAnother = {
-                help.value = Help.Hidden
-                // Deliberately no hint here: this is the escape hatch for somebody whose
-                // photos are not in DCIM/Camera, and reopening at Camera every time would
-                // make it the button that does not do what it says.
-                launch(null)
             },
         )
     }
