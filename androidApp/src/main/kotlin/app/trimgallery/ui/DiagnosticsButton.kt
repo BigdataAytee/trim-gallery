@@ -20,6 +20,7 @@ import app.trimgallery.core.ui.theme.TrimShape
 import app.trimgallery.core.ui.theme.TrimSpacing
 import app.trimgallery.core.ui.theme.TrimTheme
 import app.trimgallery.engine.NightConstraints
+import app.trimgallery.engine.android.BuildIdentity
 import app.trimgallery.engine.android.CrashReports
 import app.trimgallery.engine.android.DiagnosticsExport
 import app.trimgallery.engine.android.GrantedFolders
@@ -71,10 +72,16 @@ fun DiagnosticsButton(
                     // The scheduler section first: the commonest question a field report
                     // has to answer is "is it going to run tonight?", and that is easier to
                     // read at the top than under ten stack traces.
-                    val report = scheduler.status().lines(
-                        constraints = NightConstraints(),
-                        grantedFolders = folders.grants().size,
-                    ) + "\n" + crashes.asReport()
+                    // The build first, then the scheduler, then the traces. Which
+                    // program this was is the question every other line in the file
+                    // depends on: a trace from a build that predates the fix it is being
+                    // read against says something completely different from the same trace
+                    // on a build that has it.
+                    val report = BuildIdentity.lines() +
+                        scheduler.status().lines(
+                            constraints = NightConstraints(),
+                            grantedFolders = folders.grants().size,
+                        ) + "\n" + crashes.asReport()
                     val intent = export.share(report, fileName = "trim-gallery-diagnostics.txt")
                     // A chooser rather than the last-used target: the file is the user's
                     // and where it goes is their choice, every time.
