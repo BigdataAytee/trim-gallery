@@ -2,7 +2,9 @@ package app.trimgallery.ui
 
 import android.net.Uri
 import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.systemBarsPadding
 import androidx.compose.foundation.text.BasicText
@@ -20,8 +22,10 @@ import app.trimgallery.core.model.FolderGrant
 import app.trimgallery.core.model.FolderMode
 import app.trimgallery.core.model.MediaRef
 import app.trimgallery.core.ui.motion.pressScale
+import app.trimgallery.core.ui.theme.TrimSpacing
 import app.trimgallery.core.ui.theme.TrimTheme
 import app.trimgallery.engine.SettingsStore
+import app.trimgallery.engine.android.BuildIdentity
 import app.trimgallery.engine.android.FolderChoice
 import app.trimgallery.engine.android.GrantedFolders
 import app.trimgallery.engine.android.NightPass
@@ -87,13 +91,33 @@ fun SettingsHost(
                 onAddFolder = { picker.choose() },
                 modifier = Modifier.fillMaxSize().systemBarsPadding(),
                 header = { BackToPhotos(onBack) },
-                // The one control here that is Android's rather than the app's, so it is
-                // passed in rather than written into the shared screen.
-                footer = { DiagnosticsButton() },
+                // The two things here that are Android's rather than the app's, so they
+                // are passed in rather than written into the shared screen.
+                footer = {
+                    Column(verticalArrangement = Arrangement.spacedBy(TrimSpacing.INSET_DP.dp)) {
+                        DiagnosticsButton()
+                        About()
+                    }
+                },
             )
         }
         picker.HelpSheet()
     }
+}
+
+/**
+ * Which build this is.
+ *
+ * Always shown, unlike the diagnostics button beside it: the button appears only when
+ * there is a crash to send, and the question this answers — "am I even on the build with
+ * the fix?" — is asked most often when nothing has crashed at all.
+ */
+@Composable
+private fun About() {
+    BasicText(
+        text = BuildIdentity.line,
+        style = TrimTheme.typography.caption.copy(color = TrimTheme.colors.muted),
+    )
 }
 
 @Composable

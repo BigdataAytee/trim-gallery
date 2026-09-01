@@ -2652,3 +2652,31 @@ did must not be the one screen that crashes.
   `UndoBinAndroid.restore`.
 - The tier is hard-coded to Free in `SpaceHost` until billing is wired, so the monthly cap
   ring is the free tier's for everybody.
+
+## Naming the build (1 Sep 2026)
+
+Two field reports in a row could not say which build they were about, and both times the
+answer was worked out by comparing APK byte counts on the release page. That is a diagnostic
+tool made of coincidence.
+
+Decisions:
+
+**The commit, not a build date.** A date approximates what the code was; the commit is what
+the code was. It also keeps the export free of absolute times, which `Diagnostics` bans
+because when the app ran says when its owner sleeps — a rule that would have been quietly
+broken by the obvious alternative.
+
+**Failing to read the commit must never fail the build.** `GITHUB_SHA` first, `git` second,
+`unknown` last, the whole thing wrapped. An unbuildable app is worse than one that cannot
+name itself, and this build file fails *configuration* when it fails at all, which takes
+every job in the workflow with it.
+
+**It says `unknown` rather than omitting the field.** A line that silently drops it looks
+complete, and the reader cannot tell "the build did not know" from "this version never said".
+
+**Where it goes in `build.gradle.kts` is load-bearing.** Statements above `plugins { }` are
+compiled in a restricted scope with no Project API, so `providers` is unavailable there;
+`smokeX86Property` gets away with sitting there by being a string literal. And `const val`
+is a script compilation error at a `.kts` top level, which the file already records once.
+Both were hit while writing this and both fail configuration, so they are now recorded twice
+— the second time next to the code that has to obey them.

@@ -25,6 +25,52 @@ plugins {
     alias(libs.plugins.compose.multiplatform)
 }
 
+/**
+ * Seven characters, which is what GitHub shows and what a person can read back over a
+ * message.
+ *
+ * A plain `val`, not `const val`: a .kts script's top level is the body of an implicit
+ * class, and `const` is only legal on a real top level or in an object — the same trap the
+ * `smokeX86Property` comment records, and it fails *configuration*, so every job in the
+ * workflow goes red including the ones that never touch Android.
+ *
+ * Both of these sit **below** `plugins { }` rather than beside `smokeX86Property` above it.
+ * Statements before that block are compiled in a restricted scope with no Project API, so
+ * `providers` does not exist there; `smokeX86Property` gets away with it by being a string
+ * literal.
+ */
+val shortShaLength = 7
+
+/**
+ * The commit this APK was built from, for "which build am I on?".
+ *
+ * A field report that cannot name its build is a report about an unknown program: the
+ * first question after "it crashed" is whether the fix for the last crash was even in what
+ * the tester installed, and without this the only way to answer it is to compare file
+ * sizes on a release page.
+ *
+ * `GITHUB_SHA` first, because CI has it for free and knows the exact commit it checked
+ * out; `git` second, for a developer's own build. **Neither may fail the build.** A
+ * version string is not worth a red pipeline, so the whole thing is wrapped and falls back
+ * to "unknown" — a build that says it does not know which commit it is, is still more
+ * honest than one that cannot be built.
+ */
+val gitSha: String = run {
+    val fromCi = System.getenv("GITHUB_SHA")?.trim()?.take(shortShaLength)
+    if (!fromCi.isNullOrEmpty()) {
+        return@run fromCi
+    }
+    runCatching {
+        providers.exec {
+            commandLine("git", "rev-parse", "--short=$shortShaLength", "HEAD")
+            // A checkout with no git directory — an unpacked source archive — must not
+            // fail configuration, which in this build fails every job including the ones
+            // that never touch Android.
+            isIgnoreExitValue = true
+        }.standardOutput.asText.get().trim()
+    }.getOrNull()?.takeIf { it.isNotEmpty() } ?: "unknown"
+}
+
 android {
     namespace = "app.trimgallery"
     compileSdk = libs.versions.compileSdk.get().toInt()
@@ -35,6 +81,8 @@ android {
         targetSdk = libs.versions.targetSdk.get().toInt()
         versionCode = 1
         versionName = "0.1.0"
+
+        buildConfigField("String", "GIT_SHA", "\"$gitSha\"")
 
         // arm64-v8a only (ARCHITECTURE.md § 10). The native metric libraries are built
         // for one ABI; a second would ship code that cannot run them.
@@ -164,7 +212,12 @@ android {
         targetCompatibility = JavaVersion.VERSION_17
     }
 
-    buildFeatures { compose = true }
+    // `buildConfig` is off by default in AGP 9 and off again in gradle.properties; this
+    // module needs exactly one generated constant, the commit above.
+    buildFeatures {
+        compose = true
+        buildConfig = true
+    }
 
     lint {
         warningsAsErrors = true
@@ -329,3 +382,4 @@ afterEvaluate {
         }
     }
 }
+
