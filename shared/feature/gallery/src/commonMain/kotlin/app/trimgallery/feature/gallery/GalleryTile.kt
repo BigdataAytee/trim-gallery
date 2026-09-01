@@ -21,6 +21,7 @@ import androidx.compose.ui.unit.dp
 import app.trimgallery.core.model.MediaItem
 import app.trimgallery.core.ui.motion.HeroGeometry
 import app.trimgallery.core.ui.motion.MotionSpec
+import app.trimgallery.core.ui.motion.ProgressRing
 import app.trimgallery.core.ui.motion.breathing
 import app.trimgallery.core.ui.motion.pressScale
 import app.trimgallery.core.ui.theme.TrimTheme
@@ -49,7 +50,10 @@ fun GalleryTile(
     onOpen: (MediaItem) -> Unit,
     onBounds: (HeroGeometry.Rect) -> Unit,
     modifier: Modifier = Modifier,
+    progress: Float? = null,
+    previewing: Boolean = false,
     overlay: @Composable BoxScope.() -> Unit = {},
+    preview: @Composable (MediaItem) -> Unit = {},
     artwork: @Composable (MediaItem) -> Unit,
 ) {
     val colors = TrimTheme.colors
@@ -84,7 +88,22 @@ fun GalleryTile(
             .background(colors.card)
             .pressScale { onOpen(item) },
     ) {
+        // The still stays mounted underneath the preview. Swapping it out would leave a
+        // blank tile for however long the player takes to render its first frame, and the
+        // whole point of a dwell preview is that it arrives without the grid flinching.
         artwork(item)
+        if (previewing) preview(item)
+        if (processing) {
+            ProgressRing(
+                progress = progress,
+                color = colors.accent,
+                reduceMotion = TrimTheme.reduceMotion,
+                modifier = Modifier
+                    .align(Alignment.Center)
+                    .fillMaxSize()
+                    .padding(MotionSpec.ProgressRing.INSET_DP.dp),
+            )
+        }
         overlay()
     }
 }

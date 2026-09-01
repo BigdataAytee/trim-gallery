@@ -5,10 +5,12 @@ import androidx.compose.animation.core.CubicBezierEasing
 import androidx.compose.animation.core.Easing
 import androidx.compose.animation.core.LinearEasing
 import androidx.compose.animation.core.RepeatMode
+import androidx.compose.animation.core.SpringSpec
 import androidx.compose.animation.core.StartOffset
 import androidx.compose.animation.core.animateFloat
 import androidx.compose.animation.core.infiniteRepeatable
 import androidx.compose.animation.core.rememberInfiniteTransition
+import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.border
 import androidx.compose.foundation.gestures.detectTapGestures
@@ -30,6 +32,17 @@ import app.trimgallery.core.ui.theme.LocalReduceMotion
 
 /** [MotionSpec.Easing] as a Compose easing curve. */
 fun MotionSpec.Easing.toCompose(): Easing = CubicBezierEasing(x1, y1, x2, y2)
+
+/**
+ * The design system's spring as a Compose one.
+ *
+ * DESIGN_SYSTEM.md gives stiffness and damping; Compose wants stiffness and a damping
+ * *ratio*, which `TrimSpring.dampingRatio` already computes. Without this the tokens are
+ * a table nobody can use from a composable, which is how `HeroViewer` ended up asking for
+ * `DampingRatioMediumBouncy` — a Compose default that is close to `STANDARD` and is not
+ * it, so the dismissal settled to a rhythm no token describes.
+ */
+fun <T> TrimSpring.toCompose(): SpringSpec<T> = spring(dampingRatio = dampingRatio, stiffness = stiffness)
 
 /**
  * The slow pulse marking a thumbnail as being worked on (BUILD.md § 9: "thin progress
