@@ -1,8 +1,8 @@
 package app.trimgallery.engine.android
 
-import kotlin.test.Test
-import kotlin.test.assertEquals
-import kotlin.test.assertTrue
+import org.junit.Assert.assertEquals
+import org.junit.Assert.assertTrue
+import org.junit.Test
 
 /**
  * The line that answers "which build am I on?".
@@ -27,7 +27,7 @@ class BuildIdentityTest {
         // said".
         val line = BuildIdentity.format(versionName = "0.1.0", versionCode = 1, sha = "")
 
-        assertTrue(BuildIdentity.UNKNOWN in line, line)
+        assertTrue(line, BuildIdentity.UNKNOWN in line)
     }
 
     @Test
@@ -37,6 +37,6 @@ class BuildIdentityTest {
         // owner sleeps, and a build date invites exactly that question.
         val line = BuildIdentity.format("0.1.0", 1, "a03262a")
 
-        assertTrue(!Regex("""\d{10,}""").containsMatchIn(line), line)
+        assertTrue(line, !Regex("""\d{10,}""").containsMatchIn(line))
     }
 }
