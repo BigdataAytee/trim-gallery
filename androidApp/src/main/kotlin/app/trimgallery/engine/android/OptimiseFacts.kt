@@ -19,12 +19,9 @@ import app.trimgallery.engine.SettingsStore
  * from the settings store, the database and the platform's own name for itself. Keeping it
  * on this side is what lets the step stay free of a database, a `Context` and a `Build`.
  *
- * **Not bound yet**, because the step it serves is not bound yet: `YuvSource` and
- * `ProbeEncoder` have no implementation on any platform, so the search and the VMAF gate
- * have nothing to run on. This is written now because it is the half of the wiring that
- * *can* be written without an encoder, and because leaving it out would mean the next
- * change had to do both at once. See `AndroidEngineModule` for the full account of what is
- * missing.
+ * Bound as of the change that binds `NightRun.Step`. It was written two changes earlier,
+ * while `YuvSource` and `ProbeEncoder` still had no implementation on any platform, because
+ * it was the half of the wiring that could be written without an encoder.
  */
 class OptimiseFacts(
     private val repository: TrimRepository,

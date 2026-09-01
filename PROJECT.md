@@ -3060,3 +3060,22 @@ reads as "everything was proved here".
 **`NightRun.Step` stays unbound for one more change.** Every part it needs now exists and is
 bound. Binding it is the moment the app starts replacing files unattended at 3am, and that
 deserves a change that does only that and can be reviewed as such.
+
+
+## Binding the night step (1 Sep 2026)
+
+**A missing Koin definition is not caught by anything this project already had.** It
+compiles, and every unit test constructs its subject directly rather than resolving it, which
+is precisely the step a graph skips. `NightWorker` resolved `NightRun.Step` and nothing
+provided one; the failure was scheduled for the first charging night, in a worker, with no
+screen. `NightWiringTest` now asks the assembled graph for the same list the worker resolves,
+in the same order, on a device.
+
+**The verifier is assembled in the module rather than injected whole.** Its two halves answer
+to different parts of BUILD.md § 5 — `Verifier` holds the metric settings (VMAF ≥ 95,
+`n_subsample=10`, three windows) and `VerifyPass` holds the retry rule (step up one notch, at
+most twice) — and both take their documented defaults, so the numbers live in one place each.
+
+**This is the change that lets the app modify a file, so it does only this.** Nothing new
+protects the original: the gates were built first and are asserted elsewhere. What is new is
+that they are now reachable, and that an unattended night can reach them.

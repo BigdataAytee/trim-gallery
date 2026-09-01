@@ -1,5 +1,36 @@
 # Changelog
 
+## The night pass can now change a file
+
+Every part of the encode path existed, was tested, and was unreachable. `NightWorker`
+resolved `NightRun.Step` from the graph and **nothing provided one** — so a night that
+actually woke would have failed looking for it, in a worker, with no screen, at 3am. The
+symptom would have been "the app never optimises anything", not a crash anyone could see.
+
+That binding is now in place, along with `VideoOptimiseStep`, `VerifyPass`, `Verifier` and
+`OptimiseFacts`. From here, a charging phone at 3am will replace originals with smaller
+copies on its own, with nobody watching. That is the thing to be careful about, and it is
+why this change does only this.
+
+### What makes that safe was already built
+
+Nothing new guards it, because the guards were written first and have been asserted all
+along: `VerifyPass` steps up at most twice and refuses anything below the VMAF bar, the size
+and mtime snapshot taken before the encode is re-checked after it, a `ReplacePlan` can only
+be issued by `VerifyPass.Result.Ready`, and `Replacer` is the only component in the app that
+may write to a granted folder — a build guard enforces that last one. `VideoOptimiseStepTest`
+is written as the ways a file could be lost, each counting the plans a fake `Replacer` was
+handed.
+
+### A wiring test, because this class of bug has no other catch
+
+A missing Koin definition compiles, passes every unit test, and fails at runtime. Every unit
+test in this project constructs its subject directly, which is exactly the step a graph
+skips. So `NightWiringTest` asks the assembled graph, on a device, for **the same seven
+definitions `NightWorker.doWork` resolves, in the same order** — and for `VideoOptimiseStep`,
+whose seven constructor arguments each have their own. If one goes missing again, the failure
+names it in CI rather than overnight on someone's phone.
+
 ## The encoder half of the search
 
 `ProbeEncoder` was the last engine with no implementation on any platform. The search asks

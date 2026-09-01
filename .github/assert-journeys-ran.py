@@ -55,6 +55,13 @@ REQUIRED = {
         "theOutcomeMatchesWhatTheDeviceSaysItCanEncode",
         "anEmptyWindowIsAnEmptyWindowRatherThanACrash",
     ],
+    # That the night pass can build what it runs. A missing Koin definition compiles, passes
+    # every unit test, and fails at 3am in a worker with no screen — so it is asked of the
+    # assembled graph on a device, which is the only place the question can be put.
+    "app.trimgallery.engine.android.NightWiringTest": [
+        "theNightPassCanResolveEverythingItRuns",
+        "theWholeOptimiseChainResolves",
+    ],
     "app.trimgallery.ui.MainActivityGrantedLaunchTest": [
         "theRealActivityWithAFolderGrantedDrawsTheGrid",
         "theLaunchMarkIsClearedOnceAFrameIsDrawn",
