@@ -14,6 +14,9 @@ import app.trimgallery.core.pipeline.night.NightRun
 import app.trimgallery.core.pipeline.photo.PhotoOptimiseStep
 import app.trimgallery.core.pipeline.replace.OriginalLocator
 import app.trimgallery.core.pipeline.replace.UndoJournal
+import app.trimgallery.core.pipeline.verify.Verifier
+import app.trimgallery.core.pipeline.verify.VerifyPass
+import app.trimgallery.core.pipeline.video.VideoOptimiseStep
 import app.trimgallery.engine.CodecFactory
 import app.trimgallery.engine.ContainerReader
 import app.trimgallery.engine.Indexer
@@ -38,6 +41,7 @@ import app.trimgallery.engine.android.MlKitIndexer
 import app.trimgallery.engine.android.NativeQualityScorer
 import app.trimgallery.engine.android.NightPass
 import app.trimgallery.engine.android.NightWorker
+import app.trimgallery.engine.android.OptimiseFacts
 import app.trimgallery.engine.android.OutputProbeAndroid
 import app.trimgallery.engine.android.PhotoCodecAndroid
 import app.trimgallery.engine.android.ProbeEncoderAndroid
@@ -233,14 +237,50 @@ val androidEngineModule = module {
     // VerifyPass, the Replacer and Predictor.learn into the chain ARCHITECTURE.md § 7
     // describes, with the safety gates asserted in `VideoOptimiseStepTest`.
     //
-    // Both engines it was waiting for now exist: `YuvSourceAndroid` decodes the probe
-    // windows and the encoded output, and `ProbeEncoderAndroid` encodes one window at one
-    // setting. Both are bound above, and `ProbeAndSearch` with them.
+    // This is the wiring the whole project has been walking towards, and the point at which
+    // the app can change a file. Everything below it was built, tested and unreachable.
     //
-    // **`VideoOptimiseStep` and `NightRun.Step` are still deliberately unbound**, and that
-    // is now one decision rather than a missing part: binding `NightRun.Step` is the moment
-    // this app starts replacing a user's files unattended at 3am, and it belongs in a change
-    // that does only that and can be reviewed as such. Next PR. Recorded in PROJECT.md.
+    // `NightWorker` already asked for `NightRun.Step` and nothing provided one, so a night
+    // that actually woke would have thrown looking for it. That is the bug this closes;
+    // what it opens is the real one to be careful about — from here, a charging phone at
+    // 3am will replace originals with smaller copies, on its own, with nobody watching.
+    //
+    // Everything that makes that safe is already in place and asserted elsewhere: the
+    // verify gate (`VerifyPass` steps up at most twice and refuses below the VMAF bar), the
+    // size and mtime snapshot re-checked after the encode, and the rule that a `ReplacePlan`
+    // can only be issued by `VerifyPass.Result.Ready` and can only be executed by
+    // `Replacer`. `VideoOptimiseStepTest` is written as the ways a file could be lost, each
+    // counting the plans a fake `Replacer` was handed.
+    //
+    // The verifier is assembled here rather than injected as a whole because its two halves
+    // answer to different documents: `Verifier` holds BUILD.md § 5's metric settings
+    // (VMAF ≥ 95, n_subsample=10, three windows) and `VerifyPass` holds its retry rule
+    // (step up one notch, at most twice). Both take their defaults, which are those
+    // numbers.
+    single { Verifier(probe = get(), yuv = get(), scorer = get()) }
+    single { VerifyPass(verifier = get(), storage = get()) }
+
+    single<VideoOptimiseStep.Facts> {
+        OptimiseFacts(repository = get(), settingsStore = get(), tier = { currentTier() })
+    }
+
+    single {
+        VideoOptimiseStep(
+            storage = get(),
+            codecs = get(),
+            containers = get(),
+            probe = get(),
+            verify = get(),
+            replacer = get(),
+            facts = get(),
+        )
+    }
+
+    // The night pass's view of the same step, and the binding `NightWorker` has been asking
+    // for. `asNightStep()` always passes `background = true`: the night is by definition not
+    // the foreground, and a night job holding the hardware at foreground priority would
+    // break the promise that a camera always wins (BUILD.md § 2 rule 2, codec-priority).
+    single<NightRun.Step> { get<VideoOptimiseStep>().asNightStep() }
     //
     // --- Milestone 9: the index ------------------------------------------------
     //
