@@ -9,12 +9,12 @@ import androidx.compose.ui.viewinterop.AndroidView
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
-import androidx.media3.common.MediaItem as Media3Item
 import androidx.media3.common.Player
 import androidx.media3.common.util.UnstableApi
 import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.ui.PlayerView
 import app.trimgallery.core.model.MediaItem
+import androidx.media3.common.MediaItem as Media3Item
 
 /**
  * Video playback in the viewer, behind the `video` slot `shared/feature/gallery` exposes.

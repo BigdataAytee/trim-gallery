@@ -45,6 +45,25 @@ already built. It appears only when a report exists, and sits on the first-run s
 the empty grid — the places the app can still reach when it cannot reach a photo. It
 belongs in Settings, which does not exist yet.
 
+## The permanent link was the wrong one
+
+`/releases/latest` skips pre-releases. The rolling release is marked pre-release on
+purpose — a debug, never-field-tested APK should not present as a release — so that URL
+redirects to the releases index rather than to the build, which is what README said for
+one commit until someone tried it. Tested, rather than asserted this time:
+
+```
+/releases/download/latest/trim-gallery-debug.apk  ->  302, 109 MB, downloads
+/releases/tag/latest                              ->  200
+/releases/latest                                  ->  302 to /releases
+```
+
+README and the job's closing `echo` now use the asset and tag URLs, which do not care
+about the pre-release flag. The flag stays.
+
+The release itself published correctly on the first run: `latest`, marked pre-release, the
+notes naming the commit and the run, and the APK attached and downloadable.
+
 ## A permanent link to the newest build
 
 Every green run on `main` now republishes the debug APK to a rolling pre-release tagged

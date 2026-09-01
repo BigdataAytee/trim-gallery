@@ -40,8 +40,7 @@ class CrashReports(private val context: Context) {
     }
 
     /** Every stored report, newest first. */
-    fun reports(): List<File> =
-        directory.listFiles()?.sortedByDescending { it.lastModified() }.orEmpty()
+    fun reports(): List<File> = directory.listFiles()?.sortedByDescending { it.lastModified() }.orEmpty()
 
     /** The reports as one text block, for the diagnostics export. Empty when there are none. */
     fun asReport(): String {
