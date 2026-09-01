@@ -140,7 +140,26 @@ fun Modifier.arrival(index: Int, key: Any): Modifier = composed {
  * Press feedback. Kept as a modifier rather than a component so tiles, chips and bar
  * buttons all respond identically.
  */
-fun Modifier.pressScale(onClick: () -> Unit): Modifier = composed {
+fun Modifier.pressScale(onClick: () -> Unit): Modifier = pressFeedback(onLongPress = null, onClick = onClick)
+
+/**
+ * The same, for an element that answers to a long press as well — a grid tile, which opens
+ * on a tap and offers to optimise on a hold.
+ *
+ * A second function rather than a default parameter, so that neither of the two shapes
+ * every existing call site uses — `pressScale(action)` and `pressScale { action() }` — has
+ * to change. A trailing lambda always binds to the *last* parameter, so any single
+ * signature carrying both callbacks would silently reassign one of them.
+ *
+ * Both gestures on one detector, deliberately. Two `pointerInput` modifiers over the same
+ * element race for the down event, and which one wins depends on modifier order — so a tile
+ * could open *and* offer to optimise, or do neither. `detectTapGestures` is the one place
+ * tap and long press are told apart.
+ */
+fun Modifier.pressScale(onLongPress: () -> Unit, onClick: () -> Unit): Modifier =
+    pressFeedback(onLongPress = onLongPress, onClick = onClick)
+
+private fun Modifier.pressFeedback(onLongPress: (() -> Unit)?, onClick: () -> Unit): Modifier = composed {
     val scale = remember { Animatable(1f) }
 
     this
@@ -148,7 +167,7 @@ fun Modifier.pressScale(onClick: () -> Unit): Modifier = composed {
             scaleX = scale.value
             scaleY = scale.value
         }
-        .pointerInput(Unit) {
+        .pointerInput(onLongPress) {
             detectTapGestures(
                 onPress = {
                     scale.animateTo(MotionSpec.Press.SCALE, tween(MotionSpec.Press.DURATION_MS))
@@ -156,6 +175,7 @@ fun Modifier.pressScale(onClick: () -> Unit): Modifier = composed {
                     tryAwaitRelease()
                     scale.animateTo(1f, tween(MotionSpec.Press.DURATION_MS))
                 },
+                onLongPress = onLongPress?.let { press -> { press() } },
                 onTap = { onClick() },
             )
         }

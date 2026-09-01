@@ -1,5 +1,65 @@
 # Changelog
 
+## Optimise, on one file, because you asked
+
+The first place a person can make this app change a file. Everything under it was built and
+reachable only by a night pass nobody watches; long-press a video and it is now a thing you
+can watch happen, decide about, and undo.
+
+Long-press a tile → a sheet with the estimate and Start → a progress ring on the tile itself
+→ **"Now 165 MB (was 380 MB)"**, with Keep it and Undo.
+
+### Undo is offered only when there is something to undo
+
+The rule the whole screen is built around, and the one thing tested from every angle. The
+replace parks the original and writes an `UndoEntry` naming where it went; that reference is
+what a restore needs. A run that skipped or failed replaced nothing, so it offers no Undo and
+says what happened instead. A button that appears to work and does not is a bad thing on any
+screen and an unforgivable one here, where the user is deciding whether to trust this app
+with the rest of their library.
+
+Undo looks the entry up by media id rather than carrying it from the result, so it still
+works if the process was killed between the replace and the tap.
+
+### The run is recorded, so Space can show it
+
+An optimise now writes a `job` row before it starts and closes it out afterwards. Two things
+depend on that and both would have been quietly wrong without it: the free tier's five-a-day
+counts `job` rows with `user_initiated = 1`, and Space and History read the same table. A tap
+that freed 215 MB and left no row would have reported nothing on the screen the user checks
+first.
+
+The row is written *before* the encode, not after. The battery is spent whether or not the
+user lets it finish, so counting completions would let someone who cancels at 99% run it all
+day.
+
+### What the sheet will not say
+
+The estimate appears only where something measured one. `CompressNow.Estimate` leaves both
+numbers nullable exactly so a sheet with no prediction can say how big the file is and offer
+to start, rather than inventing a saving the result will contradict. Progress starts as
+*unknown* rather than as zero, because a bar pinned at 0% and a bar that has not started look
+identical and only one of them is honest.
+
+### Why it ends on Keep / Undo rather than § 6's three buttons
+
+USER_JOURNEY.md § 6 ends on Share / Replace original / Keep both — three choices made before
+anything is written. This ends on Keep it / Undo, which is the same safety with the order
+reversed: `VideoOptimiseStep` replaces as the last step of a verified chain and parks the
+original rather than deleting it, so Undo is a real restore. Building § 6's version would
+need a second write path that holds a finished encode unreplaced. The shape the field report
+asked for is the one the engine already supports; Share and Keep both are still open, and
+recorded as such.
+
+### Tested where it can be
+
+`OptimiseFlow` is unit tested on the JVM as the sentences the sheet must never be able to
+say. Five emulator journeys drive the real screen over a **faked** step — the hold, the run,
+the recorded job, the missing Undo after a skip, and the restore. The step is faked because
+it has to be: the CI image has no hardware encoder and rule 2 forbids the software one. What
+the journeys prove is everything between the finger and the encoder, which is where this
+change lives. The encode itself is proved on a phone.
+
 ## The night pass can now change a file
 
 Every part of the encode path existed, was tested, and was unreachable. `NightWorker`

@@ -84,6 +84,14 @@ fun GalleryScreen(
     /** Per-item progress for the ring, when the pipeline can say. Null means "busy". */
     progressOf: (MediaItem) -> Float? = { null },
     /**
+     * A hold on a tile — USER_JOURNEY.md § 6's way in to Optimise.
+     *
+     * Null by default so that the grids which have nothing to offer on a hold (the trash,
+     * the locked folder) simply do not answer to one, rather than opening a sheet whose
+     * buttons could not work.
+     */
+    onLongPress: ((MediaItem) -> Unit)? = null,
+    /**
      * The host's own controls over the grid — on Android, the way in to Settings.
      *
      * A slot rather than something the caller stacks on top of this screen, because *where*
@@ -182,6 +190,7 @@ fun GalleryScreen(
                             previewing = previewId == mediaItem.id && mediaItem.kind == MediaKind.VIDEO,
                             preview = preview,
                             onOpen = { open = it },
+                            onLongPress = onLongPress,
                             onBounds = { rect -> bounds[mediaItem.id] = rect },
                             modifier = Modifier
                                 .arrival(index = index, key = zoom)

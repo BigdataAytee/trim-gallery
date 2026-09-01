@@ -55,6 +55,16 @@ REQUIRED = {
         "theOutcomeMatchesWhatTheDeviceSaysItCanEncode",
         "anEmptyWindowIsAnEmptyWindowRatherThanACrash",
     ],
+    # Long-press to Optimise, over a faked step. The encode itself cannot run here — no
+    # hardware encoder on an ATD image — so what these prove is everything between the
+    # finger and the encoder, which is where the screen is.
+    "app.trimgallery.ui.OptimiseJourneyTest": [
+        "holdingAVideoOffersToOptimiseIt",
+        "startingItReportsWhatChanged",
+        "theRunIsRecordedSoSpaceCanShowIt",
+        "aRunThatReplacedNothingNeverOffersAnUndo",
+        "undoPutsTheOriginalBack",
+    ],
     # That the night pass can build what it runs. A missing Koin definition compiles, passes
     # every unit test, and fails at 3am in a worker with no screen — so it is asked of the
     # assembled graph on a device, which is the only place the question can be put.

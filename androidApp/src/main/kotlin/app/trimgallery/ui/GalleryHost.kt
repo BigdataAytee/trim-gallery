@@ -21,6 +21,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.media3.common.util.UnstableApi
 import app.trimgallery.core.data.TrimRepository
+import app.trimgallery.core.domain.compress.OptimiseFlow
 import app.trimgallery.core.model.MediaItem
 import app.trimgallery.core.pipeline.LibraryDiff
 import app.trimgallery.core.ui.motion.pressScale
@@ -32,6 +33,7 @@ import app.trimgallery.engine.android.CrashReports
 import app.trimgallery.engine.android.GrantedFolders
 import app.trimgallery.engine.android.NightPass
 import app.trimgallery.engine.android.StartupGuard
+import app.trimgallery.feature.compress.OptimiseSheet
 import app.trimgallery.feature.gallery.GalleryScreen
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
@@ -77,6 +79,15 @@ fun GalleryHost(
     nightPass: NightPass = koinInject(),
     guard: StartupGuard = koinInject(),
     crashes: CrashReports = koinInject(),
+    /**
+     * The Optimise sheet, and the thing that runs one.
+     *
+     * A parameter with a default rather than a `remember` inside, so that the emulator test
+     * can hand it a controller over a faked `VideoOptimiseStep`. That is not a convenience:
+     * the image CI runs on has no hardware encoder, and BUILD.md § 2 rule 2 forbids the
+     * software one — so the only way to test this screen at all is to replace the step.
+     */
+    optimise: OptimiseController = rememberOptimiseController(),
 ) {
     var grants by remember { mutableStateOf(folders.grants()) }
     var items by remember { mutableStateOf(emptyList<MediaItem>()) }
@@ -187,7 +198,12 @@ fun GalleryHost(
             }
             else -> GalleryScreen(
                 items = items,
-                processingIds = emptySet(),
+                // The tile that is being optimised right now, so the grid draws its
+                // breathing halo and progress ring while the sheet is open. The same
+                // treatment the night pass gets, because it is the same work.
+                processingIds = workingOn(optimise.state),
+                progressOf = { item -> progressFor(optimise.state, item) },
+                onLongPress = optimise::open,
                 today = Clock.System.todayIn(TimeZone.currentSystemDefault()),
                 timeZone = TimeZone.currentSystemDefault(),
                 emptyState = { ScanState(scanning = scanning, failure = failure) { picker.choose() } },
@@ -198,8 +214,40 @@ fun GalleryHost(
             )
         }
         picker.HelpSheet()
+
+        OptimiseOverlay(optimise)
     }
 }
+
+/**
+ * The Optimise sheet, over the grid.
+ *
+ * Emitted last and inside the same Box, for the reason the help sheet is: Compose paints
+ * siblings in the order they are emitted, and a sheet drawn before the grid is a sheet the
+ * grid's own opaque background is painted straight over.
+ */
+@Composable
+@UnstableApi
+private fun BoxScope.OptimiseOverlay(optimise: OptimiseController) {
+    if (optimise.state == OptimiseFlow.State.Closed) return
+
+    OptimiseSheet(
+        state = optimise.state,
+        onStart = optimise::start,
+        onKeep = optimise::keep,
+        onUndo = optimise::undo,
+        onDismiss = optimise::dismiss,
+        modifier = Modifier.align(Alignment.BottomCenter).padding(TrimSpacing.INSET_DP.dp),
+        artwork = { optimise.state.item?.let { Thumbnail(it) } },
+    )
+}
+
+/** The tile the user is optimising right now, so the grid gives it the same halo a night does. */
+private fun workingOn(state: OptimiseFlow.State): Set<String> =
+    if (state is OptimiseFlow.State.Working) setOf(state.item.id) else emptySet()
+
+private fun progressFor(state: OptimiseFlow.State, item: MediaItem): Float? =
+    (state as? OptimiseFlow.State.Working)?.takeIf { it.item.id == item.id }?.progress
 
 /**
  * Newest first, which is the order `GalleryScreen` and `DateSections` both require.

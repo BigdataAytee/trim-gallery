@@ -3079,3 +3079,42 @@ most twice) — and both take their documented defaults, so the numbers live in 
 **This is the change that lets the app modify a file, so it does only this.** Nothing new
 protects the original: the gates were built first and are asserted elsewhere. What is new is
 that they are now reachable, and that an unattended night can reach them.
+
+
+## The Optimise sheet (1 Sep 2026)
+
+**Keep / Undo rather than USER_JOURNEY § 6's Share / Replace original / Keep both.** § 6 makes
+the choice *before* anything is written; this makes it after, because `VideoOptimiseStep`
+replaces as the last step of a verified chain and parks the original rather than deleting it,
+so "Undo" is a real restore rather than a promise. § 6's version needs a second write path
+that holds a finished encode unreplaced, and the field report asked for the shape the engine
+already supports. Share and Keep both remain open.
+
+**Undo is offered only when an original was actually parked.** `OptimiseFlow.Finished` carries
+the undo reference, and its absence changes what the sheet may show. A skip or a failure
+replaced nothing, so there is nothing to restore and the sheet says what happened instead.
+
+**The undo entry is looked up by media id, not carried from the result.** That is what makes a
+restore survive the process being killed between the replace and the tap — the ordinary case
+for a night pass, and a possible one here.
+
+**A tap writes a `job` row before the encode, not after.** The free tier's five-a-day counts
+rows with `user_initiated = 1`, and counting completions would let a user who cancels at 99%
+run it all day on a battery already spent. The same row is what Space and History read: a run
+that freed real space and left no row would report nothing on the screen a user checks first.
+
+**`background = false`, in exactly one place.** An explicit tap *is* the foreground, and
+`OptimiseController.Run` exists so that decision is made once rather than at each call site.
+BUILD.md § 2 rule 1 allows this one path on battery.
+
+**Two gestures, one detector.** `pressScale` gained a second overload taking a long press
+rather than a default parameter, because a trailing lambda always binds to the last parameter
+and any single signature carrying both callbacks would silently reassign one of thirteen
+existing call sites. Both gestures go through one `detectTapGestures`: two `pointerInput`
+modifiers over the same element race for the down event, and the winner depends on modifier
+order — so a tile could open *and* offer to optimise, or do neither.
+
+**The estimate is shown only where something measured one.** A "saves about 200 MB" that turns
+into 40 MB costs the user's trust in every other number this app shows them. Progress is null
+until the encoder reports something, because a bar at 0% and a bar that has not started look
+the same and only one of them is true.
