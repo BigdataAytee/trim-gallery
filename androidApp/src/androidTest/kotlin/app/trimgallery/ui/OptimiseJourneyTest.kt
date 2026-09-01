@@ -184,8 +184,13 @@ class OptimiseJourneyTest {
             ref = MediaRef("bin://original"),
             expiresAt = null,
         )
-        runBlocking { repository.record(parked) }
         show(step)
+        // After the grid has rendered, not before: the scan is what inserts the media row,
+        // and `undo_entry.media_id` is a foreign key. Recording it first is a constraint
+        // violation on a database with foreign keys on — which this one has, because the
+        // crash loop that started all of this was exactly that.
+        awaitTag(GalleryTestTags.tile(video.id))
+        runBlocking { repository.record(parked) }
 
         optimise()
         awaitTag(OptimiseTestTags.UNDO)

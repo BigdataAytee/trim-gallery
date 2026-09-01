@@ -20,7 +20,6 @@ import app.trimgallery.core.model.Uuid7
 import app.trimgallery.core.pipeline.video.VideoOptimiseStep
 import app.trimgallery.engine.UndoStore
 import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch
 import kotlinx.datetime.TimeZone
 import kotlinx.datetime.atStartOfDayIn
@@ -28,6 +27,7 @@ import kotlinx.datetime.toLocalDateTime
 import org.koin.compose.koinInject
 import kotlin.time.Clock
 import kotlin.time.Instant
+import kotlinx.coroutines.Job as CoroutineJob
 
 /**
  * Runs one Optimise, and holds the sheet's state while it does.
@@ -103,7 +103,14 @@ class OptimiseController(
     var state: OptimiseFlow.State by mutableStateOf(OptimiseFlow.State.Closed)
         private set
 
-    private var running: Job? = null
+    /**
+     * The encode in flight, or null.
+     *
+     * Aliased, because `Job` in this file means the row in the job table — the thing Space
+     * and the free-tier count read — and having the two mean different things on adjacent
+     * lines is how the first version of this file failed to compile at all.
+     */
+    private var running: CoroutineJob? = null
 
     /** A hold on a tile. Opens the sheet — with an estimate, or with the reason it cannot. */
     fun open(item: MediaItem) {
