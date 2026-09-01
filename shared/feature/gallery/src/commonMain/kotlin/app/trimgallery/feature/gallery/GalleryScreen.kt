@@ -62,6 +62,12 @@ fun GalleryScreen(
     emptyState: @Composable () -> Unit = { GalleryEmptyState() },
     sheet: @Composable (MediaItem) -> Unit = {},
     tileOverlay: @Composable BoxScope.(MediaItem) -> Unit = {},
+    /**
+     * Plays a video item in the viewer. A slot for the same reason [artwork] is one: this
+     * module depends on no player, and the Android host supplies ExoPlayer. Items whose
+     * kind is not video never reach it.
+     */
+    video: @Composable (MediaItem) -> Unit = {},
     artwork: @Composable (MediaItem) -> Unit,
 ) {
     val colors = TrimTheme.colors
@@ -122,10 +128,7 @@ fun GalleryScreen(
                             item = mediaItem,
                             processing = mediaItem.id in processingIds,
                             onOpen = { open = it },
-                            onBounds = { rect ->
-                                bounds[mediaItem.id] =
-                                    HeroGeometry.Rect(rect.left, rect.top, rect.width, rect.height)
-                            },
+                            onBounds = { rect -> bounds[mediaItem.id] = rect },
                             modifier = Modifier
                                 .arrival(index = index, key = zoom)
                                 // Read inside the layer block so opening a tile does not
@@ -153,11 +156,22 @@ fun GalleryScreen(
         )
 
         open?.let { item ->
+            // The grid's own order, flattened. The pager has to walk the library in the
+            // order the user is looking at, not the order the query returned, or a swipe
+            // right lands somewhere they have never seen.
+            val ordered = remember(sections) { sections.flatMap { it.items } }
+            val startIndex = remember(ordered, item.id) { ordered.indexOfFirst { it.id == item.id } }
             HeroViewer(
-                item = item,
-                tileBounds = { bounds[item.id] ?: HeroGeometry.target(0f, 0f) },
+                items = ordered,
+                startIndex = startIndex,
+                // A tile that has not reported its bounds yet opens from a point rather
+                // than from a rectangle: `target(0f, 0f)` used to be the fallback and
+                // returned a *negative* rectangle, which `Modifier.size` rejects — the
+                // crash behind "tapping a photo closes the app".
+                tileBounds = { shown -> bounds[shown.id] ?: HeroGeometry.Rect(0f, 0f, 0f, 0f) },
                 onClose = { open = null },
-                sheet = { sheet(item) },
+                sheet = sheet,
+                video = video,
                 artwork = artwork,
             )
         }

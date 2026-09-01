@@ -1,0 +1,13 @@
+# Files this branch is allowed to touch, enforced by tools/git-hooks/pre-push.
+# PROJECT.md, CHANGELOG.md and this file are always allowed.
+#
+# `*` matches within one path segment; `**` crosses slashes. A pattern must
+# reach a file: androidApp/**, not androidApp.
+#
+# If this branch adds a platform implementation, ARCHITECTURE.md § 2.7 requires
+# a JVM fake under shared/ to ship with it — so include that path here too.
+# Otherwise pre-push rejects the fake, and the easy way out is dropping a file
+# the project requires rather than widening the scope.
+androidApp/**
+shared/feature/gallery/**
+shared/core/ui/**

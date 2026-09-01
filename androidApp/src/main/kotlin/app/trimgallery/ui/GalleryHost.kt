@@ -20,6 +20,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
+import androidx.media3.common.util.UnstableApi
 import app.trimgallery.core.model.MediaItem
 import app.trimgallery.core.ui.motion.pressScale
 import app.trimgallery.core.ui.theme.TrimShape
@@ -48,6 +49,7 @@ import kotlin.time.Instant
  * This is the smallest honest host: grant a folder, walk it, show what is in it. No
  * database, no night pass, no navigation — those arrive with the screens that need them.
  */
+@UnstableApi
 @Composable
 fun GalleryHost(
     modifier: Modifier = Modifier,
@@ -104,6 +106,7 @@ fun GalleryHost(
             timeZone = TimeZone.currentSystemDefault(),
             modifier = modifier,
             emptyState = { ScanState(scanning = scanning, failure = failure) { picker.launch(null) } },
+            video = { VideoPlayer(it, modifier = Modifier.fillMaxSize()) },
             artwork = { Thumbnail(it) },
         )
     }
@@ -168,6 +171,10 @@ private fun NoFolderYet(modifier: Modifier = Modifier, onChoose: () -> Unit) {
                     style = TrimTheme.typography.label.copy(color = colors.accentOn),
                 )
             }
+            // Only renders when a crash has been recorded. On the first-run screen because
+            // a crash loop may never reach the grid, and the report has to be reachable
+            // from wherever the app can still get to.
+            DiagnosticsButton()
         }
     }
 }
@@ -199,6 +206,7 @@ private fun ScanState(scanning: Boolean, failure: String?, onChoose: () -> Unit)
                 )
             }
         }
+        DiagnosticsButton()
     }
 }
 

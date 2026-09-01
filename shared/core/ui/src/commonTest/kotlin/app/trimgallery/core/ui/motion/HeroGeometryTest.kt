@@ -126,4 +126,37 @@ class HeroGeometryTest {
         assertTrue(HeroGeometry.dismissScale(1f) in 0.5f..1f)
         assertTrue(HeroGeometry.dismissScale(0.5f) > HeroGeometry.dismissScale(1f))
     }
+
+    /**
+     * The case that crashed the app on every tap.
+     *
+     * `GalleryScreen` used `target(0f, 0f)` as the rectangle to open from when a tile had
+     * not reported its bounds. `min(0, 430) - 36` is -36, so the viewer asked
+     * `Modifier.size` for a negative width and Compose rejected it — the app closed the
+     * instant a photo was tapped. Every existing test here passed throughout, because all
+     * of them pass a plausible window.
+     */
+    @Test
+    fun targetIsNeverNegativeForAnyWindow() {
+        val widths = listOf(0f, 1f, HeroGeometry.SIDE_INSET_DP - 1f, HeroGeometry.SIDE_INSET_DP, 320f, 430f, 2000f)
+        widths.forEach { width ->
+            listOf(0f, 1f, 100f, 800f, 3000f).forEach { height ->
+                val rect = HeroGeometry.target(width, height)
+                assertTrue(rect.width >= 0f, "width ${rect.width} for window ${width}x$height")
+                assertTrue(rect.height >= 0f, "height ${rect.height} for window ${width}x$height")
+            }
+        }
+    }
+
+    /** A degenerate start rectangle must interpolate without ever going negative. */
+    @Test
+    fun lerpFromAPointStaysNonNegative() {
+        val from = HeroGeometry.Rect(0f, 0f, 0f, 0f)
+        val to = HeroGeometry.target(390f, 844f)
+        listOf(0f, 0.25f, 0.5f, 0.75f, 1f).forEach { fraction ->
+            val frame = HeroGeometry.lerp(from, to, fraction)
+            assertTrue(frame.width >= 0f, "width ${frame.width} at $fraction")
+            assertTrue(frame.height >= 0f, "height ${frame.height} at $fraction")
+        }
+    }
 }

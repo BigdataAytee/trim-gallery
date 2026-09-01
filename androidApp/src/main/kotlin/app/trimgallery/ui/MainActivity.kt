@@ -6,6 +6,7 @@ import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.ui.Modifier
+import androidx.media3.common.util.UnstableApi
 import app.trimgallery.core.ui.theme.TrimTheme
 
 /**
@@ -18,6 +19,7 @@ import app.trimgallery.core.ui.theme.TrimTheme
  *
  * The gallery grid and viewer are milestone 8; `GalleryHost` mounts them.
  */
+@UnstableApi
 class MainActivity : ComponentActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {

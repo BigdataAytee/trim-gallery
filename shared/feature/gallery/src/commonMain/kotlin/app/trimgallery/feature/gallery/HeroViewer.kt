@@ -12,6 +12,8 @@ import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.pager.HorizontalPager
+import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -28,6 +30,7 @@ import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import app.trimgallery.core.model.MediaItem
+import app.trimgallery.core.model.MediaKind
 import app.trimgallery.core.ui.motion.HeroGeometry
 import app.trimgallery.core.ui.motion.MotionSpec
 import app.trimgallery.core.ui.motion.toCompose
@@ -48,13 +51,18 @@ import kotlinx.coroutines.launch
  */
 @Composable
 fun HeroViewer(
-    item: MediaItem,
-    tileBounds: () -> HeroGeometry.Rect,
+    items: List<MediaItem>,
+    startIndex: Int,
+    tileBounds: (MediaItem) -> HeroGeometry.Rect,
     onClose: () -> Unit,
     modifier: Modifier = Modifier,
-    sheet: @Composable () -> Unit = {},
+    sheet: @Composable (MediaItem) -> Unit = {},
+    video: @Composable (MediaItem) -> Unit = {},
     artwork: @Composable (MediaItem) -> Unit,
 ) {
+    if (items.isEmpty()) return
+    val pager = rememberPagerState(initialPage = startIndex.coerceIn(items.indices)) { items.size }
+    val item = items[pager.currentPage.coerceIn(items.indices)]
     val colors = TrimTheme.colors
     val reduce = TrimTheme.reduceMotion
     val density = LocalDensity.current
@@ -109,7 +117,7 @@ fun HeroViewer(
                 .pointerInput(Unit) { detectTapGestures { scope.launch { dismiss() } } },
         )
 
-        val frame = HeroGeometry.lerp(tileBounds(), target, progress.value)
+        val frame = HeroGeometry.lerp(tileBounds(item), target, progress.value)
         val radius = HeroGeometry.lerpRadius(progress.value)
 
         Box(
@@ -117,7 +125,10 @@ fun HeroViewer(
                 .offset {
                     IntOffset(frame.left.dp.roundToPx(), (frame.top + dragDp).dp.roundToPx())
                 }
-                .size(frame.width.dp, frame.height.dp)
+                // Clamped as well as fixed at the source. `Modifier.size` throws on a
+                // negative dimension, and a viewer that crashes is worse than a viewer
+                // that briefly shows nothing.
+                .size(frame.width.coerceAtLeast(0f).dp, frame.height.coerceAtLeast(0f).dp)
                 .graphicsLayer {
                     val s = HeroGeometry.dismissScale(dismissProgress)
                     scaleX = s
@@ -147,7 +158,34 @@ fun HeroViewer(
                     )
                 },
         ) {
-            artwork(item)
+            // Horizontal paging inside the hero frame, so swiping between items keeps the
+            // shape the shared element is animating and the close transition still lands
+            // on a real tile — the one for whatever is on screen now, not the one tapped.
+            //
+            // `beyondViewportPageCount = 0`: neighbours are not composed ahead of time.
+            // Every page is a decode, and on a video page it is a player; pre-warming two
+            // of those either side would have three video pipelines alive to show one.
+            HorizontalPager(
+                state = pager,
+                beyondViewportPageCount = 0,
+                // Paging is off until the viewer has arrived. During the open animation the
+                // frame is still travelling, and a horizontal drag then fights the
+                // transition for the same gesture.
+                userScrollEnabled = progress.value >= 1f,
+                modifier = Modifier.fillMaxSize(),
+            ) { page ->
+                val pageItem = items[page]
+                Box(Modifier.fillMaxSize()) {
+                    // Only the page in front plays. A paused player on a neighbouring page
+                    // still holds a decoder, and BUILD.md § 2 rule 2's sibling concern —
+                    // that the foreground wins the hardware — applies to playback too.
+                    if (pageItem.kind == MediaKind.VIDEO && page == pager.currentPage) {
+                        video(pageItem)
+                    } else {
+                        artwork(pageItem)
+                    }
+                }
+            }
         }
 
         // Follows the image up, starting once the zoom has visibly begun.
@@ -156,7 +194,7 @@ fun HeroViewer(
                 .fillMaxSize()
                 .graphicsLayer { alpha = progress.value * (1f - dismissProgress) },
         ) {
-            sheet()
+            sheet(item)
         }
     }
 }

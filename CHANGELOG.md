@@ -1,5 +1,50 @@
 # Changelog
 
+## The viewer, and the crash that hid it
+
+First real use on a phone: tapping any photo closed the app. The viewer was not missing —
+`GalleryScreen` has mounted `HeroViewer` since milestone 8. It threw before it could draw.
+
+`GalleryScreen` opened from `HeroGeometry.target(0f, 0f)` whenever a tile had not reported
+its bounds yet. `min(0, 430) - 36` is **-36**, so the viewer asked `Modifier.size` for a
+negative width and Compose rejected it. Fixed at the source (`target` clamps to zero), at
+the call site (a point, which is the honest degenerate case) and in the viewer (a clamp,
+because a viewer that crashes is worse than one that briefly shows nothing). Two tests now
+sweep every window size including the degenerate ones; the existing geometry tests all
+passed throughout, because every one of them passes a plausible window.
+
+Underneath it, a units bug that would have made the fixed viewer wrong: `GalleryTile`
+reported `boundsInWindow()` in **pixels** into a type documented in **dp**, which
+`HeroViewer` then rendered as dp — three times too large on a 3x phone. `onBounds` now
+takes a `HeroGeometry.Rect` and converts, so the unit is in the signature rather than in a
+comment nobody reads at the call site.
+
+The viewer now pages. `HeroViewer` takes the grid's flattened order and a starting index,
+and a `HorizontalPager` inside the hero frame swipes between items; closing lands on the
+tile for whatever is on screen rather than the one first tapped. Paging is disabled until
+the open animation finishes, because a horizontal drag during the transition fights it for
+the same gesture, and no neighbouring page is composed ahead of time — every page is a
+decode and some of them are players.
+
+Video plays, through a `video` slot the Android host fills with ExoPlayer, for the same
+reason `artwork` is a slot: the shared module depends on no player, and iOS will bind
+`AVPlayer` to the same seam. Only the page in front holds a player. Backgrounding pauses
+it. This is playback, not encoding — nothing here creates a codec, and `CodecFactory`
+remains the only door to one.
+
+### Crashes can now leave the phone
+
+`CrashReports` installs an uncaught-exception handler before Koin and Coil — the two most
+likely things to throw during startup — writes the trace with device model and API level
+to app-private storage, keeps ten, and chains to the platform handler so the process still
+dies properly. Nothing is uploaded, and nothing can be: rule 8 and the two guards that
+enforce it are untouched.
+
+`DiagnosticsButton` shares them through the export and FileProvider that milestone 13
+already built. It appears only when a report exists, and sits on the first-run screen and
+the empty grid — the places the app can still reach when it cannot reach a photo. It
+belongs in Settings, which does not exist yet.
+
 ## The permanent link was the wrong one
 
 `/releases/latest` skips pre-releases. The rolling release is marked pre-release on
