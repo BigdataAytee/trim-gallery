@@ -19,12 +19,16 @@ and nothing ever leaves your phone.
 | [MONETIZATION.md](MONETIZATION.md) | Freemium tiers and the rules the paywall may never break. |
 | [LAUNCH.md](LAUNCH.md) | Release phases, store listing, staged rollout. |
 | [CHANGELOG.md](CHANGELOG.md) | What has actually been built so far, and what is still missing. |
+| [STATUS.md](STATUS.md) | Every reported item, its pull request, and whether it is actually working yet. |
 | [FIELD_TEST.md](FIELD_TEST.md) | The milestone 13 procedure: devices, library, nights, and how the alpha gate is read. |
 
 Claude Code skills live in [`.claude/skills/`](.claude/skills). Three are specific to
 this project and encode its hard rules: `codec-priority`, `safe-replace`, `ndk-build`.
 
 ## Status
+
+**[STATUS.md](STATUS.md) is the honest one**, item by item, with what has been confirmed on a
+phone and what has only been merged. What follows is the milestone view.
 
 Milestones 1 through 14 of [BUILD.md section 13](BUILD.md) are built and milestone 15, the
 iOS port, is begun: the Media3 Transformer encode, XPSNR and libvmaf over the NDK, the
