@@ -84,10 +84,11 @@ class SpaceReadsTest {
 
     @Test
     fun hasNoHistoryUntilSomethingRecordsAJob() = runTest {
-        // Not an assertion that History is *meant* to be empty — it is the shape of the gap
-        // this screen ships with. Nothing in this project inserts a `job` row: the step that
-        // would, `VideoOptimiseStep`, is not assembled. When it is, this test is the one
-        // that should start failing, and the screen stops saying "nothing yet".
+        // Still the shape of the gap this screen ships with, but a narrower one than it was:
+        // `saveJob` now exists and is tested in JobAndPredictorStoreTest. What is still
+        // missing is a *caller* — `VideoOptimiseStep`, the assembly `NightRun.Step` has no
+        // binding for. Until that lands, a real device records no attempts and History is
+        // empty, which is what this asserts.
         assertTrue(repository().succeededJobs().isEmpty())
     }
 
