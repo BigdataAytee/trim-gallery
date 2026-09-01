@@ -123,6 +123,31 @@ object MotionSpec {
         const val FROM_ALPHA = 0f
     }
 
+    /**
+     * The ring drawn over a thumbnail while the night pass is working on it
+     * (DESIGN_SYSTEM.md, `progress-ring`: "2-px stroke, accent, animates length").
+     *
+     * Two modes, because the pipeline has two honest states. A step that reports a
+     * fraction gets a determinate arc that grows; a step that is working but cannot say
+     * how far along it is gets a rotating arc, which says "busy" without inventing a
+     * number. A progress bar that guesses is worse than one that admits it does not know.
+     */
+    object ProgressRing {
+        const val STROKE_DP = 2f
+
+        /** Inset from the tile edge, so the ring is not clipped by the corner radius. */
+        const val INSET_DP = 6f
+
+        /** Determinate: the arc springs to its new length rather than jumping. */
+        val SPRING = TrimSpring.STANDARD
+
+        /** Indeterminate: one full turn of the sweep below. */
+        const val SPIN_MS = 1200
+
+        /** How much of the circle the indeterminate arc covers. */
+        const val SPIN_SWEEP_DEGREES = 90f
+    }
+
     /** The dimmed, blurred backdrop behind an open viewer. */
     object Veil {
         const val FADE_MS = 350

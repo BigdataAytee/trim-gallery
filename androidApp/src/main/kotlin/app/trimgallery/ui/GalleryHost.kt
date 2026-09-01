@@ -107,6 +107,7 @@ fun GalleryHost(
             modifier = modifier,
             emptyState = { ScanState(scanning = scanning, failure = failure) { picker.launch(null) } },
             video = { VideoPlayer(it, modifier = Modifier.fillMaxSize()) },
+            preview = { TilePreview(it, modifier = Modifier.fillMaxSize()) },
             artwork = { Thumbnail(it) },
         )
     }
