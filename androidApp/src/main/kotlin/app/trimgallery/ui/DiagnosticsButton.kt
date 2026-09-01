@@ -30,13 +30,17 @@ import org.koin.compose.koinInject
 /**
  * "Export diagnostics" — the only way a crash gets off the phone.
  *
- * It belongs in Settings (LAUNCH.md § Support) and Settings does not exist yet, so it
- * lives on the gallery until it does. Its home moves; the need does not: without it a
- * field report can only describe what happened, and the stack trace that names the cause
- * stays on the device.
+ * It lives in Settings, where LAUNCH.md § Support puts it, now that there is a Settings to
+ * live in. Without it a field report can only describe what happened, and the stack trace
+ * that names the cause stays on the device.
  *
- * The button appears **only when there is something to send**, so it is invisible on a
- * healthy install rather than a permanent piece of debug furniture in a photo gallery.
+ * The button appears **only when there is something to send**, so Settings shows no debug
+ * furniture on a healthy install.
+ *
+ * It is one screen away from the gallery rather than on it, and that is enough for the
+ * crash it is really for: a viewer that dies on a tap leaves the grid rendering perfectly
+ * on the next launch. A crash during the gallery's own composition would take this button
+ * down with it wherever it were placed, because the exception escapes the whole tree.
  */
 @Composable
 fun DiagnosticsButton(

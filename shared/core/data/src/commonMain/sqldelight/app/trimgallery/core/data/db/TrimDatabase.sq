@@ -446,3 +446,26 @@ SELECT COUNT(*) FROM job WHERE user_initiated = 1 AND started_at >= ?;
 
 selectFolderGrants:
 SELECT * FROM folder_grant WHERE enabled = 1;
+
+-- Everything the app knows about one grant, found by the tree URI.
+--
+-- `platform_ref` rather than `id`: the platform owns which folders are granted (Android's
+-- persisted URI permissions), and the tree URI is the only identity both sides share. A
+-- row keyed on our own id would need a second lookup to answer "what did the user choose
+-- for *this* folder", and would go stale the moment a grant was revoked and re-taken.
+selectFolderGrantByRef:
+SELECT * FROM folder_grant WHERE platform_ref = ?;
+
+-- Writes what the user chose for a folder.
+--
+-- Upsert on `platform_ref`, which is UNIQUE: re-granting a folder that was revoked
+-- restores the mode chosen for it rather than silently resetting to KEEP, and two
+-- screens saving at once cannot produce two rows for one folder.
+upsertFolderGrant:
+INSERT INTO folder_grant (id, platform_ref, display_name, mode, offload_ref, enabled, last_scanned_at)
+VALUES (?, ?, ?, ?, ?, 1, NULL)
+ON CONFLICT(platform_ref) DO UPDATE SET
+    display_name = excluded.display_name,
+    mode         = excluded.mode,
+    offload_ref  = excluded.offload_ref,
+    enabled      = 1;

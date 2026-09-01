@@ -11,3 +11,7 @@
 androidApp/**
 shared/feature/settings/**
 shared/core/data/**
+# Widened mid-branch: the settings entry point has to be drawn over the grid and
+# under the viewer, which is a decision GalleryScreen owns, so it gained a
+# `chrome` slot. One added parameter, no behaviour change for existing callers.
+shared/feature/gallery/**

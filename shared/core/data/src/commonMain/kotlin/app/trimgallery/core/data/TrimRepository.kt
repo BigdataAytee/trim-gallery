@@ -4,6 +4,7 @@ import app.trimgallery.core.data.db.TrimDatabase
 import app.trimgallery.core.domain.billing.Tier
 import app.trimgallery.core.model.FaceEmbedding
 import app.trimgallery.core.model.FolderGrant
+import app.trimgallery.core.model.FolderMode
 import app.trimgallery.core.model.GeoPoint
 import app.trimgallery.core.model.Label
 import app.trimgallery.core.model.MediaItem
@@ -210,6 +211,49 @@ class TrimRepository(
                 id = item.id,
             )
         }
+    }
+
+    // ------------------------------------------------------------- folder grants
+
+    /**
+     * What the user chose for a granted folder, or null if they have never said.
+     *
+     * Keyed on the tree URI, because that is the identity the platform and this database
+     * share. The platform decides *which* folders are granted; this row only carries what
+     * to do with the originals inside one.
+     */
+    suspend fun folderGrant(platformRef: String): FolderGrant? = withContext(io) {
+        db.trimDatabaseQueries.selectFolderGrantByRef(platformRef).executeAsOneOrNull()?.let { row ->
+            FolderGrant(
+                id = row.id,
+                platformRef = MediaRef(row.platform_ref),
+                // Not `valueOf`: an unrecognised mode — a row written by a newer build,
+                // or a hand-edited database — must not throw on the way into Settings, and
+                // KEEP is the reading that can never remove a file.
+                mode = FolderMode.entries.firstOrNull { it.name == row.mode } ?: FolderMode.KEEP,
+                displayName = row.display_name,
+                offloadRef = row.offload_ref?.let(::MediaRef),
+                enabled = row.enabled == 1L,
+                lastScannedAt = row.last_scanned_at,
+            )
+        }
+    }
+
+    /**
+     * Records what the user chose. Upserts on the tree URI.
+     *
+     * A grant revoked in system Settings leaves this row behind, deliberately: re-granting
+     * the same folder restores the mode rather than silently resetting it to KEEP, which
+     * is the behaviour somebody who granted, revoked and re-granted would expect.
+     */
+    suspend fun saveFolderGrant(grant: FolderGrant): Unit = withContext(io) {
+        db.trimDatabaseQueries.upsertFolderGrant(
+            id = grant.id.ifEmpty { newId() },
+            platform_ref = grant.platformRef.value,
+            display_name = grant.displayName,
+            mode = grant.mode.name,
+            offload_ref = grant.offloadRef?.value,
+        )
     }
 
     // ------------------------------------------------------------- TriageStep.Sink

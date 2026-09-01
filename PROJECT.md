@@ -2486,3 +2486,71 @@ number can appear in the section.
 **`WorkManagerScheduler` is bound as both itself and the port.** The pipeline must depend
 on `NightScheduler` alone; the diagnostics export needs to ask WorkManager a question that
 has no meaning on iOS. Two definitions, one instance.
+
+## Settings, and where a folder's mode lives (1 Sep 2026)
+
+The fourth thing the field report asked for, and the first half of it: there was no screen
+that could change anything.
+
+Decisions:
+
+**The folder's mode is keyed by tree URI, in `folder_grant`.** No new table was needed —
+`folder_grant` has been in SCHEMA.md since milestone 4, with `platform_ref TEXT NOT NULL
+UNIQUE` and columns for mode, display name and offload target — but it had exactly one
+query, a SELECT, and no writer anywhere, so no row had ever been written. The split that
+now holds: **the platform owns which folders are granted, the database owns what to do with
+the originals inside them, and the tree URI is the key both sides share.** Persisted URI
+permissions survive a cleared database and are the only thing that decides whether a scan
+succeeds, so they cannot be a mirror of our own table; and a row orphaned by a revoked grant
+is harmless, because re-granting the folder joins it again and restores the mode.
+
+**Choosing a mode is stored but does not yet change behaviour.** The night pass reads
+`GrantedFolders.grants()`, which reports `KEEP` for everything, until the replace path reads
+the stored mode. That is the safe direction and it is documented in three places rather than
+implied: Keep never removes an original, so the gap costs space, not files.
+
+**Offload is refused rather than guessed.** It needs a second granted tree on a *different*
+volume, decided by the volume half of the document id — `primary` for internal storage, a
+filesystem UUID for a card or a drive. Copying an original to another folder on the same
+disk frees nothing, so offering it would misreport where the space came from. A volume the
+app cannot read is not treated as a different drive. Where several qualify, the first wins;
+choosing between two removable drives needs a picker that does not exist yet, and it is
+recorded here rather than guessed at.
+
+**Free space is warned in the row, in the warning colour.** BUILD.md § 6 requires the
+warning; a radio button reading "Free space" tells the user nothing about what it costs.
+
+**An unrecognised mode string reads as KEEP, not an exception.** `FolderMode.valueOf` on a
+row written by a newer build would crash the settings screen; the fallback is the mode that
+cannot remove a file.
+
+**Two screens, and no navigation library.** A boolean in `TrimApp` is the whole of a back
+stack of depth one, and STACK.md fixes the dependency list. It is `remember`, not
+`rememberSaveable`, so rotating in Settings returns to the photographs: `rememberSaveable`
+lives in `runtime-saveable`, which nothing on this classpath exports — `compose.runtime`,
+`compose.foundation` and `compose.animation` all omit it — and keeping the flag across a
+configuration change means adding a dependency. Follow-up, not a silent addition.
+
+**Settings is reached from a pill over the grid, not a toolbar.** BUILD.md § 9 wants the
+photographs edge to edge, and a permanent bar spends a strip of every screen on a control
+used twice a month.
+
+### Two defects this uncovered
+
+**The folder-help sheet was drawn underneath the gallery.** Compose draws siblings in
+emission order, and `GalleryHost` emitted the sheet before the screen; the grid's opaque
+background painted over it. The message shipped in the previous change could never have been
+read. Fixed by emitting it last inside a Box, and by moving the whole picker — take the
+grant, schedule the night pass, show the sheet — into one `rememberFolderPicker` that both
+screens use, so the second copy cannot drift from the first.
+
+**CHANGELOG.md had merge conflict markers committed in it.** Landed in the ktlint change and
+survived two reviews. Removed, keeping both sections. Nothing in CI reads the changelog,
+which is exactly why it went unnoticed.
+
+### Still open after this
+
+- The Space screen and Compress now — the rest of the fourth item.
+- `shared/core/data` has no database test: an in-memory SQLDelight driver is a dependency,
+  so the upsert's behaviour (keeps the row id, updates the mode) is unproven by a test.
+- Choosing *which* drive offload uses, when more than one qualifies.
