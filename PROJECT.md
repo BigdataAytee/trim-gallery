@@ -2378,3 +2378,33 @@ Known and not fixed here: the grid hides the *tapped* tile for the whole time th
 open, so after swiping, the tile behind the viewer is visible and the tapped one is still
 hidden. It is invisible behind a full-screen viewer and costs a state hoist to fix; it is
 recorded rather than quietly left.
+
+## ktlint without Gradle (1 Sep 2026)
+
+Five ktlint failures reached CI across two pull requests — import order, a body expression,
+a parameter list — each costing a ten-minute round trip to be told about whitespace. The
+cause was structural, not carelessness: every module with ktlint also has the Android
+plugin, so `./gradlew ktlintCheck` cannot *configure* in an environment that cannot reach
+Google Maven, which is the environment this project is mostly written in. The cheapest
+check in the build was the one check that could only run in CI.
+
+`tools/ktlint.sh` runs the ktlint CLI directly: a fat jar from Maven Central, which is
+reachable, reading the same `.editorconfig`. Eight seconds over the whole tree.
+
+**Pinned to the version the Gradle plugin runs**, which was extracted from the plugin jar
+rather than guessed — 1.5.0 — and the plugin is now pinned to the same number with a
+comment pointing back. That pin is the whole value: a local check that disagrees with CI is
+worse than no local check, because it teaches you to stop believing it. Verified in both
+directions before landing: silent on a clean tree, exit 1 on a planted violation.
+
+The jar is verified against a pinned SHA-256 and cached outside the repository. A checksum
+mismatch fails rather than runs: it is an executable about to be run over the source tree.
+
+**Found on the way, not fixed here: `build-logic` is not linted at all.** The first run
+reported 85 violations there, and the Gradle plugin agrees with none of them — it applies
+ktlint in `subprojects { }`, and `build-logic` is an included build rather than a
+subproject, so it has never been scanned. That is the code holding the three build guards
+and their 72 tests: the code that enforces this project's hard rules is the code with no
+style check on it. `tools/ktlint.sh` excludes it to match CI exactly, because a local check
+that fails where CI passes is the same disease. Worth its own change; 85 formatting edits
+do not belong in a tooling commit.
