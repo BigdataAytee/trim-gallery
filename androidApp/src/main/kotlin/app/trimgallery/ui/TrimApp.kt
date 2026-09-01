@@ -23,6 +23,8 @@ import app.trimgallery.core.ui.motion.pressScale
 import app.trimgallery.core.ui.theme.TrimShape
 import app.trimgallery.core.ui.theme.TrimSpacing
 import app.trimgallery.core.ui.theme.TrimTheme
+import app.trimgallery.engine.android.StartupGuard
+import org.koin.compose.koinInject
 
 /**
  * The app's three screens, and which of them is on top.
@@ -44,13 +46,24 @@ import app.trimgallery.core.ui.theme.TrimTheme
  */
 @UnstableApi
 @Composable
-fun TrimApp(modifier: Modifier = Modifier) {
+fun TrimApp(modifier: Modifier = Modifier, guard: StartupGuard = koinInject()) {
     var screen by remember { mutableStateOf(Screen.GALLERY) }
+
+    // Set before the first frame, from a flag the previous process left behind, and set
+    // again if this launch's own startup work fails. Either way the gallery is not started:
+    // the work that failed is the work the app does by itself, so trying it again is the
+    // loop rather than a retry.
+    var recovering by remember { mutableStateOf(guard.previousRunFailed) }
 
     // The system back gesture returns to the photographs rather than closing the app. Only
     // off the gallery — disabled, the gesture falls through to the Activity, which is what
     // should happen on the gallery itself.
     BackHandler(enabled = screen != Screen.GALLERY) { screen = Screen.GALLERY }
+
+    if (recovering) {
+        RecoveryScreen(onContinue = { recovering = false }, modifier = modifier.fillMaxSize())
+        return
+    }
 
     Box(modifier.fillMaxSize()) {
         when (screen) {
@@ -61,6 +74,7 @@ fun TrimApp(modifier: Modifier = Modifier) {
             // viewer. Drawn here, the pills would float over an opened photograph.
             Screen.GALLERY -> GalleryHost(
                 modifier = Modifier.fillMaxSize(),
+                onStartupFailure = { recovering = true },
                 chrome = {
                     Row(
                         horizontalArrangement = Arrangement.spacedBy(SMALL_GAP_DP.dp),

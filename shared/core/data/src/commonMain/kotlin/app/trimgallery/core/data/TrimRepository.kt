@@ -302,6 +302,45 @@ class TrimRepository(
         )
     }
 
+    /**
+     * Records the folders the platform says are granted, without touching what the user
+     * chose for them.
+     *
+     * **This is what stops the app crashing on the first scan.** `media_item.folder_grant_id`
+     * references `folder_grant(id)`, and `AndroidDatabase` turns foreign keys on because
+     * SCHEMA.md's cascades are inert without them. Nothing wrote a `folder_grant` row when a
+     * folder was granted — `saveFolderGrant` only runs when somebody picks a mode in
+     * Settings — so the first scan inserted media rows pointing at a table with nothing in
+     * it, and SQLite refused. Every launch afterwards read the persisted grant and did it
+     * again, which is the crash loop.
+     *
+     * Insert-if-missing only, deliberately: calling this on every launch must not reset a
+     * folder the user set to Offload back to Keep. [saveFolderGrant] is the one that writes
+     * a choice.
+     *
+     * Called with what the platform reports, so it also repairs a device already stuck in
+     * the loop: the grant is still persisted, and the row it was missing appears before the
+     * scan that needs it.
+     */
+    suspend fun recordGrants(grants: List<FolderGrant>): Unit = withContext(io) {
+        queries.transaction {
+            grants.forEach { grant ->
+                queries.insertFolderGrantIfMissing(
+                    // The tree URI, as both id and platform_ref. `GrantedFolders` argues
+                    // that the tree URI *is* the stable identity of a grant and that minting
+                    // a UUID would create a second identity to keep in step with the first —
+                    // and then `saveFolderGrant` minted exactly that. Two identities for one
+                    // folder is what let the scan reference a row that could never match.
+                    id = grant.id.ifEmpty { grant.platformRef.value },
+                    platform_ref = grant.platformRef.value,
+                    display_name = grant.displayName,
+                    mode = grant.mode.name,
+                    offload_ref = grant.offloadRef?.value,
+                )
+            }
+        }
+    }
+
     /** Every attempt on one file, newest first. */
     suspend fun jobsFor(mediaId: String): List<Job> = withContext(io) {
         queries.selectJobsForMedia(mediaId, ::toFullJob).executeAsList()
@@ -433,10 +472,10 @@ class TrimRepository(
         queries.transaction {
             // Insert-or-ignore then update, in that order: the insert is a no-op when the
             // folder already has a row, and the update then carries the choice in either
-            // case. An existing row keeps the id it was minted with, and keeps whatever
+            // case. An existing row keeps the id it already has, and keeps whatever
             // `last_scanned_at` the scanner has written.
             queries.insertFolderGrantIfMissing(
-                id = grant.id.ifEmpty { newId() },
+                id = grant.id.ifEmpty { grant.platformRef.value },
                 platform_ref = grant.platformRef.value,
                 display_name = grant.displayName,
                 mode = grant.mode.name,
