@@ -304,8 +304,21 @@ countCandidates:
 SELECT COUNT(*) FROM media_item WHERE status = 'CANDIDATE';
 
 -- The grid. Hidden items never appear anywhere but the locked folder.
+--
+-- `COALESCE(taken_at, mtime)`, not `taken_at` alone. The scan reads one cursor per folder
+-- and nothing else; the date a photo was taken lives in its EXIF, which
+-- `ContainerReaderAndroid` reads only for the handful of files the diff found to be new or
+-- changed. So on a first run every row is undated, and ordering on `taken_at DESC` would
+-- put the entire library in one undifferentiated block at the end — SQLite sorts NULLs
+-- last in DESC.
+--
+-- The file's modification time is an approximation (a photo copied from another device
+-- carries the copy's date), but an approximately ordered grid is far more useful than an
+-- unordered one, and the real date replaces it as soon as the item is indexed. This used to
+-- be done in Kotlin, re-sorting the whole list on every batch the scan published — which
+-- got slower exactly as the library got bigger. The index on the column does it here.
 selectGallery:
-SELECT * FROM media_item WHERE (flags & 128) = 0 ORDER BY taken_at DESC;
+SELECT * FROM media_item WHERE (flags & 128) = 0 ORDER BY COALESCE(taken_at, mtime) DESC;
 
 selectFavourites:
 SELECT * FROM media_item

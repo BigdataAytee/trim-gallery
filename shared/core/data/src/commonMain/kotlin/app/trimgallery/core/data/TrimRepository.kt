@@ -21,6 +21,7 @@ import app.trimgallery.core.model.TextBlock
 import app.trimgallery.core.model.UndoEntry
 import app.trimgallery.core.model.UndoLocation
 import app.trimgallery.core.model.UndoState
+import app.trimgallery.core.pipeline.LibraryDiff
 import app.trimgallery.core.pipeline.Predictor
 import app.trimgallery.core.pipeline.TriageStep
 import app.trimgallery.core.pipeline.index.IndexStep
@@ -215,6 +216,47 @@ class TrimRepository(
                 now = nowMs(),
                 id = item.id,
             )
+        }
+    }
+
+    // --------------------------------------------------------------- the library
+
+    /**
+     * Everything the grid shows, newest first, straight from the database.
+     *
+     * This is what makes a start fast: the grid is drawn from rows written the last time the
+     * app ran, before any folder is walked. The walk still happens — in the background — and
+     * its result is diffed in, but the user is looking at their photographs while that goes
+     * on rather than at a spinner.
+     *
+     * Sorted in SQL rather than in Kotlin. The host used to re-sort the whole list every
+     * time the scan published a batch, which is O(n log n) per batch on a list that only
+     * grows.
+     */
+    suspend fun gallery(): List<MediaItem> = withContext(io) {
+        queries.selectGallery(::toMediaItem).executeAsList()
+    }
+
+    /**
+     * Writes one scan's worth of changes, in one transaction.
+     *
+     * Removals go through the same rule [remove] applies: a row with a live undo entry keeps
+     * its place, because that row is the only handle on an original still sitting in the
+     * bin. Deleting it would lose a file the user can still restore.
+     *
+     * `unchanged` is not written at all. It is most of the library on most nights, and
+     * rewriting a row to the value it already holds is the largest avoidable cost in the
+     * whole scan.
+     */
+    suspend fun applyScan(diff: LibraryDiff.Result): Unit = withContext(io) {
+        val now = nowMs()
+        queries.transaction {
+            diff.added.forEach(::writeMedia)
+            diff.modified.forEach { change -> writeMedia(LibraryDiff.merge(change.stored, change.scanned, now)) }
+            diff.removed.forEach { item ->
+                val hasUndo = queries.selectUndoForMedia(item.id, ::toUndoEntry).executeAsList().isNotEmpty()
+                if (!hasUndo) queries.deleteMedia(item.id)
+            }
         }
     }
 
@@ -456,7 +498,17 @@ class TrimRepository(
     }
 
     @Suppress("LongMethod")
-    private suspend fun upsert(item: MediaItem): Unit = withContext(io) {
+    private suspend fun upsert(item: MediaItem): Unit = withContext(io) { writeMedia(item) }
+
+    /**
+     * The write itself, outside the dispatcher switch so a batch can share one transaction.
+     *
+     * A first scan of a fifty-thousand-item library is fifty thousand of these. One
+     * transaction each is fifty thousand commits, and SQLite fsyncs on every one; inside a
+     * single transaction it is one. That difference is most of why the grid used to take so
+     * long to arrive.
+     */
+    private fun writeMedia(item: MediaItem) {
         queries.upsertMedia(
             id = item.id,
             platform_ref = item.platformRef.value,
