@@ -2575,3 +2575,80 @@ owner to decide** before the replace path starts reading modes.
   cases against the shipped schema. It is the first test in this project to touch a
   database at all.
 - Choosing *which* drive offload uses, when more than one qualifies.
+
+## The night pass has no step, and what that means (1 Sep 2026)
+
+Found while wiring History to the `job` table, and more consequential than the screen that
+found it.
+
+`NightWorker.doWork()` opens with six `get()` calls, one of which is `get<NightRun.Step>()`.
+**Nothing binds `NightRun.Step`.** `AndroidEngineModule` carries a comment in its place:
+
+> NightRun.Step is VideoOptimiseStep — the assembly of ProbeAndSearch, the encoder,
+> VerifyPass, the Replacer and Predictor.learn into the chain ARCHITECTURE.md § 7 describes.
+> Every piece exists and is tested; the assembly itself is not written yet, and binding a
+> half-built one would be worse than binding none.
+
+That reasoning was right and the situation has changed under it. While `NightScheduler` had
+no caller the missing binding cost nothing, because the worker never ran. It has a caller
+now, so the worker runs, throws `NoDefinitionFoundException` before its `try`, and
+WorkManager marks the attempt failed and backs off. Nothing crashes visibly; the run-attempt
+count in the diagnostics export is the only symptom, which is exactly what that section was
+added to make legible.
+
+Decisions:
+
+**This, not the screens, is the answer to "no way to optimise anything".** The screens are
+the visible half. The machine underneath has every part built and tested and nothing joining
+them in order.
+
+**Compress now waits on the same assembly.** It is the same pipeline on an explicit tap
+rather than a schedule — BUILD.md § 9, and the one on-battery path in the codec-priority
+skill. So the order for the rest of the field report's fourth item is Space, then
+`VideoOptimiseStep`, then Compress now, rather than Space then Compress now.
+
+**The screen does not pretend.** `job` has no INSERT anywhere in this project — the same
+table-with-no-writer shape `folder_grant` had — so History is empty on every device.
+`SpaceScreen` says "Nothing has been optimised yet" rather than rendering a blank list, and
+`SpaceReadsTest.hasNoHistoryUntilSomethingRecordsAJob` is the test that should start failing
+the day the assembly lands.
+
+## The Space screen (1 Sep 2026)
+
+Decisions:
+
+**No new arithmetic.** `SpaceScreen`, `History` and `SkipList` are milestone 10's, pure and
+tested, and had never been mounted. The composable arranges them and adds nothing — in
+particular it does not decide what Restore may offer. `History.isOneTap` does, because a
+file offloaded to a card in a drawer has an undo entry and cannot be restored by a tap, and
+an iOS original in Recently Deleted has one the platform will not let this app touch at all.
+
+**Read once, not observed.** Every figure on the screen changes when a night pass runs,
+which is at 3am on a charger and not while somebody is looking. Five Flows would be five
+subscriptions kept alive to deliver nothing. They are read together in one pass, so the
+total and the ring cannot disagree about a run that finished between two queries.
+
+**"Next run" is a sentence from the platform, not a time.** WorkManager gives a state and a
+flex window, not a wall-clock moment; the OS places the run inside it. Naming an hour would
+put a precise-looking lie on the calmest screen in the app. When the run-attempt count is
+above zero the line says so and points at the diagnostics export, which is where the missing
+step above shows up.
+
+**`selectSucceededJobs` names its five columns.** History reads two sizes, a finish time and
+two ids; the other nineteen columns on `job` belong to the field test. Naming them is what
+makes the explicit mapper honest about the dependency it claims.
+
+**A stop reason no build recognises reads as absent, not as an exception.** The same
+totality the folder mode got, for the same reason: the one screen that explains what a night
+did must not be the one screen that crashes.
+
+### Follow-ups this left
+
+- Date formatting is spelled out twice now — privately in `DateSections` for the grid's
+  headers, and again in `SpaceHost`. The right home is `core/ui/format` beside
+  `MediaFormatting`; not done inside a change about the Space screen.
+- Restore is not wired. It cannot currently be reached, because `isOneTap` only says yes for
+  a row that came from a job and no job rows exist; when the assembly lands it becomes
+  `UndoBinAndroid.restore`.
+- The tier is hard-coded to Free in `SpaceHost` until billing is wired, so the monthly cap
+  ring is the free tier's for everybody.

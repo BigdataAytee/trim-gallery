@@ -1,5 +1,52 @@
 # Changelog
 
+## Space, and the crankshaft that is missing
+
+The screen that answers "is this app worth having on my phone?" — total freed, a progress
+ring while a run is working, what changed with Restore, what was left alone and why, and
+the energy it cost. Reached from a second pill over the grid.
+
+None of its arithmetic is new. `SpaceScreen`, `History` and `SkipList` were written and
+tested in milestone 10 and had never been mounted; this is the Compose composition over
+them plus the reads that feed it. In particular the Restore button is drawn from
+`History.isOneTap`, not from whether an undo row exists — a file offloaded to a card in a
+drawer has an entry and cannot be restored by a tap, and a button that appears to work and
+does not is the specific failure that screen exists to avoid.
+
+### The night pass has no step to run
+
+Found while wiring History to the `job` table: **`NightRun.Step` is not bound.**
+`NightWorker.doWork()` resolves it from Koin and nothing provides it — the module has a
+comment where the binding should be, saying the assembly "is not written yet, and binding a
+half-built one would be worse than binding none".
+
+That was true when nothing scheduled the worker. Since the night pass acquired a caller it
+is no longer harmless: the worker now runs, throws on the first `get()`, and WorkManager
+records a failed attempt. The run-attempt count in the diagnostics export is where it
+shows.
+
+So `job` has no INSERT anywhere in this project — the same table-with-no-writer shape
+`folder_grant` had — and History is empty on every device until the assembly exists. The
+screen says "Nothing has been optimised yet" rather than showing a blank list that reads as
+a bug, and `hasNoHistoryUntilSomethingRecordsAJob` is the test that should start failing the
+day that changes.
+
+Every piece of the assembly is built and tested: the probe and search, the encoder, the
+VMAF verifier, the safe replace, the predictor. What is missing is the thing that puts them
+in order. **"Compress now" needs the same assembly** — it is the same pipeline on an
+explicit tap — so it is the next piece of work rather than the third screen.
+
+### What the reads had to add
+
+Six queries against tables that already existed: every run session rather than only the
+last, the sum of `est_saving` over the queue, the candidate count, every undo row whatever
+its state, and the succeeded jobs. `selectSucceededJobs` names its five columns instead of
+`SELECT *`, so the mapper is honest about what History actually depends on; the other
+nineteen belong to the field test.
+
+`SpaceReadsTest` covers them against the shipped schema, including a stop reason no build
+recognises reading as absent rather than throwing — the same totality the folder mode got.
+
 ## Settings, and a way to reach it
 
 There was no way to change anything. The app read one folder, ran on defaults, and had no

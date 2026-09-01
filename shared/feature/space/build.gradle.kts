@@ -37,7 +37,10 @@ kotlin {
             dependencies {
                 implementation(libs.kotlinx.coroutines.core)
                 api(projects.shared.core.ui)
-                implementation(projects.shared.core.domain)
+                // `api`, not `implementation`: SpaceScreen.State, History.Row and
+                // SkipList.Group are the screen's own parameter types, so a caller cannot
+                // name them without this on its compile classpath.
+                api(projects.shared.core.domain)
                 api(projects.shared.core.model)
                 api(compose.runtime)
                 api(compose.foundation)
