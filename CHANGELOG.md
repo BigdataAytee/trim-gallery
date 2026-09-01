@@ -1,5 +1,42 @@
 # Changelog
 
+## The night pass is scheduled
+
+`NightScheduler.schedule` was written in milestone 5 — periodic request, the four
+constraints, linear backoff, unique work under `KEEP` so a late settings change cannot push
+tonight's window past morning — bound in Koin, and **never called by anything**. Not a
+broken pipeline: an unopened door. The encoder, the search, the verifier and the safe
+replace were all built and tested behind it, which is why a phone with the app installed
+and a folder granted has never optimised a single file.
+
+`NightPass.sync()` is the caller. It schedules when any folder is granted and cancels when
+the last one goes — the cancel half matters as much, because somebody who revokes their
+last grant in system Settings should not be left with a job waking the phone nightly to
+find nothing to read.
+
+Two call sites, both needed: when a folder is granted, which is the first moment there is
+work; and on every app start where a grant already exists, because a periodic work request
+does not survive a reinstall and nobody is going to re-grant a folder to fix something they
+cannot see. `KEEP` makes both safe to call as often as they like.
+
+### It says so in the export
+
+"Is it actually going to run tonight?" was unanswerable from a phone. The diagnostics
+export now opens with the scheduler's state, its run-attempt count, how many folders are
+granted, and which constraints are on — and prints `WARNING: folders are granted but no
+work is enqueued` when it sees exactly the fault above, rather than leaving it to be
+inferred from an absence.
+
+**No timestamps, and a test that keeps it that way.** `Diagnostics` in core/domain bans
+absolute times from the export because when the night pass ran says when its owner sleeps.
+`carriesNoTimestamps` fails on any ten-digit number in the section, so a later "last run at"
+cannot drift in.
+
+`WorkManagerScheduler` is now bound twice on purpose: the pipeline depends on the
+`NightScheduler` port and must not know what schedules it, while the export asks the
+concrete class what WorkManager holds — a question the port has no business answering on
+iOS. The second definition resolves the first, so it is one instance.
+
 <<<<<<< HEAD
 ## The folder picker says which folders Android blocks
 

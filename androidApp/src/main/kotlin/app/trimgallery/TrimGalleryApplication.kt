@@ -5,6 +5,7 @@ import app.trimgallery.core.ui.motion.MotionSpec
 import app.trimgallery.di.androidEngineModule
 import app.trimgallery.engine.android.CrashReports
 import app.trimgallery.engine.android.ForegroundWatcher
+import app.trimgallery.engine.android.NightPass
 import coil3.ImageLoader
 import coil3.SingletonImageLoader
 import coil3.request.crossfade
@@ -33,10 +34,18 @@ class TrimGalleryApplication : Application() {
         // cold start into the gallery.
         ForegroundWatcher.install(this)
 
-        startKoin {
+        val koin = startKoin {
             androidContext(this@TrimGalleryApplication)
             modules(androidEngineModule)
-        }
+        }.koin
+
+        // Schedule the night pass if a folder is already granted. A periodic work request
+        // does not survive a reinstall, and somebody whose app stopped optimising overnight
+        // has no way to know they need to re-grant a folder to fix it.
+        //
+        // After Koin, because it resolves from the graph; KEEP means calling it on every
+        // start leaves an existing schedule untouched rather than resetting its period.
+        runCatching { koin.get<NightPass>().sync() }
 
         // Coil's singleton loader, with the video decoder registered so a video tile shows
         // a frame instead of a blank square (STACK.md names both artifacts).
