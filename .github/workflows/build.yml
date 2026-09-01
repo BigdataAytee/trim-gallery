@@ -195,9 +195,19 @@ jobs:
           set -o pipefail
           ./gradlew :androidApp:compileDebugKotlin --console=plain 2>&1 | tee /tmp/compile.log
 
+      # androidApp's own JVM tests, which nothing ran until now: `sharedTest` covers the
+      # shared modules and stops there, so a test written beside the Android code was
+      # decoration — it looked like coverage and executed on no machine. The first one is
+      # `FolderChoiceTest`, which asserts the rule deciding whether a folder Android handed
+      # back can actually be used.
+      - name: androidApp unit tests
+        run: |
+          set -o pipefail
+          ./gradlew :androidApp:testDebugUnitTest --console=plain 2>&1 | tee /tmp/androidtest.log
+
       - name: Failure summary
         if: failure()
-        run: bash .github/failure-summary.sh /tmp/lint.log /tmp/compile.log
+        run: bash .github/failure-summary.sh /tmp/lint.log /tmp/compile.log /tmp/androidtest.log
 
   apk:
     name: Android APK + native

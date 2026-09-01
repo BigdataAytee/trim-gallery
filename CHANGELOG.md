@@ -1,5 +1,36 @@
 # Changelog
 
+## The folder picker says which folders Android blocks
+
+"Can't use this folder", with nothing after it. Partly Android, partly ours.
+
+Android refuses three locations to every app: the root of internal storage, `Download`, and
+the root of an SD card. The picker greys out "Use this folder" rather than returning an
+error — so a blocked attempt and somebody changing their mind reach the app identically, as
+`null`. **The app cannot tell them apart**, which rules out any message that assumes the
+user picked wrongly.
+
+The picker now opens at `DCIM/Camera`, so the ordinary path never meets a blocked folder.
+When it comes back empty the sheet leads with "No folder was chosen", names all three
+blocked places, and gives the way round each — any folder *inside* them works, including
+inside Downloads — then offers to open DCIM/Camera or the picker with no hint.
+
+A returned tree is still classified. A picker that allows what the platform documents as
+unpickable would otherwise leave a grant that is stored, looks granted and scans nothing,
+which reads as an empty library rather than a refused folder.
+
+Downloads itself needs "All files access", which is deferred rather than refused; PROJECT.md
+records why and what would change the answer.
+
+### A gap this uncovered
+
+`sharedTest` runs the shared modules and stops, so **androidApp's unit tests had never been
+run by CI**. A test written beside the Android code executed on no machine. The `android`
+job now runs `:androidApp:testDebugUnitTest`, and `FolderChoice`'s rule is split so the part
+worth testing is a pure function over a document id — six cases, including the one that
+matters most: `Download/Holiday` must *not* be refused, because it is the workaround the
+sheet recommends.
+
 ## The viewer, and the crash that hid it
 
 First real use on a phone: tapping any photo closed the app. The viewer was not missing —
