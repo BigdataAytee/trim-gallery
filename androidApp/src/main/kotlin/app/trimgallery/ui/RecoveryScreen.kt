@@ -49,11 +49,28 @@ import org.koin.compose.koinInject
  * and it is never taken on their behalf.
  *
  * It names the build, because the first question about any crash is which program it was.
+ *
+ * Every dependency is a parameter with a `koinInject` default rather than resolved inside,
+ * so that the two callers who have **no graph to inject from** can construct them by hand:
+ * `MainActivity` when the graph itself failed to build, and `DiagnosticsActivity`, the
+ * separate launcher icon that exists for exactly the case where nothing else in this app
+ * will start. All four take nothing but a `Context`, which is what makes that possible and
+ * is worth preserving.
+ *
+ * @param headline and [explanation] because this screen is reached three ways — after a
+ *   failed launch, after a graph that never built, and on purpose from the second icon —
+ *   and telling someone their app crashed when they simply tapped "Diagnostics" would be a
+ *   small lie in the one place that has to be trustworthy.
+ * @param continueLabel what the last action says. It is never taken on the user's behalf.
  */
 @Composable
 fun RecoveryScreen(
     onContinue: () -> Unit,
     modifier: Modifier = Modifier,
+    headline: String = "Trim stopped while it was starting up",
+    explanation: String = "It has not tried again. The work that failed was reading your folder, " +
+        "which it does on its own — so restarting would only do the same thing.",
+    continueLabel: String = "Try again anyway",
     guard: StartupGuard = koinInject(),
     crashes: CrashReports = koinInject(),
     export: DiagnosticsExport = koinInject(),
@@ -78,12 +95,11 @@ fun RecoveryScreen(
             .testTag(RECOVERY_TAG),
     ) {
         BasicText(
-            text = "Trim stopped while it was starting up",
+            text = headline,
             style = TrimTheme.typography.title.copy(color = colors.text),
         )
         BasicText(
-            text = "It has not tried again. The work that failed was reading your folder, " +
-                "which it does on its own — so restarting would only do the same thing.",
+            text = explanation,
             style = TrimTheme.typography.body.copy(color = colors.muted),
         )
         BasicText(
@@ -105,7 +121,7 @@ fun RecoveryScreen(
             }
         }
 
-        Action("Try again anyway") {
+        Action(continueLabel) {
             guard.clear()
             onContinue()
         }

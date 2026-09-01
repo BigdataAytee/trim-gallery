@@ -3,6 +3,12 @@
     <string name="app_name">Trim Gallery</string>
 
     <!--
+      A second launcher icon. Named so it sorts beside the app and reads as belonging to it,
+      and so a tester looking for "the diagnostics thing" finds it without being told twice.
+    -->
+    <string name="diagnostics_name">Trim Diagnostics</string>
+
+    <!--
       DESIGN_SYSTEM.md, Copy tone: short, calm, concrete; numbers over adjectives; never
       "compress" or "shrink" in user-facing copy — "optimise", "freed", "smaller".
     -->

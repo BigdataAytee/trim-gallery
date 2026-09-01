@@ -95,5 +95,37 @@
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
         </activity>
+
+        <!--
+          A second launcher icon, and a deliberate one.
+
+          Three field reports asked for a stack trace and none arrived, because "Export
+          diagnostics" lives inside the app and the app is what is broken. A tester whose
+          launcher says "Trim Gallery keeps stopping" has no route to it. This icon is that
+          route: it shares no code with the gallery, resolves nothing from the dependency
+          graph, opens no database and reads no media.
+
+          `taskAffinity=""` so it never lands in the gallery's task — a diagnostics screen
+          that could be reached by backing out of a crashed gallery would inherit its state.
+
+          Exported, necessarily: an activity in the launcher is reachable by any app that
+          can send an intent. That is acceptable here and worth stating rather than glossing.
+          It takes no intent extras and branches on nothing, so the only thing another app
+          can do is open the same screen the user can, and everything on that screen is
+          already the user's to share. The report itself leaves only through the system
+          share sheet, on a per-file grant the user picks a destination for.
+        -->
+        <activity
+            android:name=".ui.DiagnosticsActivity"
+            android:excludeFromRecents="true"
+            android:exported="true"
+            android:label="@string/diagnostics_name"
+            android:taskAffinity=""
+            android:theme="@style/Theme.TrimGallery">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+        </activity>
     </application>
 </manifest>
