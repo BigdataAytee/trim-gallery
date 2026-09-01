@@ -73,8 +73,14 @@ fi
 # their 72 tests, which is the code that enforces this project's hard rules. Recorded in
 # PROJECT.md as a follow-up rather than fixed here, because it is 85 formatting changes to
 # files this change does not otherwise touch.
+# `**/src/**/*.kt` alone misses every build script, and CI does not: `ktlintCheck`
+# includes `runKtlintCheckOverKotlinScripts`, which lints `*.gradle.kts`. That gap let a
+# stray blank line in androidApp/build.gradle.kts pass locally and fail CI — precisely the
+# "a local check CI then contradicts" failure this script exists to prevent, so the
+# patterns now cover both.
 exec java -jar "$jar" \
     "**/src/**/*.kt" \
+    "**/*.gradle.kts" \
     "!build-logic/**" \
     "!**/build/**" \
     "!design/**" \

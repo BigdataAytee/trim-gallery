@@ -9,3 +9,7 @@
 # Otherwise pre-push rejects the fake, and the easy way out is dropping a file
 # the project requires rather than widening the scope.
 androidApp/**
+# Widened: CI lints build scripts (`ktlintKotlinScriptCheck`) and tools/ktlint.sh
+# did not, which is how a stray blank line in androidApp/build.gradle.kts reached
+# CI from this very branch. The script now covers them too.
+tools/**
