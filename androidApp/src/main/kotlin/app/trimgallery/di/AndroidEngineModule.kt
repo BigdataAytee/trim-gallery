@@ -204,10 +204,27 @@ val androidEngineModule = module {
         )
     }
 
-    // NightRun.Step is VideoOptimiseStep — the assembly of ProbeAndSearch, the encoder,
+    // --- The encode path, and what is still missing from it -------------------
+    //
+    // `VideoOptimiseStep` now exists: the assembly of ProbeAndSearch, the encoder,
     // VerifyPass, the Replacer and Predictor.learn into the chain ARCHITECTURE.md § 7
-    // describes. Every piece exists and is tested; the assembly itself is not written yet,
-    // and binding a half-built one would be worse than binding none.
+    // describes, with the safety gates asserted in `VideoOptimiseStepTest`.
+    //
+    // **It is deliberately not bound yet, and `NightRun.Step` still has no binding.**
+    // Two engine-api ports have no implementation on any platform:
+    //
+    //   * `YuvSource`    — decodes a probe window to YUV, and decodes the *output* back for
+    //                      the VMAF comparison
+    //   * `ProbeEncoder` — encodes one cached window at one setting during the search
+    //
+    // Nothing implements either, on Android or iOS. That is not a detail of the search: the
+    // verifier needs `YuvSource` too, so the VMAF gate — the check that stands between a
+    // user's video and a worse copy of it — has never had a platform implementation either.
+    //
+    // Binding the step over `get()` calls for types nobody provides would move the failure
+    // from "this is not wired" to "the night pass throws at 3am", which is strictly worse.
+    // So it stays unbound until those two engines exist and have been run against a real
+    // encoder. Recorded in PROJECT.md and STATUS.md.
     //
     // --- Milestone 9: the index ------------------------------------------------
     //

@@ -1,5 +1,52 @@
 # Changelog
 
+## The encode path exists, and what it is still waiting for
+
+`NightRun.Step` had no binding. The night pass was scheduled, woke, and failed on its first
+`get()` — so **nothing in this app had ever optimised a file**, and nothing would have,
+however many nights it ran. Every piece of the chain had been built and unit tested across
+six milestones; the assembly had not.
+
+`VideoOptimiseStep` is that assembly, and it reads as the safety contract it implements:
+
+1. choose the output codec, or skip — never a software encoder (BUILD.md § 2 rule 2)
+2. **snapshot size and mtime, before any work**
+3. search for the cheapest setting that should clear the quality bar
+4. encode the whole file, verify VMAF on three windows, step up at most twice
+5. confirm it is smaller, and that the original has not moved
+6. and only then hand a `ReplacePlan` to the one component allowed to write
+
+It cannot skip step 6's gate even by mistake: a `ReplacePlan` is issued **only** by
+`VerifyPass.Result.Ready`, and `Replacer` is the only writer in the app, which a build guard
+enforces. Nothing in the step opens a user's file for writing, and nothing deletes an
+original — the original is *parked* by the Replacer at replace time.
+
+### The tests are written as the ways it could lose a file
+
+The happy path gets one test. The refusals get the rest, and each one counts calls to a
+faked `Replacer`: "the Replacer was never called" is the strongest assertion available,
+because it is the only component that may write to the library. A device with no hardware
+encoder, a file no setting can encode well enough, a file the user edited mid-encode, an
+original that vanished, an unreadable container — none of them may reach it. A rolled-back
+replace must teach the predictor nothing, because a setting that verified and then failed to
+commit is not evidence about a file that is not on disk.
+
+### What it is waiting for, stated plainly
+
+**It is not bound, and the night pass still cannot run.** Two engine-api ports have no
+implementation on any platform:
+
+- `YuvSource` — decodes a probe window, and decodes the output back for the VMAF comparison
+- `ProbeEncoder` — encodes one cached window at one setting during the search
+
+Nothing implements either, on Android or iOS. That is not only the search's problem: the
+verifier needs `YuvSource` too, so **the VMAF gate — the check standing between a video and
+a worse copy of it — has never had a platform implementation either.**
+
+Binding the step over `get()` calls for types nobody provides would move the failure from
+"this is not wired" to "the night pass throws at 3am", which is strictly worse. So it stays
+unbound until those two engines exist and have been run against a real encoder.
+
 ## The crash report you can reach when the app will not start
 
 Three field reports asked for a stack trace. None arrived, and the reason was structural

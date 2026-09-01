@@ -2922,3 +2922,44 @@ the image loader are wrapped and their failures surfaced.
 with nothing granted; the other ran the granted path outside the real Activity. The shipped
 configuration was the intersection and nothing tested it. When two suites split a surface,
 name the case that belongs to both.
+\n
+## The encode path (1 Sep 2026)
+
+**The assembly is the safety contract.** `VideoOptimiseStep` does nothing clever — it joins
+six components in one order, and that order is what keeps an original safe. It is written so
+the order is legible top to bottom rather than distributed across the callers, because a
+sequence that has to be re-derived at each call site is a sequence that will eventually be
+got wrong at one of them.
+
+**A `ReplacePlan` can only be issued by a passing verification.** That was already true of
+`VerifyPass`; this step is the first caller that could have broken it and does not. Combined
+with `Replacer` being the app's only writer, "was the Replacer called?" becomes a complete
+test of whether an original was at risk.
+
+**Learn only from a replace that landed.** A setting that verified and then failed to commit
+describes a file that is not on disk. Folding it into the predictor's mean would teach the
+family from an outcome that did not happen.
+
+**Background priority is a parameter, not a constant.** The night pass passes true, which
+becomes `KEY_PRIORITY = 1` and lets a foreground camera take the hardware. An "Optimise" the
+user just tapped passes false: it *is* the foreground, and deprioritising it behind itself
+would be a slower encode for no one's benefit. This also settles how the on-battery rule
+reads for an explicit action — a tap, on one file, with the result shown and undoable, is
+the "Compress now" case BUILD.md § 9 names, and play-to-compress is one mechanism for it
+rather than the only permitted one.
+
+**Encode at the source's own resolution.** `Scaling` exists to measure probe windows at
+1080p; applying it to the output would quietly downscale everyone's 4K. Trim's promise is a
+smaller file of the same photograph.
+
+**Two ports have no implementation anywhere, and that is the blocker.** `YuvSource` and
+`ProbeEncoder` are consumed by `ProbeAndSearch` and by `Verifier`, and implemented by
+nothing on Android or iOS. Milestone 3's search and milestone 4's VMAF gate were both built
+and unit tested against fakes and neither has ever run on a device. The step stays unbound
+until they exist — an unbound step is a feature that does not work, which is honest; a step
+bound over missing dependencies is a crash at 3am.
+
+**The emulator cannot prove this path.** An ATD image has no hardware encoder, which is why
+`Milestone1EncodeTest` skips itself there. Whatever those two engines turn out to be, their
+first real exercise is a physical device, and the safety gates above are what has to hold
+when that happens.
