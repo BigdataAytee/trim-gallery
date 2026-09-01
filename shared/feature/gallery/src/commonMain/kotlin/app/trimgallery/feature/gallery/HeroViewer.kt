@@ -27,6 +27,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import app.trimgallery.core.model.MediaItem
@@ -122,6 +123,7 @@ fun HeroViewer(
 
         Box(
             Modifier
+                .testTag(GalleryTestTags.VIEWER)
                 .offset {
                     IntOffset(frame.left.dp.roundToPx(), (frame.top + dragDp).dp.roundToPx())
                 }
