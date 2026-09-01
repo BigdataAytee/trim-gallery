@@ -57,7 +57,13 @@ import kotlinx.coroutines.CancellationException
  * BUILD.md § 2 rule 2's sibling rule keeps on-battery encoding to explicit user actions.
  * "Optimise" is exactly that: a tap, on one file, with the result shown and undoable. The
  * night pass is what waits for a charger. Recorded in PROJECT.md.
+ *
+ * Seven constructor parameters, deliberately. They are the chain: this class exists only to
+ * assemble them in one order, so its parameter list *is* the list of things being assembled.
+ * Hiding them behind a holder object would make the wiring harder to read, not easier, and
+ * would let a caller build a set that disagrees with itself.
  */
+@Suppress("LongParameterList")
 class VideoOptimiseStep(
     private val storage: LibraryStorage,
     private val codecs: CodecFactory,
@@ -187,27 +193,42 @@ class VideoOptimiseStep(
         }
 
         // 6. The one write in the app. Everything above this line is read-only.
-        return when (val replaced = replacer.replace(ready.plan)) {
-            is ReplaceResult.Replaced -> {
-                // Learned only from a file that actually landed. A setting that verified and
-                // then failed to commit is not evidence about what this family needs.
-                facts.learn(key, ready.setting.bitrate)
-                Result.Optimised(
-                    wasBytes = before.size,
-                    nowBytes = replaced.newSize,
-                    vmaf = ready.vmaf,
-                    setting = ready.setting,
-                    codec = codec,
-                    undo = replaced.undoRef,
-                )
-            }
+        return commit(ready, wasBytes = before.size, codec = codec, key = key)
+    }
 
-            ReplaceResult.SourceChanged ->
-                Result.SourceChanged("the original changed between verifying and replacing")
-
-            is ReplaceResult.RolledBack ->
-                Result.Failed("the replace was rolled back: ${replaced.reason}")
+    /**
+     * The replace, and what to report about it.
+     *
+     * Separate from [optimise] because it is a different responsibility — everything above
+     * it decides whether a swap is safe, and this performs one — and because a reader
+     * checking the safety chain should be able to see the whole of it without the reporting
+     * in the way.
+     */
+    private suspend fun commit(
+        ready: VerifyPass.Result.Ready,
+        wasBytes: Long,
+        codec: VideoCodec,
+        key: Predictor.Key,
+    ): Result = when (val replaced = replacer.replace(ready.plan)) {
+        is ReplaceResult.Replaced -> {
+            // Learned only from a file that actually landed. A setting that verified and
+            // then failed to commit is not evidence about what this family needs.
+            facts.learn(key, ready.setting.bitrate)
+            Result.Optimised(
+                wasBytes = wasBytes,
+                nowBytes = replaced.newSize,
+                vmaf = ready.vmaf,
+                setting = ready.setting,
+                codec = codec,
+                undo = replaced.undoRef,
+            )
         }
+
+        ReplaceResult.SourceChanged ->
+            Result.SourceChanged("the original changed between verifying and replacing")
+
+        is ReplaceResult.RolledBack ->
+            Result.Failed("the replace was rolled back: ${replaced.reason}")
     }
 
     /**

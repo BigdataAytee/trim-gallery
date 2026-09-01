@@ -2963,3 +2963,23 @@ bound over missing dependencies is a crash at 3am.
 `Milestone1EncodeTest` skips itself there. Whatever those two engines turn out to be, their
 first real exercise is a physical device, and the safety gates above are what has to hold
 when that happens.
+
+## Detekt, runnable locally (1 Sep 2026)
+
+**`tools/detekt.sh`, for the same reason `tools/ktlint.sh` exists.** Every module that runs
+detekt also has the Android plugin, so `./gradlew detekt` cannot configure without Google
+Maven, and detekt findings were therefore discovered only in CI. Worse, they arrived
+*without their text*: `failure-summary.sh` cuts the log at `* Try:` and Gradle prints the
+findings above it, so a red run said "2 weighted issues" and nothing else. Two round trips
+to learn two rule names.
+
+**`--build-upon-default-config` is the whole trick, and leaving it off is a trap.**
+`config/detekt/detekt.yml` holds only this project's deviations, so without that flag the
+CLI runs *only the rules named in it* and reports a clean tree. That was tried: it said zero
+smells while Gradle failed on two. A local check that disagrees with CI in the reassuring
+direction is worse than none.
+
+**It excludes `build-logic`, to match what CI runs.** No detekt task covers that included
+build, so scanning it locally reports five findings no pipeline will fail on. That it is
+unchecked is a real gap — it holds the build guards — and `ktlint.sh` records the same one.
+But a check that cries wolf gets ignored, and the checks that matter get ignored with it.
