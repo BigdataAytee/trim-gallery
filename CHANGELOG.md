@@ -34,6 +34,34 @@ worse than showing nothing.
 The cache key is split into its own object so it can be tested without a device — five
 cases, because its failures are the silent kind: a collision draws one video's frame on
 another's tile, and an over-specific key caches nothing and re-extracts forever.
+## The app says which build it is
+
+Twice now a field report has had to be answered by comparing APK file sizes on a release
+page, because there was no way to ask the app what it was. That is the wrong first question
+to be stuck on: after "it crashed", the next thing anyone needs to know is whether the fix
+for the *last* crash was even in what they installed.
+
+`Trim Gallery 0.1.0 (1) · a03262a` now appears in Settings, and at the top of the
+diagnostics export where it arrives attached to the stack trace it explains.
+
+The commit comes from `GITHUB_SHA` in CI and from `git` for a local build, and **neither may
+fail the build**: the whole lookup is wrapped and falls back to `unknown`. A version string
+is not worth a red pipeline, and a build that admits it cannot name its commit is still more
+useful than one that would not compile.
+
+Two traps in `androidApp/build.gradle.kts` this walked into and out of, both of which fail
+*configuration* and therefore every job in the workflow, including the ones that never touch
+Android:
+
+- `const val` at a `.kts` top level is a script compilation error — the file already carries
+  that lesson next to `smokeX86Property`, and it applies to a second constant just as well.
+- Statements **above** `plugins { }` are compiled without the Project API, so `providers`
+  does not exist there. `smokeX86Property` sits above it only because a string literal needs
+  nothing. The commit lookup sits below.
+
+No timestamp, in Settings or in the file. `Diagnostics` bans absolute times from the export
+because when the app ran says when its owner sleeps; a build date invites the same question,
+and the commit answers it better anyway by saying exactly what the code was.
 ## The grid comes from the database, not from a folder walk
 
 The app rescanned every granted folder on every launch and could not draw a single tile
