@@ -1,8 +1,6 @@
 package app.trimgallery.ui
 
 import android.content.Context
-import android.graphics.Bitmap
-import android.graphics.Color
 import android.net.Uri
 import android.os.SystemClock
 import android.view.View
@@ -35,23 +33,14 @@ import androidx.media3.ui.PlayerView
 import androidx.test.core.app.ApplicationProvider
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
-import app.trimgallery.core.data.AndroidDatabase
 import app.trimgallery.core.data.TrimRepository
-import app.trimgallery.core.domain.billing.Tier
-import app.trimgallery.core.model.FolderGrant
-import app.trimgallery.core.model.FolderMode
 import app.trimgallery.core.model.MediaItem
-import app.trimgallery.core.model.MediaKind
-import app.trimgallery.core.model.MediaRef
-import app.trimgallery.core.model.MediaStatus
-import app.trimgallery.core.model.Settings
 import app.trimgallery.core.ui.theme.TrimTheme
 import app.trimgallery.engine.android.GrantedFolders
 import app.trimgallery.engine.android.NightPass
 import app.trimgallery.engine.android.StartupGuard
 import app.trimgallery.feature.gallery.GalleryTestTags
 import kotlinx.coroutines.CompletableDeferred
-import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.runBlocking
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotNull
@@ -61,7 +50,6 @@ import org.junit.Before
 import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
-import java.io.File
 
 /**
  * The journeys a person actually makes through this app, on a device.
@@ -110,12 +98,12 @@ class GalleryJourneyTest {
         // Whatever a previous test left set. The guard is a file, and it outlives a process.
         StartupGuard(app).complete()
 
-        photo = photoItem(writeJpeg("journey.jpg"))
-        video = videoItem(copyOutOfAssets(GOLDEN))
+        photo = journeyPhoto(app)
+        video = journeyVideo(app)
         library = FakeLibrary(listOf(video, photo))
         scheduler = RecordingScheduler()
-        repository = inMemoryRepository()
-        picker = pickerReturning(Uri.parse(TREE))
+        repository = inMemoryRepository(app)
+        picker = pickerReturning(Uri.parse(JOURNEY_TREE))
     }
 
     /**
@@ -139,7 +127,7 @@ class GalleryJourneyTest {
 
         assertTrue("granting a folder is the moment there is work, so it must schedule", scheduler.scheduled)
         runBlocking {
-            assertNotNull("the grant row every media row points at", repository.folderGrant(TREE))
+            assertNotNull("the grant row every media row points at", repository.folderGrant(JOURNEY_TREE))
             assertEquals("both files persisted", 2, repository.gallery().size)
         }
     }
@@ -154,7 +142,7 @@ class GalleryJourneyTest {
      */
     @Test
     fun tappingAPhotoOpensTheViewer() {
-        showGallery(FakeGrantedFolders(app, listOf(grant())))
+        showGallery(FakeGrantedFolders(app, listOf(journeyGrant())))
         awaitTag(GalleryTestTags.tile(photo.id))
 
         compose.onNodeWithTag(GalleryTestTags.tile(photo.id)).performClick()
@@ -172,7 +160,7 @@ class GalleryJourneyTest {
      */
     @Test
     fun tappingAVideoPlaysIt() {
-        showGallery(FakeGrantedFolders(app, listOf(grant())))
+        showGallery(FakeGrantedFolders(app, listOf(journeyGrant())))
         awaitTag(GalleryTestTags.tile(video.id))
 
         compose.onNodeWithTag(GalleryTestTags.tile(video.id)).performClick()
@@ -194,7 +182,7 @@ class GalleryJourneyTest {
     @Test
     fun relaunchingAfterAGrantRendersTheGrid() {
         val launch = mutableStateOf(0)
-        showGallery(FakeGrantedFolders(app, listOf(grant())), launch)
+        showGallery(FakeGrantedFolders(app, listOf(journeyGrant())), launch)
         awaitTag(GalleryTestTags.tile(photo.id))
 
         val walk = CompletableDeferred<Unit>()
@@ -229,7 +217,7 @@ class GalleryJourneyTest {
     @Test
     fun aStartupThatFailsLandsOnRecoveryAndDoesNotRetry() {
         library = FakeLibrary(listOf(photo.copy(folderGrantId = "a-grant-nobody-recorded")))
-        showGallery(FakeGrantedFolders(app, listOf(grant())))
+        showGallery(FakeGrantedFolders(app, listOf(journeyGrant())))
 
         awaitTag(RECOVERY_TAG)
 
@@ -301,89 +289,6 @@ class GalleryJourneyTest {
         }
     }
 
-    private fun inMemoryRepository(): TrimRepository {
-        var minted = 0
-        return TrimRepository(
-            // name = null: this driver, this callback, no file. The callback is where
-            // `PRAGMA foreign_keys = ON` lives, and it is the whole reason these run here.
-            db = AndroidDatabase.create(app, name = null),
-            io = Dispatchers.IO,
-            newId = { "journey-${minted++}" },
-            nowMs = System::currentTimeMillis,
-            readSettings = { Settings() },
-            readTier = { Tier.FREE },
-            monthStartMs = { 0L },
-        )
-    }
-
-    // ------------------------------------------------------------- the fixtures
-
-    /** As `GrantedFolders.grants()` builds it: the tree URI is both the id and the ref. */
-    private fun grant() = FolderGrant(
-        id = TREE,
-        platformRef = MediaRef(TREE),
-        mode = FolderMode.KEEP,
-        displayName = "Journey",
-    )
-
-    private fun photoItem(file: File) = item(
-        id = "journey-photo",
-        file = file,
-        kind = MediaKind.PHOTO,
-        mime = "image/jpeg",
-        mtime = 2_000L,
-    )
-
-    private fun videoItem(file: File) = item(
-        id = "journey-video",
-        file = file,
-        kind = MediaKind.VIDEO,
-        mime = "video/mp4",
-        mtime = 1_000L,
-    )
-
-    @Suppress("LongParameterList")
-    private fun item(id: String, file: File, kind: MediaKind, mime: String, mtime: Long) = MediaItem(
-        id = id,
-        // A file URI, not a SAF document URI, and that is the one seam: without a persisted
-        // permission there is no document to address. Everything that reads it — Coil, the
-        // frame extractor, ExoPlayer — goes through the same ContentResolver either way.
-        platformRef = MediaRef(Uri.fromFile(file).toString()),
-        name = file.name,
-        kind = kind,
-        codec = null,
-        width = 0,
-        height = 0,
-        fps = null,
-        bitrate = null,
-        size = file.length(),
-        duration = null,
-        takenAt = null,
-        location = null,
-        cameraModel = null,
-        phash = null,
-        sha256 = null,
-        status = MediaStatus.NEW,
-        mtime = mtime,
-        folderGrantId = TREE,
-        mime = mime,
-    )
-
-    /** A real photograph, so the viewer has something to decode rather than a missing path. */
-    private fun writeJpeg(name: String): File {
-        val bitmap = Bitmap.createBitmap(PHOTO_PX, PHOTO_PX, Bitmap.Config.ARGB_8888)
-        bitmap.eraseColor(Color.CYAN)
-        return File(app.cacheDir, name).apply {
-            outputStream().use { bitmap.compress(Bitmap.CompressFormat.JPEG, JPEG_QUALITY, it) }
-        }
-    }
-
-    private fun copyOutOfAssets(name: String): File = File(app.cacheDir, name).apply {
-        outputStream().use { out ->
-            InstrumentationRegistry.getInstrumentation().context.assets.open(name).use { it.copyTo(out) }
-        }
-    }
-
     // ------------------------------------------------------------- the waiting
 
     private fun awaitTag(tag: String) = compose.waitUntil(SCREEN_TIMEOUT_MS) {
@@ -433,14 +338,8 @@ class GalleryJourneyTest {
     }
 
     private companion object {
-        /** A tree URI shaped like a picker's, on an authority no refusal rule names. */
-        const val TREE = "content://app.trimgallery.journey/tree/journey%3ACamera"
-
         /** The wording on the first-run screen. */
         const val CHOOSE_FOLDER = "Choose folder"
-
-        /** The clip from `shared/testdata`, real H.264 with a real AAC track. */
-        const val GOLDEN = "golden-h264-640x360-3s.mp4"
 
         /**
          * Long enough for a cold emulator to boot a decoder, short enough that a hang is
@@ -448,7 +347,5 @@ class GalleryJourneyTest {
          */
         const val SCREEN_TIMEOUT_MS = 30_000L
         const val POLL_MS = 50L
-        const val PHOTO_PX = 64
-        const val JPEG_QUALITY = 90
     }
 }

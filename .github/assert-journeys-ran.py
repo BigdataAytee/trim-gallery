@@ -19,15 +19,23 @@ import xml.etree.ElementTree as ElementTree
 
 RESULTS = pathlib.Path("androidApp/build/outputs/androidTest-results")
 
-SUITE = "app.trimgallery.ui.GalleryJourneyTest"
-
-REQUIRED = [
-    "grantingAFolderRendersTheGrid",
-    "tappingAPhotoOpensTheViewer",
-    "tappingAVideoPlaysIt",
-    "relaunchingAfterAGrantRendersTheGrid",
-    "aStartupThatFailsLandsOnRecoveryAndDoesNotRetry",
-]
+# Suite -> the tests in it that must have run and passed.
+REQUIRED = {
+    "app.trimgallery.ui.GalleryJourneyTest": [
+        "grantingAFolderRendersTheGrid",
+        "tappingAPhotoOpensTheViewer",
+        "tappingAVideoPlaysIt",
+        "relaunchingAfterAGrantRendersTheGrid",
+        "aStartupThatFailsLandsOnRecoveryAndDoesNotRetry",
+    ],
+    # The real Activity over the real graph with a folder granted, which is what a phone
+    # does on every launch after the first and what no test covered until a build shipped
+    # that crashed doing it.
+    "app.trimgallery.ui.MainActivityGrantedLaunchTest": [
+        "theRealActivityWithAFolderGrantedDrawsTheGrid",
+        "theLaunchMarkIsClearedOnceAFrameIsDrawn",
+    ],
+}
 
 
 def main() -> int:
@@ -39,15 +47,21 @@ def main() -> int:
     ran, bad = set(), []
     for report in reports:
         for case in ElementTree.parse(report).iter("testcase"):
-            if case.get("classname") != SUITE:
+            suite = case.get("classname")
+            if suite not in REQUIRED:
                 continue
-            name = case.get("name", "")
+            name = f"{suite.rsplit('.', 1)[-1]}.{case.get('name', '')}"
             ran.add(name)
             for outcome in ("failure", "error", "skipped"):
                 if case.find(outcome) is not None:
                     bad.append(f"{name}: {outcome}")
 
-    missing = [name for name in REQUIRED if name not in ran]
+    expected = [
+        f"{suite.rsplit('.', 1)[-1]}.{name}"
+        for suite, names in REQUIRED.items()
+        for name in names
+    ]
+    missing = [name for name in expected if name not in ran]
     if missing:
         print(f"These journeys did not run at all: {', '.join(missing)}")
     if bad:
@@ -56,7 +70,7 @@ def main() -> int:
         print(f"Read {len(reports)} report(s) under {RESULTS}.")
         return 1
 
-    print(f"All {len(REQUIRED)} screen journeys ran and passed on the device.")
+    print(f"All {len(expected)} screen journeys ran and passed on the device.")
     return 0
 
 

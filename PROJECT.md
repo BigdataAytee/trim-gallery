@@ -2889,3 +2889,36 @@ a filter, or an `assumeTrue` would otherwise leave the job green having asserted
 **The video journey asserts playback, not composition.** Reaching READY and `isPlaying`, over
 the golden H.264 clip with its real AAC track, read off the `PlayerView` on the main thread.
 A viewer drawn above a player that never starts is the black-tile bug one screen along.
+
+## Reaching the crash report (1 Sep 2026)
+
+**Diagnostics must not depend on the app working.** Three reports asked for a trace and
+none arrived, because the export is a screen inside an app that would not start. There is a
+second launcher activity now that shares no code path with the gallery — no Koin, no
+database, no media. If a route to the crash report can be broken by the crash, it is not a
+route.
+
+**One screen, three entry points.** `RecoveryScreen` takes every dependency as a parameter
+with a `koinInject` default, and all four take nothing but a `Context`. That is what lets
+the two callers with no graph to inject from — a failed startup, and the diagnostics icon —
+construct them by hand instead. Worth preserving deliberately.
+
+**The launch guard spans the launch, not the scan.** The first version bracketed the folder
+scan, which begins inside the composition; the request had been "crashed before the first
+frame". Two marks now, and either one opens recovery. Cleared on a pre-draw callback, not
+on `onResume`: RESUMED happens before the content is measured, and "reaches RESUMED" was
+already this project's most expensive false assurance.
+
+**A false positive here is the safe direction.** The launch mark's window is a few hundred
+milliseconds, so a process killed in it innocently — swiped away, low-memory — reads as a
+failure next launch. The cost is one screen dismissed with "Try again anyway". The
+alternative is missing the failure the mark exists for.
+
+**`Application.onCreate` may not throw.** It runs before any Activity, so a throw there
+kills every launch with nothing on screen — including the diagnostics icon. The graph and
+the image loader are wrapped and their failures surfaced.
+
+**Two test suites can each be green and still miss the product.** One ran the real Activity
+with nothing granted; the other ran the granted path outside the real Activity. The shipped
+configuration was the intersection and nothing tested it. When two suites split a surface,
+name the case that belongs to both.

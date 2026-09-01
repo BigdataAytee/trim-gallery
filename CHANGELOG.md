@@ -1,5 +1,53 @@
 # Changelog
 
+## The crash report you can reach when the app will not start
+
+Three field reports asked for a stack trace. None arrived, and the reason was structural
+rather than anybody forgetting: **Export diagnostics lives inside the app, and the app is
+what is broken.** A tester whose launcher says "Trim Gallery keeps stopping" has no route
+to it at all.
+
+**There is a second launcher icon now, "Trim Diagnostics".** It shares no code with the
+gallery: it resolves nothing from the dependency graph, opens no database, starts no scan,
+mounts no gallery and reads no media. It constructs four objects that each take a `Context`,
+reads the files the crash handler already wrote, and offers them to the share sheet. It is
+not the pretty part of this app; it is the part that has to work on the day nothing else
+does.
+
+### The startup guard covered the wrong span
+
+The field report asked for a recovery screen when "the previous launch crashed **before the
+first frame**". What was built bracketed the folder scan alone — and that bracket begins
+*inside* the composition. Everything ahead of it was unguarded: the Koin graph, the
+Activity, the first composition, the `koinInject` calls, reading the platform's list of
+granted folders. A crash there killed the process leaving no mark, so the next launch did
+the same thing. That is the loop, and the guard could not see it.
+
+There are two marks now. One spans `MainActivity.onCreate` to **the first frame drawn**;
+the other spans the scan, which outlives that frame. Either one left set opens the recovery
+screen. The first frame is detected with a pre-draw listener rather than `onResume`, and
+the difference is the point: `onResume` runs before the content has been measured, so an
+Activity that reaches RESUMED and then dies composing would clear the mark on its way past.
+
+`Application.onCreate` no longer takes the process with it either. A throw while building
+the graph happens before any Activity exists, so it kills every launch with no screen ever
+shown — the worst shape of the loop, the one where the app cannot say what happened. The
+graph and the image loader are both wrapped; a failure is recorded and reported on screen.
+
+### The test gap that let it ship
+
+Two instrumented suites covered this app and between them they missed the only
+configuration that ships. `MainActivityLaunchTest` runs the real Activity — but an emulator
+has no persisted folder grant, so the scan never starts and it asserts that an empty app
+reaches RESUMED. `GalleryJourneyTest` exercises the granted path thoroughly — but hosts the
+gallery in a bare `ComponentActivity` with fakes, and never runs `MainActivity`, `TrimApp`,
+or the real graph.
+
+**No test had ever run the real Activity with a folder granted**, which is what a phone
+does on every launch after the first. `MainActivityGrantedLaunchTest` does, over the real
+Koin graph, with only the two things an emulator cannot supply replaced. The CI guard that
+reads the instrumentation results back now requires it too.
+
 ## Screens that prove they work, on a device
 
 Four builds went out green while the first screen was broken. The only instrumented test in
