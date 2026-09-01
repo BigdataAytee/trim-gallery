@@ -26,6 +26,8 @@ import app.trimgallery.engine.Replacer
 import app.trimgallery.engine.SettingsStore
 import app.trimgallery.engine.UndoStore
 import app.trimgallery.engine.android.ContainerReaderAndroid
+import app.trimgallery.engine.android.CrashReports
+import app.trimgallery.engine.android.DiagnosticsExport
 import app.trimgallery.engine.android.GrantedFolders
 import app.trimgallery.engine.android.MediaCodecFactory
 import app.trimgallery.engine.android.MetadataCopierAndroid
@@ -76,6 +78,12 @@ val androidEngineModule = module {
     // row that says we may read a folder is worth nothing if the user revoked the grant
     // in Settings, and `getPersistedUriPermissions` is what actually decides.
     single { GrantedFolders(androidContext()) }
+
+    // The crash store and the export that carries it off the phone. Both are needed by the
+    // UI rather than by the pipeline, which is why they sit here and not behind an
+    // engine-api port: there is no iOS equivalent to keep in step yet.
+    single { CrashReports(androidContext()) }
+    single { DiagnosticsExport(androidContext()) }
     single<OutputProbe> { OutputProbeAndroid() }
     single<MetadataCopier> { MetadataCopierAndroid(androidContext()) }
 

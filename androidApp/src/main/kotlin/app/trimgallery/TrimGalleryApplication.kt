@@ -2,6 +2,7 @@ package app.trimgallery
 
 import android.app.Application
 import app.trimgallery.di.androidEngineModule
+import app.trimgallery.engine.android.CrashReports
 import app.trimgallery.engine.android.ForegroundWatcher
 import coil3.ImageLoader
 import coil3.SingletonImageLoader
@@ -20,6 +21,11 @@ class TrimGalleryApplication : Application() {
 
     override fun onCreate() {
         super.onCreate()
+        // First, before anything that can throw. A crash inside Koin's graph or Coil's
+        // loader is exactly the kind this exists to catch, and a handler installed after
+        // them would miss it.
+        CrashReports(this).install()
+
         // BUILD.md rule 7: background work pauses whenever the app is in the foreground.
         // Registered before Koin so the guards can never read a stale "not visible" on a
         // cold start into the gallery.

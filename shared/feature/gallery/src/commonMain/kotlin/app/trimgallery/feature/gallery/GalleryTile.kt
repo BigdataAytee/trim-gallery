@@ -14,11 +14,12 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.layout.boundsInWindow
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.unit.dp
 import app.trimgallery.core.model.MediaItem
+import app.trimgallery.core.ui.motion.HeroGeometry
 import app.trimgallery.core.ui.motion.MotionSpec
 import app.trimgallery.core.ui.motion.breathing
 import app.trimgallery.core.ui.motion.pressScale
@@ -33,27 +34,45 @@ import app.trimgallery.core.ui.theme.TrimTheme
  * every `shared/feature` module honest about the one-way dependency flow in
  * ARCHITECTURE.md § 2.
  *
- * @param onBounds reports the tile's rectangle in window coordinates, which is where the
- *   shared-element transition to the viewer starts from.
+ * @param onBounds reports the tile's rectangle in window coordinates **in dp**, which is
+ *   where the shared-element transition to the viewer starts from. Dp rather than the
+ *   pixels `boundsInWindow` returns, and typed as [HeroGeometry.Rect] rather than a
+ *   Compose `Rect` so the unit is part of the signature: passing the pixel values through
+ *   unconverted made the opened image three times too large on a 3x phone, and nothing
+ *   caught it — the geometry tests build their rectangles in dp directly and never go
+ *   through this composable.
  */
 @Composable
 fun GalleryTile(
     item: MediaItem,
     processing: Boolean,
     onOpen: (MediaItem) -> Unit,
-    onBounds: (Rect) -> Unit,
+    onBounds: (HeroGeometry.Rect) -> Unit,
     modifier: Modifier = Modifier,
     overlay: @Composable BoxScope.() -> Unit = {},
     artwork: @Composable (MediaItem) -> Unit,
 ) {
     val colors = TrimTheme.colors
+    val density = LocalDensity.current
     val radius = MotionSpec.Hero.TILE_RADIUS_DP.dp
 
     Box(
         modifier = modifier
             .fillMaxWidth()
             .aspectRatio(1f)
-            .onGloballyPositioned { onBounds(it.boundsInWindow()) }
+            .onGloballyPositioned { coordinates ->
+                val px = coordinates.boundsInWindow()
+                with(density) {
+                    onBounds(
+                        HeroGeometry.Rect(
+                            left = px.left.toDp().value,
+                            top = px.top.toDp().value,
+                            width = px.width.toDp().value,
+                            height = px.height.toDp().value,
+                        ),
+                    )
+                }
+            }
             .breathing(
                 id = item.platformRef.value,
                 active = processing,

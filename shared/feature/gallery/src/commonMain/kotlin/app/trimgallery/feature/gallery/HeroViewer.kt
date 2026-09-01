@@ -117,7 +117,10 @@ fun HeroViewer(
                 .offset {
                     IntOffset(frame.left.dp.roundToPx(), (frame.top + dragDp).dp.roundToPx())
                 }
-                .size(frame.width.dp, frame.height.dp)
+                // Clamped as well as fixed at the source. `Modifier.size` throws on a
+                // negative dimension, and a viewer that crashes is worse than a viewer
+                // that briefly shows nothing.
+                .size(frame.width.coerceAtLeast(0f).dp, frame.height.coerceAtLeast(0f).dp)
                 .graphicsLayer {
                     val s = HeroGeometry.dismissScale(dismissProgress)
                     scaleX = s

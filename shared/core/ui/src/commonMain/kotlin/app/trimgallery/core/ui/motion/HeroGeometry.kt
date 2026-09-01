@@ -46,7 +46,12 @@ object HeroGeometry {
      * means the shared element never changes shape mid-flight, only size and position.
      */
     fun target(windowWidth: Float, windowHeight: Float): Rect {
-        val size = min(windowWidth, SHELL_MAX_DP) - SIDE_INSET_DP
+        // coerceAtLeast(0), because a window narrower than the inset makes this negative
+        // and a negative Rect is not a small rectangle — it is a crash. `Modifier.size`
+        // rejects negative constraints, so `target(0f, 0f)` (the fallback GalleryScreen
+        // used when a tile had not reported its bounds) took the app down on every tap.
+        // A zero-size rectangle animates from a point, which is the right degenerate case.
+        val size = (min(windowWidth, SHELL_MAX_DP) - SIDE_INSET_DP).coerceAtLeast(0f)
         return Rect(
             left = (windowWidth - size) / 2f,
             top = max(MIN_TOP_DP, (windowHeight - size) * VERTICAL_BIAS),

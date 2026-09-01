@@ -122,10 +122,7 @@ fun GalleryScreen(
                             item = mediaItem,
                             processing = mediaItem.id in processingIds,
                             onOpen = { open = it },
-                            onBounds = { rect ->
-                                bounds[mediaItem.id] =
-                                    HeroGeometry.Rect(rect.left, rect.top, rect.width, rect.height)
-                            },
+                            onBounds = { rect -> bounds[mediaItem.id] = rect },
                             modifier = Modifier
                                 .arrival(index = index, key = zoom)
                                 // Read inside the layer block so opening a tile does not
@@ -155,7 +152,11 @@ fun GalleryScreen(
         open?.let { item ->
             HeroViewer(
                 item = item,
-                tileBounds = { bounds[item.id] ?: HeroGeometry.target(0f, 0f) },
+                // A tile that has not reported its bounds yet opens from a point rather
+                // than from a rectangle: `target(0f, 0f)` used to be the fallback and
+                // returned a *negative* rectangle, which `Modifier.size` rejects — the
+                // crash behind "tapping a photo closes the app".
+                tileBounds = { bounds[item.id] ?: HeroGeometry.Rect(0f, 0f, 0f, 0f) },
                 onClose = { open = null },
                 sheet = { sheet(item) },
                 artwork = artwork,

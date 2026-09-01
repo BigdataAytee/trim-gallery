@@ -168,6 +168,10 @@ private fun NoFolderYet(modifier: Modifier = Modifier, onChoose: () -> Unit) {
                     style = TrimTheme.typography.label.copy(color = colors.accentOn),
                 )
             }
+            // Only renders when a crash has been recorded. On the first-run screen because
+            // a crash loop may never reach the grid, and the report has to be reachable
+            // from wherever the app can still get to.
+            DiagnosticsButton()
         }
     }
 }
@@ -199,6 +203,7 @@ private fun ScanState(scanning: Boolean, failure: String?, onChoose: () -> Unit)
                 )
             }
         }
+        DiagnosticsButton()
     }
 }
 
