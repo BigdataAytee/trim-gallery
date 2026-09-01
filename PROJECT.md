@@ -2408,3 +2408,55 @@ and their 72 tests: the code that enforces this project's hard rules is the code
 style check on it. `tools/ktlint.sh` excludes it to match CI exactly, because a local check
 that fails where CI passes is the same disease. Worth its own change; 85 formatting edits
 do not belong in a tooling commit.
+
+## The folders Android will not grant (1 Sep 2026)
+
+From the phone: "can't use this folder", with no explanation. Partly ours, partly not.
+
+**Android refuses three locations to every app** through `ACTION_OPEN_DOCUMENT_TREE`, since
+Android 11: the root of internal storage, `Download`, and the root of a removable volume.
+The system picker greys out "Use this folder" there. That is not this app's rule and cannot
+be argued with.
+
+**The app cannot tell a refusal from a cancellation.** Because the picker prevents
+confirmation rather than returning an error, a blocked attempt and somebody changing their
+mind arrive identically: `null`. Every design that says "that folder is not allowed" in
+response to `null` is guessing, and will eventually tell someone who simply backed out that
+they did something wrong.
+
+So the screen does the two things it honestly can:
+
+- **Prevention.** The picker opens at `DCIM/Camera` via `EXTRA_INITIAL_URI`, so the ordinary
+  path never meets a blocked folder. A hint, not a guarantee — a device without that folder
+  opens where it likes.
+- **Explanation, stated neutrally.** On an empty result the sheet leads with "No folder was
+  chosen", names all three blocked locations, and says the way round each: any folder
+  *inside* them works, including inside Downloads. It offers to open DCIM/Camera, and a
+  second button that opens the picker with no hint for someone whose photos are elsewhere.
+
+A returned tree is still classified, because a picker that allows what the platform
+documents as unpickable would otherwise leave a grant that is stored, looks granted, and
+scans nothing — which reads as an empty library rather than a refused folder.
+
+### Downloads, and the All-files-access route
+
+Granting `Download` itself needs `MANAGE_EXTERNAL_STORAGE` — "All files access". It is
+technically available and it is a real option, with real costs: Google Play requires a
+declaration and a review for it, it is the single most invasive permission on Android, and
+it contradicts the app's own pitch that it only ever sees folders the user hands it. This
+app optimises photographs, which live in `DCIM`, and a folder inside Downloads works today
+without any of that.
+
+**Deferred, not refused**, and worth revisiting only if field testing shows people keep
+photographs directly in Downloads. Recorded here so the question is not rediscovered from
+scratch.
+
+### And a gap this uncovered
+
+`sharedTest` runs the shared modules and nothing else, so **androidApp's own unit tests
+have never been run by CI**. A test written beside the Android code was decoration: it
+looked like coverage and executed nowhere. The `android` job now runs
+`:androidApp:testDebugUnitTest`, and `FolderChoice`'s rule is split so the interesting half
+is a pure function over a document id — `Uri` returns null for everything in a plain JVM
+test, so a classifier taking a `Uri` could only ever have been checked on a device.
+
