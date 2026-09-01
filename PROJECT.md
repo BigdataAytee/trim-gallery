@@ -2832,6 +2832,22 @@ folder grant, which is the input that made the work fail. Releasing touches only
 permission: nothing in the user's folder is written, and nothing can be — there is no write
 path outside `SafeReplacerAndroid`.
 
+## The picker opens at the top level (1 Sep 2026)
+
+Reversing a decision from the folder-help change, on field evidence.
+
+**`EXTRA_INITIAL_URI` was steering, not helping.** The argument for it was that the common
+path would never meet a folder Android refuses. The cost, which the argument missed, is that
+the picker then *starts* inside DCIM/Camera — and a user whose photographs are anywhere else
+has to navigate up out of a folder the app chose for them. Guarding against a rare bad
+outcome by narrowing the common one is the wrong trade.
+
+**The help sheet is the right place for that guard**, because it fires when the user has
+actually hit the case rather than pre-emptively for everyone.
+
+**The sheet is down to one button.** Two actions that do the same thing, distinguished only
+by a hint that no longer exists, is a label that lies.
+
 ## Emulator UI tests (1 Sep 2026)
 
 The pattern behind three bad builds: the logic was tested, the screens were not. Decisions
