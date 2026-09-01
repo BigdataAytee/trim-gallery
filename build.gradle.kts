@@ -26,6 +26,14 @@ subprojects {
     // files nobody wrote and nobody can fix — and it failed the build on them the first time
     // CI got far enough to run code generation before linting.
     extensions.configure<org.jlleitschuh.gradle.ktlint.KtlintExtension> {
+        // Pinned, and pinned to the same number as `tools/ktlint.sh`, which runs the ktlint
+        // CLI directly so that formatting can be checked in an environment that cannot
+        // reach Google Maven. Left implicit, this is whatever the Gradle plugin happens to
+        // default to — 1.5.0 today — and the day the plugin moves, the local check and CI
+        // start disagreeing about the same file with no version visible anywhere to
+        // explain why. Change both or neither.
+        version.set("1.5.0")
+
         filter {
             val generated = "${File.separator}build${File.separator}"
             exclude { element -> element.file.path.contains(generated) }

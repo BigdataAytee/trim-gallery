@@ -1,5 +1,26 @@
 # Changelog
 
+## ktlint that can actually run here
+
+Five ktlint failures reached CI over two pull requests, each a ten-minute round trip to be
+told about an import order. The cause was structural: every module with ktlint also has the
+Android plugin, so `./gradlew ktlintCheck` cannot configure without Google Maven — and this
+sandbox cannot reach it. The cheapest check in the build ran only in CI.
+
+`tools/ktlint.sh` runs the ktlint CLI straight from Maven Central, which is reachable,
+against the same `.editorconfig`. Eight seconds for the tree, and `tools/checkall.sh` runs
+it first.
+
+It is pinned to the version the Gradle plugin runs — 1.5.0, read out of the plugin jar
+rather than assumed — and `build.gradle.kts` now pins the plugin to the same number with a
+comment tying them together. Both directions were checked before landing: silent on a clean
+tree, and exit 1 with the right message on a planted violation.
+
+Found while doing it: **`build-logic` is not linted by anything.** It is an included build,
+not a subproject, so `subprojects { }` never applies ktlint to it — 85 violations sit there
+today. That is where the three build guards live. Recorded in PROJECT.md; excluded from the
+script so it agrees with CI exactly, rather than fixed in a commit about tooling.
+
 ## The viewer, and the crash that hid it
 
 First real use on a phone: tapping any photo closed the app. The viewer was not missing —
