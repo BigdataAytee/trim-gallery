@@ -115,6 +115,7 @@ class SpaceReadsTest {
             location = null,
             cameraModel = null,
             phash = null,
+            sha256 = null,
             status = status,
             skipReason = skipReason,
             mtime = 0,
