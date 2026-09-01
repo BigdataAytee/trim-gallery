@@ -81,6 +81,14 @@ class OptimiseJourneyTest {
     private lateinit var photo: MediaItem
     private val restored = mutableListOf<UndoEntry>()
 
+    /**
+     * The live controller, so a failed assertion can say which state the sheet was in.
+     *
+     * That is the fact every other measurement depends on: a missing summary node means
+     * something quite different in `Done` than it does in `Closed`.
+     */
+    private var controller: OptimiseController? = null
+
     @Before
     fun prepare() = runBlocking {
         repository = inMemoryRepository(app)
@@ -251,7 +259,7 @@ class OptimiseJourneyTest {
                     val scope = rememberCoroutineScope()
                     // Remembered, so a recomposition mid-run does not build a second
                     // controller and lose the state the first one is holding.
-                    val controller = remember {
+                    val sheet = remember {
                         OptimiseController(
                             scope = scope,
                             run = step,
@@ -260,7 +268,7 @@ class OptimiseJourneyTest {
                             tier = { Tier.FREE },
                             onLibraryChanged = {},
                             clocks = TestClocks,
-                        )
+                        ).also { controller = it }
                     }
                     GalleryHost(
                         modifier = Modifier.fillMaxSize(),
@@ -269,7 +277,7 @@ class OptimiseJourneyTest {
                         folders = folders,
                         nightPass = nightPass,
                         guard = StartupGuard(app),
-                        optimise = controller,
+                        optimise = sheet,
                     )
                 }
             }
@@ -318,18 +326,28 @@ class OptimiseJourneyTest {
             summary.assertIsDisplayed()
             summary.assertTextEquals(text)
         } catch (failure: AssertionError) {
-            // The measurements first, then the reason, then the tree — in that order and
-            // not the other way round. The previous version printed the tree first and CI's
-            // own forty-line cap cut it off one line before the node in question, which
-            // spent a whole cycle to learn nothing. A diagnostic that does not survive
-            // truncation is not a diagnostic.
-            val node = summary.fetchSemanticsNode()
-            val root = compose.onRoot().fetchSemanticsNode()
-            fail(
-                "summary=${node.boundsInRoot} size=${node.size} " +
-                    "root=${root.boundsInRoot} size=${root.size} | " +
-                    "${failure.message}\n${compose.onRoot().printToString()}",
-            )
+            // The sheet's own state first, then the node's measurements, then the original
+            // reason. In that order because the last two versions of this each answered a
+            // question I had not asked: the first was truncated one line short of the node,
+            // and the second threw from inside its own catch — `fetchSemanticsNode` fails
+            // when the node is gone, which replaced the real failure with a second one. So
+            // every part of the diagnosis is now gathered defensively, and the sheet's state
+            // leads, because "which state was it in" decides everything after it.
+            val state = controller?.state?.let { it::class.simpleName } ?: "no controller"
+            val where = runCatching {
+                val node = summary.fetchSemanticsNode()
+                "summary=${node.boundsInRoot} size=${node.size}"
+            }.getOrElse { "summary node is GONE (${it::class.simpleName})" }
+            val root = runCatching { "root=${compose.onRoot().fetchSemanticsNode().size}" }
+                .getOrElse { "root unavailable" }
+            // How many nodes carry the tag, which separates "it vanished" from "there are
+            // two of them" — `onNodeWithTag` fails the same way for both, and they are
+            // opposite bugs.
+            val tagged = runCatching {
+                compose.onAllNodesWithTag(OptimiseTestTags.SUMMARY).fetchSemanticsNodes().size
+            }.getOrElse { -1 }
+
+            fail("state=$state tagged=$tagged $where $root | ${failure.message}")
         }
     }
 
