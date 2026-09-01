@@ -32,7 +32,7 @@ Keep this current. A status list that drifts is worse than none, because it is b
 | # | What you asked for | PR | Status |
 |---|---|---|---|
 | 5 | Say which build I am on — version and commit SHA in Settings and in the diagnostics file | [#23](https://github.com/BigdataAytee/trim-gallery/pull/23) | 🟡 merged, unconfirmed on a phone |
-| 6 | Tapping a video closes the app | — | 🔨 **root cause still unknown.** The diagnostics you exported never reached me, so there is no stack trace. Journey 3 in [#28](https://github.com/BigdataAytee/trim-gallery/pull/28) taps a video and requires the player to reach READY and play — that is the test that will say whether this is still real, and where |
+| 6 | Tapping a video closes the app | — | 🔨 **does not reproduce on the emulator.** Journey 3 in [#28](https://github.com/BigdataAytee/trim-gallery/pull/28) taps a video, opens the viewer and requires the player to reach READY and play — and it passes. That is not the same as fixed: the emulator plays a `file://` clip, your phone plays a `content://` SAF document, and the difference is exactly where a crash could still live. **Still no stack trace** — the diagnostics you exported never reached me |
 | 7 | Video tiles go black | [#24](https://github.com/BigdataAytee/trim-gallery/pull/24) | 🟡 provider thumbnail, then a frame off a descriptor, cached to disk; never a black tile. Unconfirmed on a phone |
 | 8 | Loading far too slow | [#25](https://github.com/BigdataAytee/trim-gallery/pull/25) | 🟡 the grid is drawn from the database on launch and the folder walk happens behind it |
 | 8a | …with Macrobenchmark numbers, before and after | — | ⛔ **not delivered.** Nothing was measured, so there are no numbers, and I will not invent them. It needs a device: the benchmark cannot run on this build environment |
@@ -71,7 +71,8 @@ every report so far: the logic was tested, the wiring was never done.
 ## What the emulator now proves
 
 [#28](https://github.com/BigdataAytee/trim-gallery/pull/28) adds five journeys to the CI job
-that previously only asserted the Activity reached RESUMED:
+that previously only asserted the Activity reached RESUMED. **All five pass** as of
+`c2501a7`:
 
 1. Grant a folder → the grid renders, the grant row is written, the night pass is scheduled
 2. Tap a photograph → the viewer opens
@@ -81,6 +82,11 @@ that previously only asserted the Activity reached RESUMED:
 
 A green job is no longer taken as evidence they ran: the instrumentation result XML is read
 back and the job fails unless every journey is there and passed.
+
+**What five passing journeys do not mean.** They are an emulator, with a fake grant and
+`file://` refs, because a persisted SAF permission cannot be obtained without the system
+picker. Your phone has real `content://` documents, a real provider, real hardware decoders
+and your own library. Everything in the table above is still 🟡 until you have seen it.
 
 ## Still waiting on you
 
