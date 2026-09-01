@@ -318,7 +318,18 @@ class OptimiseJourneyTest {
             summary.assertIsDisplayed()
             summary.assertTextEquals(text)
         } catch (failure: AssertionError) {
-            fail("the summary did not say \"$text\": ${failure.message}\n${compose.onRoot().printToString()}")
+            // The measurements first, then the reason, then the tree — in that order and
+            // not the other way round. The previous version printed the tree first and CI's
+            // own forty-line cap cut it off one line before the node in question, which
+            // spent a whole cycle to learn nothing. A diagnostic that does not survive
+            // truncation is not a diagnostic.
+            val node = summary.fetchSemanticsNode()
+            val root = compose.onRoot().fetchSemanticsNode()
+            fail(
+                "summary=${node.boundsInRoot} size=${node.size} " +
+                    "root=${root.boundsInRoot} size=${root.size} | " +
+                    "${failure.message}\n${compose.onRoot().printToString()}",
+            )
         }
     }
 
