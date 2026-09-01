@@ -1,10 +1,10 @@
 package app.trimgallery.engine.android
 
 import app.trimgallery.core.model.MediaRef
-import kotlin.test.Test
-import kotlin.test.assertEquals
-import kotlin.test.assertNotEquals
-import kotlin.test.assertTrue
+import org.junit.Assert.assertEquals
+import org.junit.Assert.assertNotEquals
+import org.junit.Assert.assertTrue
+import org.junit.Test
 
 /**
  * The cache key, which is the whole correctness of the disk cache.
@@ -60,8 +60,8 @@ class VideoThumbnailKeyTest {
 
         // A tree URI is full of slashes and percent signs; the key must survive being a
         // file name in the cache directory.
-        assertTrue(key.none { it in "/\\:%?*\"<>|" }, key)
-        assertTrue(key.endsWith(".jpg"), key)
+        assertTrue(key, key.none { it in "/\\:%?*\"<>|" })
+        assertTrue(key, key.endsWith(".jpg"))
     }
 
     private companion object {
