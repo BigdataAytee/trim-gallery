@@ -81,11 +81,12 @@ class GrantedFolders(private val context: Context) {
      * not yet change what the night pass does. Recorded in PROJECT.md.
      */
     suspend fun withModes(repository: TrimRepository): List<FolderGrant> = grants().map { grant ->
-        repository.folderGrant(grant.platformRef.value)?.copy(
-            // The platform's display name wins: it is read live, and a folder renamed
-            // since the row was written should show its current name.
-            displayName = grant.displayName,
-        ) ?: grant
+        val stored = repository.folderGrant(grant.platformRef.value) ?: return@map grant
+        // The platform's name wins *when it has one*: it is read live, so a folder renamed
+        // since the row was written shows its current name. When the provider refuses a
+        // name — which [displayName] catches rather than throws — the stored one is still
+        // better than none.
+        stored.copy(displayName = grant.displayName ?: stored.displayName)
     }
 
     /** The folder's own name, for the UI. Null when the provider will not give one. */

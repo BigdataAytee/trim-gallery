@@ -120,7 +120,10 @@ private suspend fun folderRows(folders: GrantedFolders, repository: TrimReposito
         grants.map { grant ->
             FolderRow(
                 ref = grant.platformRef.value,
-                displayName = grant.displayName ?: grant.platformRef.value.substringAfterLast('/'),
+                // Percent-decoded before the last segment is taken: a tree URI ends
+                // `/tree/primary%3ADCIM%2FCamera`, so the raw string's last segment is the
+                // whole encoded document id rather than the folder's name.
+                displayName = grant.displayName ?: Uri.decode(grant.platformRef.value).substringAfterLast('/'),
                 mode = grant.mode,
                 offloadTarget = offloadTargetFor(grant, grants)?.let { it.displayName ?: "the other drive" },
             )
