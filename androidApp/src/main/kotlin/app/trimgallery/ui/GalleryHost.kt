@@ -1,6 +1,7 @@
 package app.trimgallery.ui
 
 import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.media3.common.util.UnstableApi
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
@@ -48,6 +49,7 @@ import kotlin.time.Instant
  * This is the smallest honest host: grant a folder, walk it, show what is in it. No
  * database, no night pass, no navigation — those arrive with the screens that need them.
  */
+@UnstableApi
 @Composable
 fun GalleryHost(
     modifier: Modifier = Modifier,
@@ -104,6 +106,7 @@ fun GalleryHost(
             timeZone = TimeZone.currentSystemDefault(),
             modifier = modifier,
             emptyState = { ScanState(scanning = scanning, failure = failure) { picker.launch(null) } },
+            video = { VideoPlayer(it, modifier = Modifier.fillMaxSize()) },
             artwork = { Thumbnail(it) },
         )
     }

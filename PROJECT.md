@@ -2347,3 +2347,34 @@ to quietly stop being true.
 What this host still is not: no database, no night pass, no navigation, no viewer beyond
 what `GalleryScreen` itself contains. It grants a folder, walks it, and shows what is in
 it.
+
+## The viewer and crash reporting (31 Aug 2026)
+
+**A crash handler is the first thing a field loop needs.** The first report from a real
+phone was "tapping a photo closes the app" — true, and consistent with about forty lines.
+Without a cable there is no logcat, so the app keeps its own: `CrashReports` writes traces
+to app-private storage and the diagnostics export carries them off. Nothing is uploaded;
+that is not a policy choice to revisit, it is BUILD.md rule 8 and two build guards.
+
+**Video playback is a slot, not a dependency.** `shared/feature/gallery` gained a `video`
+composable parameter and the Android host fills it with ExoPlayer, exactly as `artwork` is
+filled with Coil. The shared module compiles for iOS in CI, and it would not if it named a
+player. iOS binds `AVPlayer` to the same seam.
+
+**Only the visible page holds a player.** `beyondViewportPageCount = 0` and a
+`page == currentPage` check. A paused player still holds a decoder, and the reason the
+night pass sets `KEY_PRIORITY = 1` — that the foreground should win the hardware — cuts
+the same way inside the app.
+
+**Paging is off during the open animation.** The hero frame is still travelling then, and a
+horizontal drag would fight the transition for the same gesture. It turns on when progress
+reaches 1.
+
+**The tile the close animation returns to is the one on screen**, not the one first tapped.
+`tileBounds` takes the item now rather than closing over the tapped one, which is what
+makes swiping and then dismissing land in the right place.
+
+Known and not fixed here: the grid hides the *tapped* tile for the whole time the viewer is
+open, so after swiping, the tile behind the viewer is visible and the tapped one is still
+hidden. It is invisible behind a full-screen viewer and costs a state hoist to fix; it is
+recorded rather than quietly left.
