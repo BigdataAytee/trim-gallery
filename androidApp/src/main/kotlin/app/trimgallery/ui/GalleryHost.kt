@@ -20,7 +20,9 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.media3.common.util.UnstableApi
+import app.trimgallery.core.data.TrimRepository
 import app.trimgallery.core.model.MediaItem
+import app.trimgallery.core.pipeline.LibraryDiff
 import app.trimgallery.core.ui.motion.pressScale
 import app.trimgallery.core.ui.theme.TrimShape
 import app.trimgallery.core.ui.theme.TrimSpacing
@@ -62,6 +64,7 @@ fun GalleryHost(
      */
     chrome: @Composable BoxScope.() -> Unit = {},
     storage: LibraryStorage = koinInject(),
+    repository: TrimRepository = koinInject(),
     folders: GrantedFolders = koinInject(),
     nightPass: NightPass = koinInject(),
 ) {
@@ -69,9 +72,22 @@ fun GalleryHost(
     var items by remember { mutableStateOf(emptyList<MediaItem>()) }
     var scanning by remember { mutableStateOf(false) }
     var failure by remember { mutableStateOf<String?>(null) }
+    // Distinguishes "the database is still opening" from "there is genuinely nothing here",
+    // so the first frame is not an empty-state message that is about to be wrong.
+    var loaded by remember { mutableStateOf(false) }
 
     val picker = rememberFolderPicker(folders, nightPass) { grants = it }
 
+    // The photographs, before any folder is walked. This is the whole of the fast start:
+    // the rows were written the last time the app ran, and reading them is one indexed
+    // query rather than a walk of every granted tree.
+    LaunchedEffect(Unit) {
+        items = repository.gallery()
+        loaded = true
+    }
+
+    // Then the walk, in the background, with the result diffed in. The user is looking at
+    // their library while this runs; nothing here blocks a frame.
     LaunchedEffect(grants) {
         if (grants.isEmpty()) {
             items = emptyList()
@@ -79,25 +95,37 @@ fun GalleryHost(
         }
         scanning = true
         failure = null
-        val found = mutableListOf<MediaItem>()
-        var nextPublish = FIRST_BATCH
+        val scanned = mutableListOf<MediaItem>()
         storage.scan(grants)
             .catch { failure = it.message ?: it::class.simpleName }
             .collect { item ->
-                found += item
-                // Published while the walk continues, at a doubling interval. `SafStorage.scan`
-                // is a Flow precisely so the caller need not wait for the end of a folder that
-                // can hold tens of thousands of files — but each publish sorts everything found
-                // so far, so publishing at a fixed interval would sort the whole list N/interval
-                // times and get slower exactly as the library gets bigger. Doubling makes that a
-                // handful of sorts however large the folder is, while keeping early feedback
-                // fast: 200 items, then 400, 800, and so on to a ceiling so updates never stop.
-                if (found.size >= nextPublish) {
-                    items = found.sortedNewestFirst()
-                    nextPublish = (nextPublish * 2).coerceAtMost(found.size + MAX_BATCH)
+                scanned += item
+                // Only while the grid has nothing to show — a first run, before anything
+                // has ever been persisted. Publishing batches into a grid that is already
+                // full would make the user's own photographs flicker for no benefit, and
+                // the diff below is what decides what actually changed.
+                if (items.isEmpty() && scanned.size % FIRST_RUN_BATCH == 0) {
+                    items = scanned.sortedNewestFirst()
                 }
             }
-        items = found.sortedNewestFirst()
+
+        if (failure == null) {
+            // Off the main thread: the diff is a hash join over the whole library, and
+            // `applyScan` writes every change in one transaction.
+            val changes = withContext(Dispatchers.Default) {
+                LibraryDiff.diff(
+                    stored = repository.stored(grants),
+                    scanned = scanned,
+                    scannedGrants = grants.map { it.id }.toSet(),
+                )
+            }
+            if (!changes.isEmpty) {
+                repository.applyScan(changes)
+            }
+            // Re-read rather than patching the list in memory: the query is the one place
+            // that knows the sort, the hidden-item rule and the date fallback.
+            items = repository.gallery()
+        }
         scanning = false
     }
 
@@ -106,7 +134,7 @@ fun GalleryHost(
     // opaque background was painted straight over it and the sheet was never seen.
     Box(modifier.fillMaxSize()) {
         when {
-            grants.isEmpty() -> {
+            grants.isEmpty() && loaded -> {
                 NoFolderYet { picker.choose() }
                 chrome()
             }
@@ -219,9 +247,11 @@ private fun ScanState(scanning: Boolean, failure: String?, onChoose: () -> Unit)
     }
 }
 
-/** How many items to find before the grid first fills in, while a scan is still walking. */
-private const val FIRST_BATCH = 200
-
-/** The ceiling on the doubling interval, so a very large folder keeps showing progress. */
-private const val MAX_BATCH = 5_000
+/**
+ * How often a *first* run publishes what it has found so far.
+ *
+ * Only ever used before anything has been persisted. Every later start draws from the
+ * database immediately, so there is no partial state to show.
+ */
+private const val FIRST_RUN_BATCH = 200
 private const val BUTTON_V_DP = 12

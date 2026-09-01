@@ -2653,6 +2653,89 @@ did must not be the one screen that crashes.
 - The tier is hard-coded to Free in `SpaceHost` until billing is wired, so the monthly cap
   ring is the free tier's for everybody.
 
+## The night pass's two ledgers (1 Sep 2026)
+
+`job` and `predictor` were the second and third of the three things missing behind the
+unbound `NightRun.Step`. Both are now written and read; neither is called yet.
+
+Decisions:
+
+**The job row is overwritten, not appended.** It is written when an attempt starts and again
+as it progresses, so a night killed mid-file leaves the last state it reached — the same
+argument `upsertRunSession` makes. Appending would put two rows in History for one file and
+double every total on the Space screen.
+
+**Two job mappers, deliberately.** `toJob` maps the five columns `selectSucceededJobs` asks
+for; `toFullJob` maps all twenty-four for the callers that want the whole attempt. Sharing
+one mapper over `SELECT *` would make the Space screen read nineteen columns per row to
+display four, on the one query that runs over hundreds of rows.
+
+**An unrecognised job state reads as `FAILED`, not `SUCCEEDED`.** The third instance of the
+same rule, after the folder mode and the stop reason, and the one where the direction
+matters most: a state this build cannot read is not a state it may treat as a completed
+replacement.
+
+**The predictor's mean is stored as a REAL and read back rounded.** `Predictor.learn` keeps
+a running average, which is fractional; a bitrate is a whole number of bits per second. The
+rounding happens on the way out rather than on the way in, so the average does not drift
+downward one truncation at a time.
+
+**Still missing: the caller.** `VideoOptimiseStep` is the assembly of ProbeAndSearch, the
+encoder, VerifyPass, the Replacer and `Predictor.learn`. It is the code path that parks and
+replaces originals, and it is being built as a separate change held for review rather than
+merged with its plumbing — this environment cannot compile or run anything (Google Maven is
+unreachable, so Gradle cannot configure), and self-merging the one path that can lose a
+photograph into an APK on that basis is not a risk worth taking.
+
+## A start that does not walk the library (1 Sep 2026)
+
+The second field report's fourth item: loading far too slow, with the diagnosis that the SAF
+walk was reading every file on every launch.
+
+Decisions:
+
+**The database is what the grid is drawn from; the scan is what keeps it current.** The
+first frame comes from `selectGallery`, which is one indexed query against rows written on
+the previous run. The walk happens after, off the main thread, and reaches the screen
+through `LibraryDiff` — the class milestone 6 wrote and tested for exactly this and which
+had no caller on this path.
+
+**Ordering moved into SQL, with the fallback intact.** `ORDER BY COALESCE(taken_at, mtime)
+DESC`. Nothing is dated until `ContainerReaderAndroid` reads its EXIF, which happens only
+for files the diff found new or changed, so on a first run every row is undated and
+`taken_at DESC` alone would put the whole library in one block — SQLite sorts NULLs last in
+DESC. The Kotlin that used to do this re-sorted the entire list on every published batch.
+
+**One transaction for a scan's changes.** Fifty thousand rows written one transaction each
+is fifty thousand fsyncs. This is the single largest cost in a first scan and it was
+invisible, because the previous host never persisted anything at all.
+
+**`unchanged` is not written.** It is most of the library on most nights.
+
+**A row whose original is in the bin is never deleted by a scan.** The same rule `remove`
+already applied, repeated inside `applyScan` because that is now the path removals actually
+take. Losing that row loses the only handle on a file the user can still restore.
+
+### The diagnosis was half right, and the other half is a decision
+
+The report said the walk "opens every file through SAF". It does not: `SafStorage.scan` runs
+one cursor per *directory* and takes name, size, mime and mtime from the listing. No file is
+opened. The costs were that the walk ran on every launch, that nothing was persisted, and —
+until the previous change — that every visible video tile was copying its whole file to draw
+a thumbnail.
+
+MediaStore would still be faster: one query for the library instead of one per folder. But
+it requires `READ_MEDIA_IMAGES`/`READ_MEDIA_VIDEO`, and PROJECT.md § Access commits this app
+to SAF grants with all-files access as a later opt-in, on Play policy and privacy grounds.
+**Open for the owner**: adopting MediaStore means changing what the app asks for on first
+run. Not taken inside a performance change.
+
+### Numbers
+
+None reported, because none were measured. This environment cannot build an Android app and
+CI does not run Macrobenchmark — it needs a device. `StartupBenchmark` is in place with cold
+and warm cases for a real phone with a real library, which is the only measurement that
+would mean anything: an empty install starts fast however the code is written.
 ## Why videos do not go through Coil (1 Sep 2026)
 
 The second field report said video tiles were black. The Coil configuration was correct —

@@ -21,6 +21,8 @@ import app.trimgallery.core.model.TextBlock
 import app.trimgallery.core.model.UndoEntry
 import app.trimgallery.core.model.UndoLocation
 import app.trimgallery.core.model.UndoState
+import app.trimgallery.core.pipeline.LibraryDiff
+import app.trimgallery.core.pipeline.Predictor
 import app.trimgallery.core.pipeline.TriageStep
 import app.trimgallery.core.pipeline.index.IndexStep
 import app.trimgallery.core.pipeline.night.NightFacts
@@ -30,6 +32,7 @@ import app.trimgallery.core.pipeline.replace.UndoJournal
 import app.trimgallery.engine.PauseReason
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.withContext
+import kotlin.math.roundToInt
 import kotlin.time.Instant
 
 /**
@@ -216,6 +219,146 @@ class TrimRepository(
         }
     }
 
+    // --------------------------------------------------------------- the library
+
+    /**
+     * Everything the grid shows, newest first, straight from the database.
+     *
+     * This is what makes a start fast: the grid is drawn from rows written the last time the
+     * app ran, before any folder is walked. The walk still happens — in the background — and
+     * its result is diffed in, but the user is looking at their photographs while that goes
+     * on rather than at a spinner.
+     *
+     * Sorted in SQL rather than in Kotlin. The host used to re-sort the whole list every
+     * time the scan published a batch, which is O(n log n) per batch on a list that only
+     * grows.
+     */
+    suspend fun gallery(): List<MediaItem> = withContext(io) {
+        queries.selectGallery(::toMediaItem).executeAsList()
+    }
+
+    /**
+     * Writes one scan's worth of changes, in one transaction.
+     *
+     * Removals go through the same rule [remove] applies: a row with a live undo entry keeps
+     * its place, because that row is the only handle on an original still sitting in the
+     * bin. Deleting it would lose a file the user can still restore.
+     *
+     * `unchanged` is not written at all. It is most of the library on most nights, and
+     * rewriting a row to the value it already holds is the largest avoidable cost in the
+     * whole scan.
+     */
+    suspend fun applyScan(diff: LibraryDiff.Result): Unit = withContext(io) {
+        val now = nowMs()
+        queries.transaction {
+            diff.added.forEach(::writeMedia)
+            diff.modified.forEach { change -> writeMedia(LibraryDiff.merge(change.stored, change.scanned, now)) }
+            diff.removed.forEach { item ->
+                val hasUndo = queries.selectUndoForMedia(item.id, ::toUndoEntry).executeAsList().isNotEmpty()
+                if (!hasUndo) queries.deleteMedia(item.id)
+            }
+        }
+    }
+
+    // ------------------------------------------------------------------- the job
+
+    /**
+     * Records an attempt on one file, creating the row or overwriting it in place.
+     *
+     * Written when the attempt starts and again as it progresses, so a night killed
+     * mid-file leaves the last state it reached rather than nothing — the same reason
+     * `save(session)` replaces rather than updates.
+     *
+     * Nothing called this for the first nine milestones because nothing ran an attempt:
+     * `NightRun.Step` has no binding, so `job` was a table with a schema, a foreign key and
+     * no writer. Recorded in PROJECT.md.
+     */
+    suspend fun saveJob(job: Job): Unit = withContext(io) {
+        queries.upsertJob(
+            id = job.id.ifEmpty { newId() },
+            media_id = job.mediaId,
+            run_session_id = job.runSessionId,
+            state = job.state.name,
+            stage_before_pause = job.stageBeforePause?.name,
+            engine = job.engine,
+            setting = job.setting,
+            probes = job.probes.toLong(),
+            xpsnr = job.xpsnr,
+            vmaf = job.vmaf,
+            ssim2 = job.ssim2,
+            original_size = job.originalSize,
+            new_size = job.newSize,
+            encode_ms = job.encodeMs,
+            verify_ms = job.verifyMs,
+            realtime_multiple = job.realtimeMultiple,
+            thermal_start = job.thermalStart?.toDouble(),
+            thermal_end = job.thermalEnd?.toDouble(),
+            energy_wh = job.energyWh,
+            attempts = job.attempts.toLong(),
+            error = job.error,
+            user_initiated = if (job.userInitiated) 1L else 0L,
+            started_at = job.startedAt?.toEpochMilliseconds(),
+            finished_at = job.finishedAt?.toEpochMilliseconds(),
+        )
+    }
+
+    /** Every attempt on one file, newest first. */
+    suspend fun jobsFor(mediaId: String): List<Job> = withContext(io) {
+        queries.selectJobsForMedia(mediaId, ::toFullJob).executeAsList()
+    }
+
+    // ------------------------------------------------------------- the predictor
+
+    /**
+     * What this device has learned about a family of files, or null if it has met none.
+     *
+     * The table has been in SCHEMA.md since milestone 3 with both its queries written and
+     * neither called, for the same reason `job` had no writer: the search that would consult
+     * it and the encode that would teach it both hang off a night pass with no step.
+     */
+    suspend fun prediction(key: Predictor.Key): Predictor.Entry? = withContext(io) {
+        queries.selectPredictor(
+            platform = key.platform,
+            device = key.device,
+            camera_model = key.cameraModel,
+            codec = key.codec,
+            output_codec = key.outputCodec.name,
+            width = key.width.toLong(),
+            height = key.height.toLong(),
+            fps_bucket = key.fps.toLong(),
+            bitrate_bucket = key.bitrateBucket.toLong(),
+        ) { _, _, _, _, _, _, _, _, _, settingMean, settingVar, samples, _ ->
+            Predictor.Entry(
+                key = key,
+                // The mean is stored as a REAL because `Predictor.learn` keeps a running
+                // average, and a bitrate is a whole number of bits per second on the way
+                // back out.
+                settingBps = settingMean.roundToInt(),
+                samples = samples.toInt(),
+                settingVar = settingVar,
+            )
+        }.executeAsOneOrNull()
+    }
+
+    /** Folds one result into the family's running mean and variance. */
+    suspend fun learn(entry: Predictor.Entry): Unit = withContext(io) {
+        queries.upsertPredictor(
+            platform = entry.key.platform,
+            device = entry.key.device,
+            camera_model = entry.key.cameraModel,
+            codec = entry.key.codec,
+            output_codec = entry.key.outputCodec.name,
+            width = entry.key.width.toLong(),
+            height = entry.key.height.toLong(),
+            fps_bucket = entry.key.fps.toLong(),
+            bitrate_bucket = entry.key.bitrateBucket.toLong(),
+            setting_mean = entry.settingBps.toDouble(),
+            setting_var = entry.settingVar,
+            samples = entry.samples.toLong(),
+            updated_at = nowMs(),
+        )
+    }
+
     // --------------------------------------------------------------- Space screen
 
     /**
@@ -355,7 +498,17 @@ class TrimRepository(
     }
 
     @Suppress("LongMethod")
-    private suspend fun upsert(item: MediaItem): Unit = withContext(io) {
+    private suspend fun upsert(item: MediaItem): Unit = withContext(io) { writeMedia(item) }
+
+    /**
+     * The write itself, outside the dispatcher switch so a batch can share one transaction.
+     *
+     * A first scan of a fifty-thousand-item library is fifty thousand of these. One
+     * transaction each is fifty thousand commits, and SQLite fsyncs on every one; inside a
+     * single transaction it is one. That difference is most of why the grid used to take so
+     * long to arrive.
+     */
+    private fun writeMedia(item: MediaItem) {
         queries.upsertMedia(
             id = item.id,
             platform_ref = item.platformRef.value,
@@ -472,6 +625,69 @@ class TrimRepository(
     }
 
     // ------------------------------------------------------------------ mapping
+
+    /**
+     * Every column on `job`, for the callers that want the whole attempt.
+     *
+     * Separate from `toJob`, which maps the five columns `selectSucceededJobs` asks for.
+     * Two mappers rather than one over `SELECT *` because the narrow query is the one the
+     * Space screen runs over hundreds of rows, and widening it to share a mapper would read
+     * nineteen columns per row to display four.
+     */
+    @Suppress("LongParameterList")
+    private fun toFullJob(
+        id: String,
+        mediaId: String,
+        runSessionId: String?,
+        state: String,
+        stageBeforePause: String?,
+        engine: String?,
+        setting: String?,
+        probes: Long,
+        xpsnr: Double?,
+        vmaf: Double?,
+        ssim2: Double?,
+        originalSize: Long?,
+        newSize: Long?,
+        encodeMs: Long?,
+        verifyMs: Long?,
+        realtimeMultiple: Double?,
+        thermalStart: Double?,
+        thermalEnd: Double?,
+        energyWh: Double?,
+        attempts: Long,
+        error: String?,
+        userInitiated: Long,
+        startedAt: Long?,
+        finishedAt: Long?,
+    ) = Job(
+        id = id,
+        mediaId = mediaId,
+        runSessionId = runSessionId,
+        // Total, like the folder mode and the stop reason: a state this build does not know
+        // must not throw on the way into the viewer's info sheet.
+        state = JobState.entries.firstOrNull { it.name == state } ?: JobState.FAILED,
+        stageBeforePause = stageBeforePause?.let { name -> JobState.entries.firstOrNull { it.name == name } },
+        engine = engine,
+        setting = setting,
+        probes = probes.toInt(),
+        xpsnr = xpsnr,
+        vmaf = vmaf,
+        ssim2 = ssim2,
+        originalSize = originalSize,
+        newSize = newSize,
+        encodeMs = encodeMs,
+        verifyMs = verifyMs,
+        realtimeMultiple = realtimeMultiple,
+        thermalStart = thermalStart?.toFloat(),
+        thermalEnd = thermalEnd?.toFloat(),
+        energyWh = energyWh,
+        attempts = attempts.toInt(),
+        userInitiated = userInitiated == 1L,
+        error = error,
+        startedAt = startedAt?.let(Instant::fromEpochMilliseconds),
+        finishedAt = finishedAt?.let(Instant::fromEpochMilliseconds),
+    )
 
     @Suppress("LongParameterList")
     private fun toRunSession(
