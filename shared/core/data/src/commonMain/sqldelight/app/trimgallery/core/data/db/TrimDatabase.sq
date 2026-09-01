@@ -291,8 +291,13 @@ LIMIT 1;
 -- The same `CANDIDATE` predicate `selectCandidatesBySaving` uses, hidden items included:
 -- the locked folder is excluded from the *grid*, not from the work, and a projection that
 -- silently omitted it would under-report what the app can do.
+--
+-- The CAST is load-bearing, not decoration: `est_saving` is a *nullable* INTEGER, and
+-- SQLDelight types `SUM` over one as REAL — so without it this comes back as a Double and
+-- a byte count acquires a fractional part it can never have. `bytesFreedSince` needs no
+-- cast because `bytes_freed` is NOT NULL, which is exactly the difference.
 sumCandidateSaving:
-SELECT COALESCE(SUM(est_saving), 0) AS bytes FROM media_item WHERE status = 'CANDIDATE';
+SELECT CAST(COALESCE(SUM(est_saving), 0) AS INTEGER) AS bytes FROM media_item WHERE status = 'CANDIDATE';
 
 -- How much is still to do, which is the denominator of the progress ring.
 countCandidates:
