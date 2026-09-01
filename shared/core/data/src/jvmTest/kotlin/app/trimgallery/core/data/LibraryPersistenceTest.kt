@@ -87,9 +87,16 @@ class LibraryPersistenceTest {
         repository.applyScan(added(item("a", mtime = 100)))
         val stored = repository.gallery().single()
 
-        // The same file, edited: the scan mints a fresh id for everything it finds, and the
-        // merge has to keep the stored one or the photo loses its albums and its history.
-        val rescanned = item("freshly-minted-id", mtime = 400).copy(size = 999)
+        // The same file, edited. Note what stays and what changes: the **platformRef is the
+        // same**, because it is the same file in the same place, and that is what the diff
+        // matches on. Only the id differs, because the scan mints a fresh one for everything
+        // it finds — and the merge has to keep the stored one or the photo loses its albums
+        // and its history.
+        //
+        // Getting this wrong is how the test first failed: changing the ref too made the
+        // diff report a removal and an addition, which is the correct answer to a different
+        // question.
+        val rescanned = item("a", mtime = 400).copy(id = "freshly-minted-id", size = 999)
         val diff = LibraryDiff.diff(listOf(stored), listOf(rescanned), setOf(GRANT))
         repository.applyScan(diff)
 
