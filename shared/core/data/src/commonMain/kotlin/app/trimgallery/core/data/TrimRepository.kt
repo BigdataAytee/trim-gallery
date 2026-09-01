@@ -240,7 +240,7 @@ class TrimRepository(
 
     /** What the whole queue is expected to give back. A projection, and labelled as one. */
     suspend fun projectedSaving(): Long = withContext(io) {
-        queries.sumCandidateSaving().executeAsOne().bytes
+        queries.sumCandidateSaving().executeAsOne()
     }
 
     /**
