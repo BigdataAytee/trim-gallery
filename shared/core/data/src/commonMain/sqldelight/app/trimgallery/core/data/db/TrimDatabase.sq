@@ -456,16 +456,22 @@ SELECT * FROM folder_grant WHERE enabled = 1;
 selectFolderGrantByRef:
 SELECT * FROM folder_grant WHERE platform_ref = ?;
 
--- Writes what the user chose for a folder.
+-- Writes what the user chose for a folder, as two statements run in one transaction.
 --
--- Upsert on `platform_ref`, which is UNIQUE: re-granting a folder that was revoked
--- restores the mode chosen for it rather than silently resetting to KEEP, and two
--- screens saving at once cannot produce two rows for one folder.
-upsertFolderGrant:
-INSERT INTO folder_grant (id, platform_ref, display_name, mode, offload_ref, enabled, last_scanned_at)
-VALUES (?, ?, ?, ?, ?, 1, NULL)
-ON CONFLICT(platform_ref) DO UPDATE SET
-    display_name = excluded.display_name,
-    mode         = excluded.mode,
-    offload_ref  = excluded.offload_ref,
-    enabled      = 1;
+-- Not `ON CONFLICT ... DO UPDATE`: SQLite gained upsert in 3.24 and this project's
+-- SQLDelight dialect is 3.18, which is the floor the schema is verified against rather
+-- than whatever a particular Android release happens to ship. `INSERT OR IGNORE` then
+-- `UPDATE` reaches the same end state on any version.
+--
+-- Not `INSERT OR REPLACE` either: that deletes the conflicting row and inserts a new one,
+-- which would throw away the row's id and its `last_scanned_at`.
+insertFolderGrantIfMissing:
+INSERT OR IGNORE INTO folder_grant (id, platform_ref, display_name, mode, offload_ref, enabled, last_scanned_at)
+VALUES (?, ?, ?, ?, ?, 1, NULL);
+
+-- The second half. Re-granting a folder that was revoked restores the mode chosen for it
+-- rather than silently resetting to KEEP, so `enabled` goes back to 1 here too.
+updateFolderGrant:
+UPDATE folder_grant
+SET display_name = ?, mode = ?, offload_ref = ?, enabled = 1
+WHERE platform_ref = ?;

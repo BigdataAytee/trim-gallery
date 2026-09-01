@@ -223,20 +223,7 @@ class TrimRepository(
      * to do with the originals inside one.
      */
     suspend fun folderGrant(platformRef: String): FolderGrant? = withContext(io) {
-        db.trimDatabaseQueries.selectFolderGrantByRef(platformRef).executeAsOneOrNull()?.let { row ->
-            FolderGrant(
-                id = row.id,
-                platformRef = MediaRef(row.platform_ref),
-                // Not `valueOf`: an unrecognised mode — a row written by a newer build,
-                // or a hand-edited database — must not throw on the way into Settings, and
-                // KEEP is the reading that can never remove a file.
-                mode = FolderMode.entries.firstOrNull { it.name == row.mode } ?: FolderMode.KEEP,
-                displayName = row.display_name,
-                offloadRef = row.offload_ref?.let(::MediaRef),
-                enabled = row.enabled == 1L,
-                lastScannedAt = row.last_scanned_at,
-            )
-        }
+        queries.selectFolderGrantByRef(platformRef, ::toFolderGrant).executeAsOneOrNull()
     }
 
     /**
@@ -247,14 +234,47 @@ class TrimRepository(
      * is the behaviour somebody who granted, revoked and re-granted would expect.
      */
     suspend fun saveFolderGrant(grant: FolderGrant): Unit = withContext(io) {
-        db.trimDatabaseQueries.upsertFolderGrant(
-            id = grant.id.ifEmpty { newId() },
-            platform_ref = grant.platformRef.value,
-            display_name = grant.displayName,
-            mode = grant.mode.name,
-            offload_ref = grant.offloadRef?.value,
-        )
+        queries.transaction {
+            // Insert-or-ignore then update, in that order: the insert is a no-op when the
+            // folder already has a row, and the update then carries the choice in either
+            // case. An existing row keeps the id it was minted with, and keeps whatever
+            // `last_scanned_at` the scanner has written.
+            queries.insertFolderGrantIfMissing(
+                id = grant.id.ifEmpty { newId() },
+                platform_ref = grant.platformRef.value,
+                display_name = grant.displayName,
+                mode = grant.mode.name,
+                offload_ref = grant.offloadRef?.value,
+            )
+            queries.updateFolderGrant(
+                display_name = grant.displayName,
+                mode = grant.mode.name,
+                offload_ref = grant.offloadRef?.value,
+                platform_ref = grant.platformRef.value,
+            )
+        }
     }
+
+    private fun toFolderGrant(
+        id: String,
+        platformRef: String,
+        displayName: String?,
+        mode: String,
+        offloadRef: String?,
+        enabled: Long,
+        lastScannedAt: Long?,
+    ) = FolderGrant(
+        id = id,
+        platformRef = MediaRef(platformRef),
+        // Not `valueOf`: an unrecognised mode — a row written by a newer build, or a
+        // hand-edited database — must not throw on the way into Settings, and KEEP is the
+        // reading that can never remove a file.
+        mode = FolderMode.entries.firstOrNull { it.name == mode } ?: FolderMode.KEEP,
+        displayName = displayName,
+        offloadRef = offloadRef?.let(::MediaRef),
+        enabled = enabled == 1L,
+        lastScannedAt = lastScannedAt,
+    )
 
     // ------------------------------------------------------------- TriageStep.Sink
 

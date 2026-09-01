@@ -2522,7 +2522,16 @@ warning; a radio button reading "Free space" tells the user nothing about what i
 
 **An unrecognised mode string reads as KEEP, not an exception.** `FolderMode.valueOf` on a
 row written by a newer build would crash the settings screen; the fallback is the mode that
-cannot remove a file.
+cannot remove a file. There is a test that plants `ARCHIVE_TO_MARS` in the row and asserts
+the reading.
+
+**The write is `INSERT OR IGNORE` then `UPDATE`, in one transaction, not an upsert.** SQLite
+gained `ON CONFLICT ... DO UPDATE` in 3.24 and this project's SQLDelight dialect is 3.18 —
+the floor the schema is verified against, rather than whatever a given Android release
+happens to ship. `INSERT OR REPLACE` was the other tempting shortcut and is worse: it
+deletes the conflicting row and inserts a new one, throwing away the row's id and its
+`last_scanned_at`. The test that would have caught it asserts the id is unchanged across a
+second save.
 
 **Two screens, and no navigation library.** A boolean in `TrimApp` is the whole of a back
 stack of depth one, and STACK.md fixes the dependency list. It is `remember`, not
@@ -2561,6 +2570,8 @@ owner to decide** before the replace path starts reading modes.
 
 - Whether Offload/Free should be the default per BUILD.md § 6, above.
 - The Space screen and Compress now — the rest of the fourth item.
-- `shared/core/data` has no database test: an in-memory SQLDelight driver is a dependency,
-  so the upsert's behaviour (keeps the row id, updates the mode) is unproven by a test.
+- ~~`shared/core/data` has no database test.~~ It does now: the in-memory JDBC driver was
+  already declared in `jvmTest` and had never been used, so `FolderGrantStoreTest` runs six
+  cases against the shipped schema. It is the first test in this project to touch a
+  database at all.
 - Choosing *which* drive offload uses, when more than one qualifies.
