@@ -28,12 +28,7 @@ import androidx.compose.ui.unit.dp
  *   only ever said "busy".
  */
 @Composable
-fun ProgressRing(
-    progress: Float?,
-    color: Color,
-    modifier: Modifier = Modifier,
-    reduceMotion: Boolean = false,
-) {
+fun ProgressRing(progress: Float?, color: Color, modifier: Modifier = Modifier, reduceMotion: Boolean = false) {
     val density = LocalDensity.current
     val stroke = remember(density) {
         with(density) { Stroke(width = MotionSpec.ProgressRing.STROKE_DP.dp.toPx()) }
