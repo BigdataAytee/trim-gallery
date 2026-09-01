@@ -28,9 +28,12 @@ import app.trimgallery.core.ui.theme.TrimShape
 import app.trimgallery.core.ui.theme.TrimSpacing
 import app.trimgallery.core.ui.theme.TrimTheme
 import app.trimgallery.engine.LibraryStorage
+import app.trimgallery.engine.android.CrashReports
 import app.trimgallery.engine.android.GrantedFolders
 import app.trimgallery.engine.android.NightPass
+import app.trimgallery.engine.android.StartupGuard
 import app.trimgallery.feature.gallery.GalleryScreen
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.withContext
@@ -57,6 +60,11 @@ import kotlin.time.Instant
 fun GalleryHost(
     modifier: Modifier = Modifier,
     /**
+     * The app's own startup work died. Not a crash any more — the caller shows a recovery
+     * screen instead, and nothing retries on its own.
+     */
+    onStartupFailure: () -> Unit = {},
+    /**
      * Controls drawn over the grid and under the viewer — the way in to Settings.
      *
      * Passed down rather than stacked on top of this host, because a control drawn above
@@ -67,6 +75,8 @@ fun GalleryHost(
     repository: TrimRepository = koinInject(),
     folders: GrantedFolders = koinInject(),
     nightPass: NightPass = koinInject(),
+    guard: StartupGuard = koinInject(),
+    crashes: CrashReports = koinInject(),
 ) {
     var grants by remember { mutableStateOf(folders.grants()) }
     var items by remember { mutableStateOf(emptyList<MediaItem>()) }
@@ -95,38 +105,75 @@ fun GalleryHost(
         }
         scanning = true
         failure = null
-        val scanned = mutableListOf<MediaItem>()
-        storage.scan(grants)
-            .catch { failure = it.message ?: it::class.simpleName }
-            .collect { item ->
-                scanned += item
-                // Only while the grid has nothing to show — a first run, before anything
-                // has ever been persisted. Publishing batches into a grid that is already
-                // full would make the user's own photographs flicker for no benefit, and
-                // the diff below is what decides what actually changed.
-                if (items.isEmpty() && scanned.size % FIRST_RUN_BATCH == 0) {
-                    items = scanned.sortedNewestFirst()
-                }
-            }
 
-        if (failure == null) {
-            // Off the main thread: the diff is a hash join over the whole library, and
-            // `applyScan` writes every change in one transaction.
-            val changes = withContext(Dispatchers.Default) {
-                LibraryDiff.diff(
-                    stored = repository.stored(grants),
-                    scanned = scanned,
-                    scannedGrants = grants.map { it.id }.toSet(),
-                )
+        // Everything from here to `guard.complete()` is work the app starts by itself. A
+        // crash inside it is one the user cannot escape by not doing it, so it is bracketed:
+        // the mark survives a process death this code cannot catch, and the catch below
+        // handles the ones it can.
+        guard.begin()
+        try {
+            // Before anything reads or writes media: the rows the scan's inserts point at.
+            // `media_item.folder_grant_id` references `folder_grant(id)` and foreign keys are on,
+            // so a scan that ran before this did threw on its first insert — and threw again on
+            // every launch, because the grant it was scanning had already been persisted.
+            repository.recordGrants(grants)
+
+            val scanned = mutableListOf<MediaItem>()
+            storage.scan(grants)
+                .catch { failure = it.message ?: it::class.simpleName }
+                .collect { item ->
+                    scanned += item
+                    // Only while the grid has nothing to show — a first run, before anything
+                    // has ever been persisted. Publishing batches into a grid that is already
+                    // full would make the user's own photographs flicker for no benefit, and
+                    // the diff below is what decides what actually changed.
+                    if (items.isEmpty() && scanned.size % FIRST_RUN_BATCH == 0) {
+                        items = scanned.sortedNewestFirst()
+                    }
+                }
+
+            if (failure == null) {
+                // Off the main thread: the diff is a hash join over the whole library, and
+                // `applyScan` writes every change in one transaction.
+                val changes = withContext(Dispatchers.Default) {
+                    LibraryDiff.diff(
+                        stored = repository.stored(grants),
+                        scanned = scanned,
+                        scannedGrants = grants.map { it.id }.toSet(),
+                    )
+                }
+                if (!changes.isEmpty) {
+                    repository.applyScan(changes)
+                }
+                // Re-read rather than patching the list in memory: the query is the one place
+                // that knows the sort, the hidden-item rule and the date fallback.
+                items = repository.gallery()
             }
-            if (!changes.isEmpty) {
-                repository.applyScan(changes)
-            }
-            // Re-read rather than patching the list in memory: the query is the one place
-            // that knows the sort, the hidden-item rule and the date fallback.
-            items = repository.gallery()
+            scanning = false
+            guard.complete()
+        } catch (cancelled: CancellationException) {
+            // Leaving the screen is not a failure. The mark has to come off, or the
+            // next launch would open into a recovery screen for a scan nobody was
+            // waiting on any more.
+            guard.complete()
+            throw cancelled
+        } catch (@Suppress("TooGenericExceptionCaught") failed: Throwable) {
+            // Deliberately everything, and deliberately **not** clearing the mark.
+            //
+            // This is the crash the guard exists for: it happened inside work the app
+            // began on its own, over an input — a persisted folder grant — that will
+            // still be there next launch. Letting it propagate kills the process, and
+            // the next launch does the same thing, which is the loop. Caught, it
+            // becomes a screen the user can act on.
+            //
+            // Written to the crash store on the way past, because the recovery screen shows
+            // what happened by reading that store — and a caught exception never reaches the
+            // uncaught handler that normally fills it. Without this line the screen would
+            // open on "No crashes recorded" for the very failure that opened it.
+            crashes.record(failed)
+            scanning = false
+            onStartupFailure()
         }
-        scanning = false
     }
 
     // A Box, and the sheet last, because Compose draws siblings in the order they are

@@ -39,6 +39,19 @@ class CrashReports(private val context: Context) {
         }
     }
 
+    /**
+     * Records a failure the app caught rather than died from.
+     *
+     * The startup guard turns a crash in the app's own work into a recovery screen, and
+     * that screen's whole purpose is to show what happened — but a caught exception never
+     * reaches the uncaught handler, so without this the screen opens on "No crashes
+     * recorded" for exactly the failure it was opened for. Same file, same format: the
+     * export makes no distinction, because to the person reading it there is none.
+     */
+    fun record(error: Throwable) {
+        runCatching { write(Thread.currentThread(), error) }
+    }
+
     /** Every stored report, newest first. */
     fun reports(): List<File> = directory.listFiles()?.sortedByDescending { it.lastModified() }.orEmpty()
 
