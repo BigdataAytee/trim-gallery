@@ -50,6 +50,16 @@ run() {
 }
 
 # Configuration first: this is the class of fault the old harness was blind to.
+# Before Gradle, because it needs neither Gradle nor the Android SDK and finishes in eight
+# seconds. Five ktlint failures reached CI over two pull requests while this check was
+# reachable only through `./gradlew`, which cannot configure without Google Maven.
+echo "=== ktlint (standalone) ==="
+if bash tools/ktlint.sh; then
+    echo "no formatting violations"
+else
+    fail=1
+fi
+
 run "configure every project"  help
 run "shared JVM tests"         sharedTest
 run "build guards"             guards
