@@ -27,6 +27,7 @@ import app.trimgallery.core.ui.theme.TrimShape
 import app.trimgallery.core.ui.theme.TrimSpacing
 import app.trimgallery.core.ui.theme.TrimTheme
 import app.trimgallery.engine.LibraryStorage
+import app.trimgallery.engine.android.FolderChoice
 import app.trimgallery.engine.android.GrantedFolders
 import app.trimgallery.feature.gallery.GalleryScreen
 import kotlinx.coroutines.Dispatchers
@@ -61,12 +62,34 @@ fun GalleryHost(
     var scanning by remember { mutableStateOf(false) }
     var failure by remember { mutableStateOf<String?>(null) }
 
+    // Null means one of two things the app cannot tell apart: Android refused the folder
+    // (the picker greys out "Use this folder" for the three locations in FolderChoice, so
+    // the only way out is to back away), or the user changed their mind. Either way the
+    // next screen has to be help rather than an accusation.
+    var help by remember { mutableStateOf<HelpState>(HelpState.Hidden) }
     val picker = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocumentTree()) { uri ->
-        if (uri != null) {
-            folders.take(uri)
-            grants = folders.grants()
+        when {
+            uri == null -> help = HelpState.Shown(refusal = null)
+            else -> {
+                val refusal = FolderChoice.refusalFor(uri)
+                if (refusal != null) {
+                    // Reachable when a picker allows what the platform documents as
+                    // unpickable. Taking the grant would leave a folder that is stored,
+                    // looks granted, and scans nothing.
+                    help = HelpState.Shown(refusal)
+                } else {
+                    folders.take(uri)
+                    grants = folders.grants()
+                    help = HelpState.Hidden
+                }
+            }
         }
     }
+
+    // Opening at DCIM/Camera rather than wherever the picker last was. It is a hint, not a
+    // guarantee — a device without that folder opens where it likes — but it means the
+    // ordinary path never meets a blocked folder in the first place.
+    fun choose() = picker.launch(FolderChoice.cameraFolderHint())
 
     LaunchedEffect(grants) {
         if (grants.isEmpty()) {
@@ -97,15 +120,32 @@ fun GalleryHost(
         scanning = false
     }
 
+    (help as? HelpState.Shown)?.let { shown ->
+        FolderHelpSheet(
+            refusal = shown.refusal,
+            onOpenCamera = {
+                help = HelpState.Hidden
+                choose()
+            },
+            onPickAnother = {
+                help = HelpState.Hidden
+                // Deliberately no hint here: this is the escape hatch for someone whose
+                // photos are not in DCIM/Camera, and reopening at Camera every time would
+                // make it the button that does not do what it says.
+                picker.launch(null)
+            },
+        )
+    }
+
     when {
-        grants.isEmpty() -> NoFolderYet(modifier) { picker.launch(null) }
+        grants.isEmpty() -> NoFolderYet(modifier) { choose() }
         else -> GalleryScreen(
             items = items,
             processingIds = emptySet(),
             today = Clock.System.todayIn(TimeZone.currentSystemDefault()),
             timeZone = TimeZone.currentSystemDefault(),
             modifier = modifier,
-            emptyState = { ScanState(scanning = scanning, failure = failure) { picker.launch(null) } },
+            emptyState = { ScanState(scanning = scanning, failure = failure) { choose() } },
             video = { VideoPlayer(it, modifier = Modifier.fillMaxSize()) },
             preview = { TilePreview(it, modifier = Modifier.fillMaxSize()) },
             artwork = { Thumbnail(it) },
@@ -209,6 +249,12 @@ private fun ScanState(scanning: Boolean, failure: String?, onChoose: () -> Unit)
         }
         DiagnosticsButton()
     }
+}
+
+/** Whether the folder-help sheet is up, and what it should lead with. */
+private sealed interface HelpState {
+    data object Hidden : HelpState
+    data class Shown(val refusal: FolderChoice.Refusal?) : HelpState
 }
 
 /** How many items to find before the grid first fills in, while a scan is still walking. */
