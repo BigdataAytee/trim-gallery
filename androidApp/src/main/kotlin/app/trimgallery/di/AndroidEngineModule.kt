@@ -25,6 +25,7 @@ import app.trimgallery.engine.QualityScorer
 import app.trimgallery.engine.Replacer
 import app.trimgallery.engine.SettingsStore
 import app.trimgallery.engine.UndoStore
+import app.trimgallery.engine.YuvSource
 import app.trimgallery.engine.android.ContainerReaderAndroid
 import app.trimgallery.engine.android.CrashReports
 import app.trimgallery.engine.android.DiagnosticsExport
@@ -43,6 +44,7 @@ import app.trimgallery.engine.android.StartupGuard
 import app.trimgallery.engine.android.UndoBinAndroid
 import app.trimgallery.engine.android.VideoThumbnails
 import app.trimgallery.engine.android.WorkManagerScheduler
+import app.trimgallery.engine.android.YuvSourceAndroid
 import kotlinx.coroutines.Dispatchers
 import kotlinx.datetime.LocalDate
 import kotlinx.datetime.TimeZone
@@ -62,7 +64,16 @@ import kotlin.time.Clock
  */
 @UnstableApi
 val androidEngineModule = module {
-    single<CodecFactory> { MediaCodecFactory(androidContext()) }
+    // Bound as itself as well as as the port, because `YuvSourceAndroid` needs the
+    // concrete factory: creating a decoder is inside the codec guard, so the only door to
+    // one is a method on this class rather than on the `CodecFactory` interface, which
+    // names encoders alone.
+    single { MediaCodecFactory(androidContext()) }
+    single<CodecFactory> { get<MediaCodecFactory>() }
+
+    // Milestone 3 and 4's missing half. Both the search and the VMAF gate need to decode,
+    // and until now nothing on either platform could.
+    single<YuvSource> { YuvSourceAndroid(androidContext(), get()) }
 
     // Milestone 2. XPSNR and VMAF over the native C ABI; the pipeline never sees JNI.
     single<QualityScorer> { NativeQualityScorer() }

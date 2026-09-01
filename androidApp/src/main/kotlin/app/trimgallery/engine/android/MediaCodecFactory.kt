@@ -1,6 +1,7 @@
 package app.trimgallery.engine.android
 
 import android.content.Context
+import android.media.MediaCodec
 import android.media.MediaCodecInfo
 import android.media.MediaCodecList
 import android.media.MediaFormat
@@ -98,6 +99,42 @@ class MediaCodecFactory(private val context: Context) : CodecFactory {
         background = background,
         encoderSelector = hardwareOnlySelector(),
     )
+
+    /**
+     * A started **decoder** for [format], and the only door to one.
+     *
+     * Decoders are inside the codec guard for a reason that is not the hardware-only rule:
+     * BUILD.md § 2 rule 2 bans software *encoding*, and a software decoder is ordinary and
+     * necessary — an emulator has nothing else. What a decoder shares with an encoder is the
+     * hardware slot. The codec-priority skill is explicit: *"Set it on all codecs in the
+     * pipeline, not just the encoder — a realtime-priority decoder feeding a background
+     * encoder still holds a slot the foreground wants."* Routing decoder creation through
+     * here is what makes that impossible to forget.
+     *
+     * Configured for `COLOR_FormatYUV420Flexible`, which is the contract `getOutputImage`
+     * needs: it is the one colour format every device must be able to hand back as a
+     * three-plane `Image`, whatever it prefers internally.
+     *
+     * @return null when the device has no decoder for this format at all, which the caller
+     *   turns into an empty window rather than a crash.
+     */
+    fun decoder(format: MediaFormat, background: Boolean = true): MediaCodec? {
+        val mimeType = format.getString(MediaFormat.KEY_MIME) ?: return null
+        return runCatching {
+            MediaCodec.createDecoderByType(mimeType).apply {
+                format.setInteger(
+                    KEY_PRIORITY,
+                    if (background) PRIORITY_BACKGROUND else PRIORITY_REALTIME,
+                )
+                format.setInteger(
+                    MediaFormat.KEY_COLOR_FORMAT,
+                    MediaCodecInfo.CodecCapabilities.COLOR_FormatYUV420Flexible,
+                )
+                configure(format, null, null, 0)
+                start()
+            }
+        }.getOrNull()
+    }
 
     /**
      * An [EncoderSelector] that can only ever offer hardware encoders.
