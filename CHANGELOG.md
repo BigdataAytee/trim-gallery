@@ -1,5 +1,49 @@
 # Changelog
 
+## Screens that prove they work, on a device
+
+Four builds went out green while the first screen was broken. The only instrumented test in
+this repository asserted that the Activity reached RESUMED — which it did, on a build that
+crashed the moment a folder was granted. Reaching RESUMED says the process came up; it says
+nothing about what is on the screen, or what happens when it is touched.
+
+**So the screens are now tapped, on the emulator, in CI.** `GalleryJourneyTest` runs the
+journeys a person actually makes:
+
+1. Grant a folder → the grid renders (and the grant row is written before any media row
+   points at it, and the night pass is scheduled).
+2. Tap a photograph → the viewer opens.
+3. Tap a video → it plays. Not "the viewer opened over it": the player has to reach READY
+   and actually be playing, over the golden clip.
+4. Relaunch after a grant → the photographs are there **before** anything is walked. The
+   walk is held shut for the second launch, so a tile on screen can only have come from the
+   database — which is the fast start, and it is where the crash loop always died.
+5. A startup that does fail → the recovery screen, with the mark left set so the next
+   launch does not repeat the work that just died.
+
+Three things make these worth having rather than decorative:
+
+**The database is the real one.** Opened through `AndroidSqliteDriver` and its callback, so
+`PRAGMA foreign_keys = ON` is in force exactly as it is on a phone. The crash loop was a
+foreign key that the JVM test driver leaves off; a journey test running against a permissive
+database would certify the same bug a second time. Held in memory, so a run leaves nothing
+behind.
+
+**Only the platform edges are faked** — the system picker's grant, a tree of the user's own
+files, WorkManager. Everything else is the app: the picker's result handling, the grant row,
+the scan, the diff, the grid, the viewer, ExoPlayer. A journey test that fakes the middle
+proves only that the fakes agree with each other.
+
+**A green job is checked for having actually run them.** `pixelSmokeAndroidTest` is green
+when it runs zero tests, when a filter excludes a class, and when every test skips. So the
+job now reads the instrumentation's own result XML back and fails unless each journey is
+there and passed.
+
+The tiles, the grid and the viewer carry test tags (`GalleryTestTags`) so a test can name
+what it means rather than count nodes. The `ComponentActivity` the Compose rule needs is
+declared in the **smoke** variant's manifest only — the CI-only build — so no installable
+build has it.
+
 ## The crash loop, and the test environment that certified it
 
 Granting a folder killed the app, and every launch afterwards killed it again. Clearing app

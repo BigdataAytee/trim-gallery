@@ -307,6 +307,11 @@ dependencies {
     // Invisible until an instrumented test actually ran, which first happened today.
     androidTestImplementation(libs.androidx.test.runner)
     androidTestImplementation(libs.kotlinx.coroutines.test)
+    // The Compose test rule, for the screen journeys in GalleryJourneyTest. Until these
+    // existed the only thing any instrumented test asserted was that the Activity reached
+    // RESUMED — which it did on a build whose first screen crashed the moment a folder was
+    // granted, because reaching RESUMED says the process came up and nothing more.
+    androidTestImplementation(libs.compose.ui.test.junit4)
 }
 
 // --- Guard 1, merged-manifest half (ARCHITECTURE.md § 14) --------------------

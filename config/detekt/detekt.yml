@@ -16,6 +16,11 @@ complexity:
     excludes: ['**/commonTest/**', '**/jvmTest/**', '**/test/**', '**/androidTest/**']
   TooManyFunctions:
     ignoreAnnotated: ['Composable']
+    # Same reasoning as LongParameterList above, and the same source sets. A test class is
+    # one function per case plus the fixtures and waits those cases read from; the thing
+    # this rule exists to catch — a class that has grown into several — is not what a
+    # journey suite with twenty small named helpers is. Production code keeps the default.
+    excludes: ['**/commonTest/**', '**/jvmTest/**', '**/test/**', '**/androidTest/**']
 
 naming:
   FunctionNaming:

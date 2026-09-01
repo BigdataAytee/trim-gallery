@@ -462,13 +462,18 @@ jobs:
           restore-keys: |
             native-abi_arm64-v8a_x86_64-${{ runner.os }}-${{ hashFiles('shared/native/CMakeLists.txt', 'shared/native/cmake/**', 'androidApp/build.gradle.kts', '.gitmodules') }}-
 
-      # Boots the managed device, installs the smoke APK and runs MainActivityLaunchTest:
-      # the activity reaches RESUMED, and survives recreation. The only check in this
-      # repository that proves the app runs rather than that it compiles.
+      # Boots the managed device, installs the smoke APK and runs every instrumented test.
+      # That now means four screen journeys as well as the launch check — grant a folder and
+      # the grid renders, tap a photo and the viewer opens, tap a video and it plays, come
+      # back a second time and the photographs are still there (GalleryJourneyTest).
+      #
+      # Reaching RESUMED was all this job asserted for four milestones, and three builds
+      # shipped green while the first screen crashed on the folder grant and then on every
+      # launch. RESUMED says the process came up; it says nothing about the screen.
       #
       # `--info` because when an emulator test fails the useful line is almost always in
       # Gradle's device log rather than in the test report.
-      - name: Launch the app on a Gradle-managed device
+      - name: Run the screen journeys on a Gradle-managed device
         run: |
           set -o pipefail
           # -P…smoke.x86_64: opt this run into the second ABI. The property is set here and
@@ -492,6 +497,14 @@ jobs:
           for f in $(find androidApp/.cxx -name meson-log.txt 2>/dev/null); do
             echo "=== $f (last 80) ==="; tail -80 "$f"
           done
+
+      # A green task is not proof the journeys ran: a filter, a build variant without the
+      # androidTest component, or an `assumeTrue` that quietly skips would all leave this job
+      # green having asserted nothing — which is the exact failure this whole PR is about.
+      # So the result XML is read back and each journey must be there, and must have run.
+      - name: Prove the screen journeys actually ran
+        if: always()
+        run: python3 .github/assert-journeys-ran.py
 
       - uses: actions/upload-artifact@v4
         if: always()

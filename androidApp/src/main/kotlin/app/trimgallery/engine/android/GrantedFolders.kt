@@ -21,8 +21,15 @@ import app.trimgallery.core.model.MediaRef
  * So the platform is the source of truth here, and the database will hold the *settings*
  * that hang off a grant (its folder mode, when it was last scanned) once the settings
  * screen exists to change them. Recorded in PROJECT.md.
+ *
+ * `open`, and only for [grants] and [take], so an emulator test can stand in the one place
+ * this app cannot drive: the system folder picker. Everything downstream of the picker's
+ * result — taking the grant, scheduling the night pass, recording the grant row, the scan,
+ * the grid — is the app's own code and runs for real in `GalleryJourneyTest`. Faking the
+ * platform's answer is the only way to reach it; faking anything more would be testing the
+ * test.
  */
-class GrantedFolders(private val context: Context) {
+open class GrantedFolders(private val context: Context) {
 
     /**
      * Every readable persisted grant, newest first.
@@ -33,7 +40,7 @@ class GrantedFolders(private val context: Context) {
      * default. OFFLOAD and FREE both move or expire originals, and neither should
      * happen because nobody has been asked.
      */
-    fun grants(): List<FolderGrant> = context.contentResolver.persistedUriPermissions
+    open fun grants(): List<FolderGrant> = context.contentResolver.persistedUriPermissions
         .filter { it.isReadPermission }
         .sortedByDescending { it.persistedTime }
         .map { permission ->
@@ -56,7 +63,7 @@ class GrantedFolders(private val context: Context) {
      * be widened later without asking the user again, and discovering that on the night
      * of the first replace would strand a verified encode with nowhere to go.
      */
-    fun take(uri: Uri) {
+    open fun take(uri: Uri) {
         context.contentResolver.takePersistableUriPermission(
             uri,
             Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_GRANT_WRITE_URI_PERMISSION,

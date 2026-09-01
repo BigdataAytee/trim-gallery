@@ -110,6 +110,12 @@ androidxTestRunner = "1.7.0"      # [google] The AndroidJUnitRunner class `testI
 compose-ui = { group = "org.jetbrains.compose.ui", name = "ui", version.ref = "composeMultiplatform" }
 compose-ui-tooling = { group = "org.jetbrains.compose.ui", name = "ui-tooling", version.ref = "composeMultiplatform" }
 
+# The Compose test rule and its finders, for the emulator UI tests. From the same group and
+# the same `composeMultiplatform` reference as everything else Compose here: taking it from
+# androidx instead would put a second Compose version in the test classpath, which is the
+# mistake this file's `compose-ui` comment above already records the cost of.
+compose-ui-test-junit4 = { group = "org.jetbrains.compose.ui", name = "ui-test-junit4", version.ref = "composeMultiplatform" }
+
 # --- Shared / KMP ---
 sqldelight-runtime = { group = "app.cash.sqldelight", name = "runtime", version.ref = "sqldelight" }
 sqldelight-coroutines = { group = "app.cash.sqldelight", name = "coroutines-extensions", version.ref = "sqldelight" }

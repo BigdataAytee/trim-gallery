@@ -28,6 +28,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.unit.dp
 import app.trimgallery.core.model.MediaItem
 import app.trimgallery.core.model.MediaKind
@@ -156,6 +157,7 @@ fun GalleryScreen(
             horizontalArrangement = Arrangement.spacedBy(GRID_GAP_DP.dp),
             verticalArrangement = Arrangement.spacedBy(GRID_GAP_DP.dp),
             modifier = Modifier
+                .testTag(GalleryTestTags.GRID)
                 .fillMaxSize()
                 .pointerInput(zoom) {
                     // Pinch changes density. GridZoom.step applies the deadband, so an

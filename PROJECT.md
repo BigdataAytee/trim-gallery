@@ -2831,3 +2831,45 @@ deaths it cannot — a native crash, an OOM kill, a throw on another thread.
 folder grant, which is the input that made the work fail. Releasing touches only the
 permission: nothing in the user's folder is written, and nothing can be — there is no write
 path outside `SafeReplacerAndroid`.
+
+## Emulator UI tests (1 Sep 2026)
+
+The pattern behind three bad builds: the logic was tested, the screens were not. Decisions
+made in closing that.
+
+**Every screen has to prove it renders and responds on a device before it is installed.**
+`GalleryJourneyTest` is where that happens, and the CI job that used to assert only RESUMED
+now runs it.
+
+**A journey test opens the real database.** `AndroidDatabase.create` gained a `name`
+parameter so a test can ask for an in-memory one, rather than opening its own connection —
+because the driver and its callback are the thing under test as much as the screen is. The
+JVM tests' permissive driver is exactly how the crash loop was certified green.
+
+**Only the platform edges are faked, and each one is a thing an emulator cannot supply.**
+The system picker's grant (`GrantedFolders.grants`/`take` are `open` for this and nothing
+else), a tree of the user's own files, WorkManager. Faking anything above them would be
+testing the test.
+
+**The folder picker's *result* is driven, not its UI.** `LocalActivityResultRegistryOwner`
+is replaced, so the grant journey runs every line the app has from the result onwards. The
+picker itself is another app's UI and driving it with UiAutomator would be a test that
+breaks when Android's file browser changes.
+
+**Test tags live in production code.** `GalleryTestTags` names the grid, a tile and the
+viewer. A test that finds a tile by position or by the words inside it breaks whenever the
+layout or the wording changes, and a UI test that breaks for unrelated reasons is one that
+gets deleted.
+
+**The Compose rule's host Activity is declared in the smoke variant only.** `ComponentActivity`
+needs a manifest entry to be launchable; androidx publishes `ui-test-manifest` to add exactly
+that line. Rather than take the dependency, the line is in `src/smoke/AndroidManifest.xml` —
+the CI-only variant — so no build a person can install carries it.
+
+**A passing job is not proof the tests ran.** `.github/assert-journeys-ran.py` reads the
+instrumentation result XML and fails unless every journey is present and passed. Zero tests,
+a filter, or an `assumeTrue` would otherwise leave the job green having asserted nothing.
+
+**The video journey asserts playback, not composition.** Reaching READY and `isPlaying`, over
+the golden H.264 clip with its real AAC track, read off the `PlayerView` on the main thread.
+A viewer drawn above a player that never starts is the black-tile bug one screen along.
