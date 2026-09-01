@@ -159,7 +159,7 @@ class OptimiseController(
                 state = OptimiseFlow.progress(state, fraction)
             }
 
-            val finished = describe(result, wasBytes)
+            val finished = describe(result)
             repository.saveJob(complete(job, finished))
             state = OptimiseFlow.finish(state, finished)
             onLibraryChanged()
@@ -207,6 +207,10 @@ class OptimiseController(
         is OptimiseFlow.Finished.Optimised -> job.copy(
             state = JobState.SUCCEEDED,
             finishedAt = clocks.now(),
+            // Corrected to what the step measured, for the same reason the sheet shows that
+            // number: this row opened with the size a scan recorded, and Space subtracts
+            // these two to report what was freed.
+            originalSize = finished.wasBytes,
             newSize = finished.nowBytes,
         )
 
@@ -230,9 +234,15 @@ class OptimiseController(
      * nothing was replaced, so it offers no undo and says what actually happened, which is
      * that the user changed the file while Trim was working on it.
      */
-    private fun describe(result: VideoOptimiseStep.Result, wasBytes: Long): OptimiseFlow.Finished = when (result) {
+    private fun describe(result: VideoOptimiseStep.Result): OptimiseFlow.Finished = when (result) {
+        // `result.wasBytes`, not the item's own `size`. Both mean "how big it was" and they
+        // disagree: the item's size is what a library scan recorded, which on a file the
+        // user has just edited can be minutes old, while the step's is the `storage.stat()`
+        // snapshot taken immediately before the encode — the same number the whole
+        // safe-replace contract is checked against. "Was 380 MB" has to be the size the file
+        // actually had, and Space subtracts these two to report what was freed.
         is VideoOptimiseStep.Result.Optimised -> OptimiseFlow.Finished.Optimised(
-            wasBytes = wasBytes,
+            wasBytes = result.wasBytes,
             nowBytes = result.nowBytes,
             undoRef = result.undo.value,
         )

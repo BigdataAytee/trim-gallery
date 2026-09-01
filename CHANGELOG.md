@@ -51,6 +51,18 @@ need a second write path that holds a finished encode unreplaced. The shape the 
 asked for is the one the engine already supports; Share and Keep both are still open, and
 recorded as such.
 
+### The emulator test caught a real one
+
+The sheet was building "Was 380 MB → now 165 MB" from the item's own `size` — the number a
+library *scan* recorded — rather than from `result.wasBytes`, the `storage.stat()` snapshot
+the step takes immediately before the encode. They are both "how big it was" and they
+disagree: a scan can be minutes old, and a file the user has just edited is exactly the case
+where it is wrong.
+
+That number is not decoration. The sheet shows it, the `job` row stores it, and Space
+subtracts it from the new size to report what was freed — so a stale original size is a wrong
+saving on the screen this whole feature is judged by. Both now use the measured value.
+
 ### Tested where it can be
 
 `OptimiseFlow` is unit tested on the JVM as the sentences the sheet must never be able to

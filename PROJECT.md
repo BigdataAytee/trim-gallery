@@ -3118,3 +3118,11 @@ order — so a tile could open *and* offer to optimise, or do neither.
 into 40 MB costs the user's trust in every other number this app shows them. Progress is null
 until the encoder reports something, because a bar at 0% and a bar that has not started look
 the same and only one of them is true.
+
+**The original's size comes from the step's snapshot, never from the item's `size`.** They are
+both "how big it was" and they disagree: `MediaItem.size` is what a library scan recorded, and
+`VideoOptimiseStep.Result.Optimised.wasBytes` is the `storage.stat()` taken immediately before
+the encode — the same snapshot the safe-replace contract is checked against. The sheet shows
+this number, the `job` row stores it, and Space subtracts it from the new size to report what
+was freed, so a stale value is a wrong saving on the screen the feature is judged by. Found by
+the emulator journey, which is the argument for having it.

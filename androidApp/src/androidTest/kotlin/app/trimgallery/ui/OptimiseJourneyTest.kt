@@ -157,6 +157,10 @@ class OptimiseJourneyTest {
             assertEquals(JobState.SUCCEEDED, jobs.single().state)
             assertTrue("the row must say a person asked for it", jobs.single().userInitiated)
             assertEquals(165L * MB, jobs.single().newSize)
+            // The size the step measured, not the one the scan recorded. Space subtracts
+            // these two, so a stale original size is a wrong "freed" number on the screen
+            // this whole feature is judged by.
+            assertEquals(380L * MB, jobs.single().originalSize)
         }
     }
 
