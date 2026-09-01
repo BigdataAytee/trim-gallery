@@ -29,6 +29,7 @@ import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import app.trimgallery.core.ui.theme.LocalReduceMotion
+import app.trimgallery.core.ui.theme.TrimSpring
 
 /** [MotionSpec.Easing] as a Compose easing curve. */
 fun MotionSpec.Easing.toCompose(): Easing = CubicBezierEasing(x1, y1, x2, y2)
