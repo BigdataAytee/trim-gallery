@@ -2652,3 +2652,37 @@ did must not be the one screen that crashes.
   `UndoBinAndroid.restore`.
 - The tier is hard-coded to Free in `SpaceHost` until billing is wired, so the monthly cap
   ring is the free tier's for everybody.
+
+## The night pass's two ledgers (1 Sep 2026)
+
+`job` and `predictor` were the second and third of the three things missing behind the
+unbound `NightRun.Step`. Both are now written and read; neither is called yet.
+
+Decisions:
+
+**The job row is overwritten, not appended.** It is written when an attempt starts and again
+as it progresses, so a night killed mid-file leaves the last state it reached — the same
+argument `upsertRunSession` makes. Appending would put two rows in History for one file and
+double every total on the Space screen.
+
+**Two job mappers, deliberately.** `toJob` maps the five columns `selectSucceededJobs` asks
+for; `toFullJob` maps all twenty-four for the callers that want the whole attempt. Sharing
+one mapper over `SELECT *` would make the Space screen read nineteen columns per row to
+display four, on the one query that runs over hundreds of rows.
+
+**An unrecognised job state reads as `FAILED`, not `SUCCEEDED`.** The third instance of the
+same rule, after the folder mode and the stop reason, and the one where the direction
+matters most: a state this build cannot read is not a state it may treat as a completed
+replacement.
+
+**The predictor's mean is stored as a REAL and read back rounded.** `Predictor.learn` keeps
+a running average, which is fractional; a bitrate is a whole number of bits per second. The
+rounding happens on the way out rather than on the way in, so the average does not drift
+downward one truncation at a time.
+
+**Still missing: the caller.** `VideoOptimiseStep` is the assembly of ProbeAndSearch, the
+encoder, VerifyPass, the Replacer and `Predictor.learn`. It is the code path that parks and
+replaces originals, and it is being built as a separate change held for review rather than
+merged with its plumbing — this environment cannot compile or run anything (Google Maven is
+unreachable, so Gradle cannot configure), and self-merging the one path that can lose a
+photograph into an APK on that basis is not a risk worth taking.

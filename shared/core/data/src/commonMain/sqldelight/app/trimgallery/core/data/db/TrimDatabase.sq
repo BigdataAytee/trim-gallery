@@ -490,6 +490,25 @@ selectSucceededJobs:
 SELECT id, media_id, original_size, new_size, finished_at
 FROM job WHERE state = 'SUCCEEDED' ORDER BY finished_at DESC LIMIT :limit;
 
+-- Records an attempt on one file (SCHEMA.md `job`, BUILD.md § 14's metrics).
+--
+-- `INSERT OR REPLACE` on the primary key, so the row is written once when the attempt
+-- starts and overwritten as it progresses: a night killed mid-file leaves the last state
+-- it reached rather than nothing, which is the same reason `upsertRunSession` replaces.
+--
+-- Nothing wrote a `job` row for the first nine milestones. The night pass had no step to
+-- run, so there was never an attempt to record; History was empty in consequence.
+upsertJob:
+INSERT OR REPLACE INTO job(
+    id, media_id, run_session_id, state, stage_before_pause, engine, setting, probes,
+    xpsnr, vmaf, ssim2, original_size, new_size, encode_ms, verify_ms, realtime_multiple,
+    thermal_start, thermal_end, energy_wh, attempts, error, user_initiated, started_at, finished_at
+) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);
+
+-- One file's attempts, newest first, for the viewer's info sheet and the field test.
+selectJobsForMedia:
+SELECT * FROM job WHERE media_id = ? ORDER BY started_at DESC;
+
 selectFolderGrants:
 SELECT * FROM folder_grant WHERE enabled = 1;
 

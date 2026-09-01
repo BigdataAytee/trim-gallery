@@ -1,5 +1,33 @@
 # Changelog
 
+## The two tables the night pass writes to
+
+`job` and `predictor` have had a schema since milestone 3, queries written for them, and no
+caller on either side. Both now have one.
+
+**`job`** is what an attempt did: the setting it settled on, the probes it spent, the VMAF
+it reached, the two sizes, the encode and verify times, the thermal readings at each end
+and the energy — BUILD.md § 14's per-file metrics, and the row the History screen lists.
+The write replaces rather than appends, so a night killed mid-file leaves the last state it
+reached instead of nothing; two rows for one attempt would double-count the file in every
+total on the Space screen.
+
+**`predictor`** is what makes the second night on a phone cheaper than the first. A family's
+running mean and variance, keyed including the *output* codec — AV1 reaches the same quality
+at about two thirds of HEVC's bitrate, so a table without it would average the two and
+predict a number wrong for both. `Predictor.learn` does the arithmetic and is already tested;
+this is only its memory between nights.
+
+Nine tests against the shipped schema, including the ones that would catch a silent drop:
+every field the field test is scored on surviving a round trip, a second result folding into
+the same family's mean, two output codecs staying apart, and a job state this build does not
+recognise reading as `FAILED` rather than as a completed replacement.
+
+**This does not make the night pass work.** `NightRun.Step` still has no binding, so nothing
+calls either of these on a device yet. It removes two of the three things that were missing;
+the third is `VideoOptimiseStep` itself, which is the code that parks and replaces originals
+and is being held for review rather than merged alongside the plumbing.
+
 ## Space, and the crankshaft that is missing
 
 The screen that answers "is this app worth having on my phone?" — total freed, a progress
