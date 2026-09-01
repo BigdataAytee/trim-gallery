@@ -28,6 +28,89 @@ Android:
 No timestamp, in Settings or in the file. `Diagnostics` bans absolute times from the export
 because when the app ran says when its owner sleeps; a build date invites the same question,
 and the commit answers it better anyway by saying exactly what the code was.
+## The grid comes from the database, not from a folder walk
+
+The app rescanned every granted folder on every launch and could not draw a single tile
+until that walk produced its first two hundred items. Nothing was persisted, so it did the
+whole thing again the next time.
+
+Now the first thing that happens is one indexed query. The rows were written the last time
+the app ran; the grid is on screen before any folder is opened. The walk still runs — in the
+background — and its result goes through `LibraryDiff`, which has been written and tested
+since milestone 6 and had no caller on this path.
+
+Three things that were quietly expensive, all gone:
+
+- **A transaction per row.** A first scan of fifty thousand files was fifty thousand
+  commits, and SQLite fsyncs on every one. One transaction for the whole diff.
+- **A full re-sort per batch.** The host sorted the entire list every time the scan
+  published two hundred more items — O(n log n) on a list that only grows. The order is now
+  `ORDER BY COALESCE(taken_at, mtime) DESC` in SQL, against the column's own index. The
+  fallback is the same one the Kotlin did, and it matters: nothing is dated until it is
+  indexed, and `taken_at DESC` alone puts the whole library in one block, because SQLite
+  sorts NULLs last in DESC.
+- **Rewriting rows that had not changed.** `unchanged` is most of the library on most
+  nights and is not written at all.
+
+Seven tests over the persisted library, including the one that guards the worst outcome: a
+file whose optimised copy is gone but whose **original is still in the bin keeps its row**,
+because that row is the only handle on a file the user can still restore.
+
+### The benchmark, and what it can and cannot say
+
+`StartupBenchmark` measures cold and warm start separately — they fail for different
+reasons, and a slow warm start is specifically work being repeated.
+
+**No before-and-after numbers are reported here, because none were measured.** Nothing in
+this environment can build an Android app, and CI does not run Macrobenchmark either — it
+needs a device. Quoting numbers from a benchmark nobody ran would be worse than quoting
+none. The benchmark is in place for a real phone with a real DCIM folder, which is the only
+measurement that would mean anything anyway: an empty install starts fast whatever the code
+does.
+
+### MediaStore was not adopted, deliberately
+
+The report asked for MediaStore metadata instead of SAF. Two facts got in the way, and the
+second is a decision that is not mine.
+
+The scan does **not** open every file: it is one cursor per directory, and the columns come
+back with the listing. So the win from MediaStore is not "stop opening files" — it is one
+query for the whole library instead of one per folder, which is real but smaller than it
+sounds.
+
+And reading MediaStore needs `READ_MEDIA_IMAGES`/`READ_MEDIA_VIDEO`. PROJECT.md § Access
+says SAF grants by default and all-files access is a later opt-in, on Play policy and
+privacy grounds. Adding a media-read permission changes what the app asks for on first run
+and what its privacy story is. That is a product decision, so it is recorded as an open
+question rather than taken quietly inside a performance change.
+
+## The two tables the night pass writes to
+
+`job` and `predictor` have had a schema since milestone 3, queries written for them, and no
+caller on either side. Both now have one.
+
+**`job`** is what an attempt did: the setting it settled on, the probes it spent, the VMAF
+it reached, the two sizes, the encode and verify times, the thermal readings at each end
+and the energy — BUILD.md § 14's per-file metrics, and the row the History screen lists.
+The write replaces rather than appends, so a night killed mid-file leaves the last state it
+reached instead of nothing; two rows for one attempt would double-count the file in every
+total on the Space screen.
+
+**`predictor`** is what makes the second night on a phone cheaper than the first. A family's
+running mean and variance, keyed including the *output* codec — AV1 reaches the same quality
+at about two thirds of HEVC's bitrate, so a table without it would average the two and
+predict a number wrong for both. `Predictor.learn` does the arithmetic and is already tested;
+this is only its memory between nights.
+
+Nine tests against the shipped schema, including the ones that would catch a silent drop:
+every field the field test is scored on surviving a round trip, a second result folding into
+the same family's mean, two output codecs staying apart, and a job state this build does not
+recognise reading as `FAILED` rather than as a completed replacement.
+
+**This does not make the night pass work.** `NightRun.Step` still has no binding, so nothing
+calls either of these on a device yet. It removes two of the three things that were missing;
+the third is `VideoOptimiseStep` itself, which is the code that parks and replaces originals
+and is being held for review rather than merged alongside the plumbing.
 
 ## Space, and the crankshaft that is missing
 
