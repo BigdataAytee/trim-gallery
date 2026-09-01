@@ -6,6 +6,8 @@ import app.trimgallery.core.model.FaceEmbedding
 import app.trimgallery.core.model.FolderGrant
 import app.trimgallery.core.model.FolderMode
 import app.trimgallery.core.model.GeoPoint
+import app.trimgallery.core.model.Job
+import app.trimgallery.core.model.JobState
 import app.trimgallery.core.model.Label
 import app.trimgallery.core.model.MediaItem
 import app.trimgallery.core.model.MediaKind
@@ -14,6 +16,7 @@ import app.trimgallery.core.model.MediaStatus
 import app.trimgallery.core.model.RunSession
 import app.trimgallery.core.model.Settings
 import app.trimgallery.core.model.SkipReason
+import app.trimgallery.core.model.StopReason
 import app.trimgallery.core.model.TextBlock
 import app.trimgallery.core.model.UndoEntry
 import app.trimgallery.core.model.UndoLocation
@@ -211,6 +214,56 @@ class TrimRepository(
                 id = item.id,
             )
         }
+    }
+
+    // --------------------------------------------------------------- Space screen
+
+    /**
+     * Every recorded night, newest first.
+     *
+     * `SpaceScreen.state` sums these itself rather than being handed totals, so that the
+     * screen's arithmetic is the tested arithmetic and this method stays a plain read.
+     */
+    suspend fun runSessions(): List<RunSession> = withContext(io) {
+        queries.selectRunSessions(::toRunSession).executeAsList()
+    }
+
+    /** The night in progress, or null. A row with no finish time is one still running. */
+    suspend fun currentRunSession(): RunSession? = withContext(io) {
+        queries.lastRunSession(::toRunSession).executeAsOneOrNull()?.takeIf { it.finishedAt == null }
+    }
+
+    /** How many files are still waiting, which is the progress ring's denominator. */
+    suspend fun candidateCount(): Int = withContext(io) {
+        queries.countCandidates().executeAsOne().toInt()
+    }
+
+    /** What the whole queue is expected to give back. A projection, and labelled as one. */
+    suspend fun projectedSaving(): Long = withContext(io) {
+        queries.sumCandidateSaving().executeAsOne().bytes
+    }
+
+    /**
+     * The changes History lists, newest first.
+     *
+     * **Nothing writes a `job` row yet.** The table has no INSERT anywhere in this project:
+     * `VideoOptimiseStep` — the assembly that would record one — is the piece
+     * `AndroidEngineModule` still has a comment in place of. So this returns an empty list
+     * on every device today, and the screen says so rather than showing a blank list that
+     * reads as a bug. Recorded in PROJECT.md.
+     */
+    suspend fun succeededJobs(limit: Long = HISTORY_LIMIT): List<Job> = withContext(io) {
+        queries.selectSucceededJobs(limit, ::toJob).executeAsList()
+    }
+
+    /** Every undo row, whatever its state, keyed by the media it belongs to. */
+    suspend fun undoByMedia(): Map<String, UndoEntry> = withContext(io) {
+        queries.selectAllUndo(::toUndoEntry).executeAsList().associateBy { it.mediaId }
+    }
+
+    /** Everything triage declined to touch, for the Skipped list. */
+    suspend fun skipped(): List<MediaItem> = withContext(io) {
+        queries.selectByStatus(MediaStatus.SKIPPED.name, ::toMediaItem).executeAsList()
     }
 
     // ------------------------------------------------------------- folder grants
@@ -421,6 +474,57 @@ class TrimRepository(
     // ------------------------------------------------------------------ mapping
 
     @Suppress("LongParameterList")
+    private fun toRunSession(
+        id: String,
+        startedAt: Long,
+        finishedAt: Long?,
+        stopReason: String?,
+        filesDone: Long,
+        filesSkipped: Long,
+        filesFailed: Long,
+        bytesFreed: Long,
+        minutesWorked: Double,
+        energyWh: Double,
+        thermalPauses: Long,
+        filesIndexed: Long,
+        duplicatesFound: Long,
+        seen: Long,
+    ) = RunSession(
+        id = id,
+        startedAt = startedAt,
+        finishedAt = finishedAt,
+        // Total, like the folder mode: a stop reason this build does not know must not
+        // throw on the way into the one screen that explains what the night did.
+        stopReason = stopReason?.let { name -> StopReason.entries.firstOrNull { it.name == name } },
+        filesDone = filesDone.toInt(),
+        filesSkipped = filesSkipped.toInt(),
+        filesFailed = filesFailed.toInt(),
+        bytesFreed = bytesFreed,
+        minutesWorked = minutesWorked,
+        energyWh = energyWh,
+        thermalPauses = thermalPauses.toInt(),
+        filesIndexed = filesIndexed.toInt(),
+        duplicatesFound = duplicatesFound.toInt(),
+        seen = seen == 1L,
+    )
+
+    /**
+     * The five columns `selectSucceededJobs` asks for.
+     *
+     * `state` is filled in rather than read because the query's WHERE clause already fixed
+     * it, and `History.rows` filters on it: reading a column the query cannot vary would be
+     * a column this mapper claims to depend on and does not.
+     */
+    private fun toJob(id: String, mediaId: String, originalSize: Long?, newSize: Long?, finishedAt: Long?) = Job(
+        id = id,
+        mediaId = mediaId,
+        state = JobState.SUCCEEDED,
+        originalSize = originalSize,
+        newSize = newSize,
+        finishedAt = finishedAt?.let(Instant::fromEpochMilliseconds),
+    )
+
+    @Suppress("LongParameterList")
     private fun toFolderGrant(
         id: String,
         platformRef: String,
@@ -534,6 +638,15 @@ class TrimRepository(
 
     private companion object {
         val HEX = "0123456789abcdef".toCharArray()
+
+        /**
+         * How far back History goes.
+         *
+         * A cap rather than the whole table: a year of nightly runs is tens of thousands of
+         * rows, and a screen nobody scrolls past the first screenful of should not read them
+         * all to draw. The totals above are unaffected — they are summed in SQL.
+         */
+        const val HISTORY_LIMIT = 500L
 
         /** SCHEMA.md `label.source`: which engine produced it. */
         const val SOURCE = "mlkit"

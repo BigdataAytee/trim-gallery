@@ -286,6 +286,18 @@ WHERE status = 'CANDIDATE'
 ORDER BY est_saving DESC
 LIMIT 1;
 
+-- What the whole queue is expected to give back, for the Space screen's projection.
+--
+-- The same `CANDIDATE` predicate `selectCandidatesBySaving` uses, hidden items included:
+-- the locked folder is excluded from the *grid*, not from the work, and a projection that
+-- silently omitted it would under-report what the app can do.
+sumCandidateSaving:
+SELECT COALESCE(SUM(est_saving), 0) AS bytes FROM media_item WHERE status = 'CANDIDATE';
+
+-- How much is still to do, which is the denominator of the progress ring.
+countCandidates:
+SELECT COUNT(*) FROM media_item WHERE status = 'CANDIDATE';
+
 -- The grid. Hidden items never appear anywhere but the locked folder.
 selectGallery:
 SELECT * FROM media_item WHERE (flags & 128) = 0 ORDER BY taken_at DESC;
@@ -351,6 +363,15 @@ VALUES (?, ?, ?, ?, ?, ?, ?, 'ACTIVE', ?);
 
 selectUndoForMedia:
 SELECT * FROM undo_entry WHERE media_id = ? AND state = 'ACTIVE';
+
+-- Every undo row, whatever its state, for the History screen.
+--
+-- Not filtered to ACTIVE like the query above: History has to be able to say "the original
+-- was removed on the 3rd" and "you already restored this", and both of those are rows this
+-- app would otherwise never look at again. An expired entry reported as *absent* would
+-- leave the user guessing whether an original was ever kept.
+selectAllUndo:
+SELECT * FROM undo_entry;
 
 setUndoState:
 UPDATE undo_entry SET state = :state WHERE id = :id;
@@ -420,6 +441,14 @@ WHERE platform = ? AND device = ? AND camera_model = ? AND codec = ? AND output_
 lastRunSession:
 SELECT * FROM run_session ORDER BY started_at DESC LIMIT 1;
 
+-- Every recorded night, for the Space screen.
+--
+-- The totals there are summed from these rows rather than kept as a running counter, for
+-- the same reason the monthly cap is: a counter drifts from what happened the first time a
+-- run is killed mid-write, and a number the user cannot trust is worse than no number.
+selectRunSessions:
+SELECT * FROM run_session ORDER BY started_at DESC;
+
 -- Written after every file (ARCHITECTURE.md § 7). A replace rather than an update so the
 -- first checkpoint of a night creates the row and the rest overwrite it: a night that is
 -- killed between the two would otherwise have nothing to show for itself.
@@ -443,6 +472,18 @@ SELECT COALESCE(SUM(bytes_freed), 0) AS bytes FROM run_session WHERE started_at 
 -- `run_session`, which a Compress now job has none of.
 compressNowsSince:
 SELECT COUNT(*) FROM job WHERE user_initiated = 1 AND started_at >= ?;
+
+-- What the History screen lists: changes that were actually made, newest first.
+--
+-- Only `SUCCEEDED`. A failed or cancelled job belongs on the Skipped screen with its
+-- reason (BUILD.md § 9); listing it here would tell the user something changed when
+-- nothing did.
+-- Five columns rather than `SELECT *`: History reads the two sizes, the finish time and
+-- the two ids, and naming them is what makes the mapper below honest about that. The other
+-- nineteen columns are the field test's, and belong to FieldMetrics.
+selectSucceededJobs:
+SELECT id, media_id, original_size, new_size, finished_at
+FROM job WHERE state = 'SUCCEEDED' ORDER BY finished_at DESC LIMIT :limit;
 
 selectFolderGrants:
 SELECT * FROM folder_grant WHERE enabled = 1;
