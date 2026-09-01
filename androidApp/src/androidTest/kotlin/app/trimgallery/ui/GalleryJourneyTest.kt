@@ -25,7 +25,9 @@ import androidx.compose.ui.test.onAllNodesWithTag
 import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
+import androidx.compose.ui.test.onRoot
 import androidx.compose.ui.test.performClick
+import androidx.compose.ui.test.printToString
 import androidx.core.app.ActivityOptionsCompat
 import androidx.media3.common.Player
 import androidx.media3.common.util.UnstableApi
@@ -291,11 +293,11 @@ class GalleryJourneyTest {
 
     // ------------------------------------------------------------- the waiting
 
-    private fun awaitTag(tag: String) = compose.waitUntil(SCREEN_TIMEOUT_MS) {
+    private fun awaitTag(tag: String) = await("a node tagged '$tag'") {
         compose.onAllNodesWithTag(tag).fetchSemanticsNodes().isNotEmpty()
     }
 
-    private fun awaitText(text: String) = compose.waitUntil(SCREEN_TIMEOUT_MS) {
+    private fun awaitText(text: String) = await("a node reading '$text'") {
         compose.onAllNodesWithText(text).fetchSemanticsNodes().isNotEmpty()
     }
 
@@ -312,8 +314,23 @@ class GalleryJourneyTest {
             if (condition()) return
             Thread.sleep(POLL_MS)
         }
-        fail("timed out after ${SCREEN_TIMEOUT_MS}ms waiting for: $what")
+        fail("timed out after ${SCREEN_TIMEOUT_MS}ms waiting for: $what\n\nOn screen instead:\n${onScreen()}")
     }
+
+    /**
+     * The semantics tree, for the failure message.
+     *
+     * A timeout says only that something never appeared, which is the least useful half of
+     * what happened — the useful half is what appeared instead. An empty grid, a recovery
+     * screen, the first-run invitation and a crashed composition are four very different
+     * bugs and they all reach the assertion as the same silence.
+     *
+     * Wrapped, because a screen this cannot read must not replace the real failure with a
+     * failure about reading the screen.
+     */
+    private fun onScreen(): String = runCatching {
+        compose.onRoot(useUnmergedTree = true).printToString(maxDepth = TREE_DEPTH)
+    }.getOrElse { "could not read the semantics tree: $it" }
 
     private fun playbackState(): Int = onPlayer { it?.playbackState ?: Player.STATE_IDLE }
 
@@ -347,5 +364,8 @@ class GalleryJourneyTest {
          */
         const val SCREEN_TIMEOUT_MS = 30_000L
         const val POLL_MS = 50L
+
+        /** Deep enough to show the grid's tiles, shallow enough to stay readable in a log. */
+        const val TREE_DEPTH = 12
     }
 }
