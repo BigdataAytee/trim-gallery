@@ -78,6 +78,29 @@ class WorkManagerScheduler(private val context: Context) : NightScheduler {
         .setRequiresBatteryNotLow(true)
         .build()
 
+    /**
+     * What WorkManager currently holds for the night pass, for the diagnostics export.
+     *
+     * Deliberately **no times**. `Diagnostics` in `core/domain` bans absolute timestamps
+     * from the export for a reason it states plainly: when the night pass ran says when
+     * somebody sleeps. State and constraints answer "is it scheduled?" without answering
+     * "when is this person unconscious?".
+     */
+    fun status(): NightPassStatus {
+        val infos = runCatching {
+            WorkManager.getInstance(context).getWorkInfosForUniqueWork(NAME).get()
+        }.getOrNull().orEmpty()
+
+        val info = infos.firstOrNull()
+            ?: return NightPassStatus(scheduled = false, state = null, runAttempts = 0)
+
+        return NightPassStatus(
+            scheduled = true,
+            state = info.state.name,
+            runAttempts = info.runAttemptCount,
+        )
+    }
+
     private companion object {
         const val NAME = "trim-night-pass"
         const val TAG = "night"

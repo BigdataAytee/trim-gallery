@@ -19,8 +19,11 @@ import app.trimgallery.core.ui.motion.pressScale
 import app.trimgallery.core.ui.theme.TrimShape
 import app.trimgallery.core.ui.theme.TrimSpacing
 import app.trimgallery.core.ui.theme.TrimTheme
+import app.trimgallery.engine.NightConstraints
 import app.trimgallery.engine.android.CrashReports
 import app.trimgallery.engine.android.DiagnosticsExport
+import app.trimgallery.engine.android.GrantedFolders
+import app.trimgallery.engine.android.WorkManagerScheduler
 import kotlinx.coroutines.launch
 import org.koin.compose.koinInject
 
@@ -40,6 +43,8 @@ fun DiagnosticsButton(
     modifier: Modifier = Modifier,
     crashes: CrashReports = koinInject(),
     export: DiagnosticsExport = koinInject(),
+    folders: GrantedFolders = koinInject(),
+    scheduler: WorkManagerScheduler = koinInject(),
 ) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
@@ -59,7 +64,14 @@ fun DiagnosticsButton(
                 if (sharing) return@pressScale
                 sharing = true
                 scope.launch {
-                    val intent = export.share(crashes.asReport(), fileName = "trim-gallery-crashes.txt")
+                    // The scheduler section first: the commonest question a field report
+                    // has to answer is "is it going to run tonight?", and that is easier to
+                    // read at the top than under ten stack traces.
+                    val report = scheduler.status().lines(
+                        constraints = NightConstraints(),
+                        grantedFolders = folders.grants().size,
+                    ) + "\n" + crashes.asReport()
+                    val intent = export.share(report, fileName = "trim-gallery-diagnostics.txt")
                     // A chooser rather than the last-used target: the file is the user's
                     // and where it goes is their choice, every time.
                     context.startActivity(Intent.createChooser(intent, "Export diagnostics"))

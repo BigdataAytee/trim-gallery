@@ -29,6 +29,7 @@ import app.trimgallery.core.ui.theme.TrimTheme
 import app.trimgallery.engine.LibraryStorage
 import app.trimgallery.engine.android.FolderChoice
 import app.trimgallery.engine.android.GrantedFolders
+import app.trimgallery.engine.android.NightPass
 import app.trimgallery.feature.gallery.GalleryScreen
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.catch
@@ -56,6 +57,7 @@ fun GalleryHost(
     modifier: Modifier = Modifier,
     storage: LibraryStorage = koinInject(),
     folders: GrantedFolders = koinInject(),
+    nightPass: NightPass = koinInject(),
 ) {
     var grants by remember { mutableStateOf(folders.grants()) }
     var items by remember { mutableStateOf(emptyList<MediaItem>()) }
@@ -81,6 +83,11 @@ fun GalleryHost(
                     folders.take(uri)
                     grants = folders.grants()
                     help = HelpState.Hidden
+                    // The first moment the app has anything to work on. Until this call
+                    // existed, granting a folder scheduled nothing: NightScheduler.schedule
+                    // had no caller anywhere in the app, so the night pass had never run on
+                    // any device.
+                    nightPass.sync()
                 }
             }
         }

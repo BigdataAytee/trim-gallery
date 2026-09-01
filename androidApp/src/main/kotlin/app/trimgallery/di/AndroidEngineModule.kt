@@ -33,6 +33,7 @@ import app.trimgallery.engine.android.MediaCodecFactory
 import app.trimgallery.engine.android.MetadataCopierAndroid
 import app.trimgallery.engine.android.MlKitIndexer
 import app.trimgallery.engine.android.NativeQualityScorer
+import app.trimgallery.engine.android.NightPass
 import app.trimgallery.engine.android.NightWorker
 import app.trimgallery.engine.android.OutputProbeAndroid
 import app.trimgallery.engine.android.PhotoCodecAndroid
@@ -83,6 +84,9 @@ val androidEngineModule = module {
     // UI rather than by the pipeline, which is why they sit here and not behind an
     // engine-api port: there is no iOS equivalent to keep in step yet.
     single { CrashReports(androidContext()) }
+
+    // The one caller of NightScheduler.schedule. See NightPass for why it did not exist.
+    single { NightPass(scheduler = get(), folders = get()) }
     single { DiagnosticsExport(androidContext()) }
     single<OutputProbe> { OutputProbeAndroid() }
     single<MetadataCopier> { MetadataCopierAndroid(androidContext()) }
@@ -111,7 +115,12 @@ val androidEngineModule = module {
     // `Guards` is deliberately absent here: it needs the run's own worked-time, so
     // NightWorker builds it per run. Everything a guard decides lives in GuardChain,
     // which is platform-free and unit tested (ARCHITECTURE.md § 15, "Guards composition").
-    single<NightScheduler> { WorkManagerScheduler(androidContext()) }
+    // Bound twice, deliberately. The pipeline depends on the `NightScheduler` port and must
+    // not know what schedules it; the diagnostics export asks the concrete class what
+    // WorkManager currently holds, which is a question the port has no business answering
+    // on iOS. Same instance either way — the second definition resolves the first.
+    single { WorkManagerScheduler(androidContext()) }
+    single<NightScheduler> { get<WorkManagerScheduler>() }
 
     single { NightWorker.RunSessionIds { get<Uuid7>().next(System.currentTimeMillis()) } }
 

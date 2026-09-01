@@ -2460,3 +2460,29 @@ looked like coverage and executed nowhere. The `android` job now runs
 is a pure function over a document id — `Uri` returns null for everything in a plain JVM
 test, so a classifier taking a `Uri` could only ever have been checked on a device.
 
+## The night pass had no caller (1 Sep 2026)
+
+The single most consequential thing found by putting the app on a phone. `NightScheduler`
+was complete and correct since milestone 5, and nothing in the app ever called
+`schedule()`. Every milestone that depended on the night pass running was therefore
+untested end to end on a device, and the symptom — "nothing is ever optimised" — pointed at
+the pipeline, which was fine.
+
+Decisions:
+
+**`NightPass` is the only caller, and it both schedules and cancels.** A component that
+only schedules leaves a revoked grant behind a job that wakes the phone to read nothing.
+
+**It runs on app start, not only on grant.** A periodic work request does not survive a
+reinstall. Someone whose app quietly stopped optimising has no way to know that re-granting
+a folder is the fix, so the app re-asserts the schedule itself. `enqueueUniquePeriodicWork`
+with `KEEP` makes that free: an existing schedule keeps its period.
+
+**The export answers "is it scheduled?" and refuses to answer "when do you sleep?"** State,
+attempt count, granted-folder count and constraint list, and no times at all — the rule
+`Diagnostics` already states for the metrics export, with a test asserting no ten-digit
+number can appear in the section.
+
+**`WorkManagerScheduler` is bound as both itself and the port.** The pipeline must depend
+on `NightScheduler` alone; the diagnostics export needs to ask WorkManager a question that
+has no meaning on iOS. Two definitions, one instance.
