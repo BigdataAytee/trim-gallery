@@ -25,15 +25,22 @@ import app.trimgallery.engine.NightScheduler
 class NightPass(private val scheduler: NightScheduler, private val folders: GrantedFolders) {
 
     /**
-     * Schedules if any folder is granted; cancels if none is.
+     * Schedules if any folder is granted **and** the user has the night pass switched on;
+     * cancels otherwise.
      *
      * The cancel half matters as much as the schedule half: a user who revokes their last
      * grant in system Settings should not leave a job waking the phone every night to
      * discover it has nothing to read.
+     *
+     * @param enabled Home's on/off switch, `Settings.nightPassEnabled`. Passed in rather
+     *   than read here, because this class deliberately has no dependency on the settings
+     *   store — it is called from the application's `onCreate`, where reading a suspending
+     *   store would mean blocking start-up on disk.
+     * @return whether a schedule was left in place.
      */
-    fun sync(constraints: NightConstraints = NightConstraints()): Boolean {
-        val granted = folders.grants().isNotEmpty()
-        if (granted) scheduler.schedule(constraints) else scheduler.cancel()
-        return granted
+    fun sync(constraints: NightConstraints = NightConstraints(), enabled: Boolean = true): Boolean {
+        val shouldRun = enabled && folders.grants().isNotEmpty()
+        if (shouldRun) scheduler.schedule(constraints) else scheduler.cancel()
+        return shouldRun
     }
 }

@@ -2,7 +2,6 @@ package app.trimgallery.feature.settings
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
@@ -10,18 +9,14 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicText
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
-import app.trimgallery.core.model.FolderMode
 import app.trimgallery.core.model.QualityTarget
 import app.trimgallery.core.model.Settings
 import app.trimgallery.core.ui.motion.pressScale
-import app.trimgallery.core.ui.theme.TrimShape
 import app.trimgallery.core.ui.theme.TrimSpacing
 import app.trimgallery.core.ui.theme.TrimTheme
 
@@ -41,12 +36,9 @@ import app.trimgallery.core.ui.theme.TrimTheme
 @Composable
 fun SettingsScreen(
     settings: Settings,
-    folders: List<FolderRow>,
     onQualityTarget: (QualityTarget) -> Unit,
     onStartWhenFull: (Boolean) -> Unit,
     onNightlyCap: (Int) -> Unit,
-    onFolderMode: (FolderRow, FolderMode) -> Unit,
-    onAddFolder: () -> Unit,
     modifier: Modifier = Modifier,
     /** Whatever gets the user back where they came from. Scrolls with the list. */
     header: @Composable () -> Unit = {},
@@ -61,23 +53,6 @@ fun SettingsScreen(
         verticalArrangement = Arrangement.spacedBy(TrimSpacing.INSET_DP.dp),
     ) {
         item { header() }
-
-        item { SectionTitle("Folders") }
-
-        if (folders.isEmpty()) {
-            item {
-                BasicText(
-                    text = "No folders yet. The night pass has nothing to work on until you add one.",
-                    style = TrimTheme.typography.body.copy(color = colors.muted),
-                )
-            }
-        }
-
-        items(folders, key = { it.ref }) { folder ->
-            FolderCard(folder = folder, onMode = { mode -> onFolderMode(folder, mode) })
-        }
-
-        item { TextButton(text = "Add a folder", onClick = onAddFolder) }
 
         item { SectionTitle("Optimising") }
 
@@ -118,85 +93,6 @@ fun SettingsScreen(
         }
 
         item { footer() }
-    }
-}
-
-@Composable
-private fun FolderCard(folder: FolderRow, onMode: (FolderMode) -> Unit) {
-    val colors = TrimTheme.colors
-
-    Column(
-        verticalArrangement = Arrangement.spacedBy(SMALL_GAP_DP.dp),
-        modifier = Modifier
-            .fillMaxWidth()
-            .background(colors.card, RoundedCornerShape(TrimShape.CARD_DP.dp))
-            .padding(TrimSpacing.CARD_PADDING_DP.dp),
-    ) {
-        BasicText(folder.displayName, style = TrimTheme.typography.label.copy(color = colors.text))
-
-        FolderMode.entries.forEach { mode ->
-            ModeRow(
-                mode = mode,
-                selected = folder.mode == mode,
-                offloadTarget = folder.offloadTarget,
-                onSelect = onMode,
-            )
-        }
-    }
-}
-
-@Composable
-private fun ModeRow(mode: FolderMode, selected: Boolean, offloadTarget: String?, onSelect: (FolderMode) -> Unit) {
-    val colors = TrimTheme.colors
-    val available = mode != FolderMode.OFFLOAD || offloadTarget != null
-    val text = when (mode) {
-        FolderMode.KEEP -> "Keep originals" to "Nothing is ever removed. Uses the most space."
-        FolderMode.OFFLOAD ->
-            "Move originals to another drive" to
-                if (offloadTarget != null) {
-                    "Originals are copied to $offloadTarget, then removed from here."
-                } else {
-                    "Needs a second folder on an SD card or USB drive. Add one to use this."
-                }
-        FolderMode.FREE ->
-            "Free the space" to
-                "Originals go to the bin and are deleted for good after the retention period. " +
-                "This is the only setting that loses a file you cannot get back."
-    }
-
-    Row(
-        verticalAlignment = Alignment.Top,
-        horizontalArrangement = Arrangement.spacedBy(SMALL_GAP_DP.dp),
-        modifier = Modifier
-            .fillMaxWidth()
-            .pressScale { if (available) onSelect(mode) }
-            .padding(vertical = SMALL_GAP_DP.dp),
-    ) {
-        Box(
-            modifier = Modifier
-                .padding(top = BULLET_TOP_DP.dp)
-                .background(
-                    if (selected) colors.accent else colors.line,
-                    RoundedCornerShape(BULLET_DP.dp),
-                )
-                .padding(BULLET_DP.dp),
-        )
-        Column {
-            BasicText(
-                text = text.first,
-                style = TrimTheme.typography.body.copy(
-                    color = if (available) colors.text else colors.muted,
-                ),
-            )
-            BasicText(
-                text = text.second,
-                style = TrimTheme.typography.caption.copy(
-                    // The consequence of FREE is warned in the accent the design system
-                    // reserves for it, not buried in the same grey as everything else.
-                    color = if (mode == FolderMode.FREE) colors.warning else colors.muted,
-                ),
-            )
-        }
     }
 }
 
@@ -261,17 +157,15 @@ private fun SectionTitle(text: String) {
 }
 
 @Composable
-private fun TextButton(text: String, onClick: () -> Unit) {
+internal fun TextButton(text: String, onClick: () -> Unit, modifier: Modifier = Modifier) {
     BasicText(
         text = text,
         style = TrimTheme.typography.label.copy(color = TrimTheme.colors.accent),
-        modifier = Modifier.pressScale(onClick).padding(vertical = SMALL_GAP_DP.dp),
+        modifier = modifier.pressScale(onClick).padding(vertical = SMALL_GAP_DP.dp),
     )
 }
 
 private const val SMALL_GAP_DP = 6
-private const val BULLET_DP = 5
-private const val BULLET_TOP_DP = 5
 
 /** BUILD.md § 6 budgets an hour a night; the range either side of it is the useful one. */
 private const val CAP_STEP = 15

@@ -75,6 +75,14 @@ class FolderPicker internal constructor(private val launch: (Uri?) -> Unit, priv
 fun rememberFolderPicker(
     folders: GrantedFolders,
     nightPass: NightPass,
+    /**
+     * Home's on/off switch, read fresh at the moment a grant lands.
+     *
+     * A folder granted while the night pass is switched off must not schedule one: the
+     * switch is the user's standing instruction, and taking a new folder is not them
+     * revoking it.
+     */
+    nightPassEnabled: () -> Boolean = { true },
     onGranted: (List<FolderGrant>) -> Unit,
 ): FolderPicker {
     // Null means one of two things the app cannot tell apart: Android refused the folder
@@ -99,7 +107,7 @@ fun rememberFolderPicker(
                 // existed, granting a folder scheduled nothing: NightScheduler.schedule had
                 // no caller anywhere in the app, so the night pass had never run on any
                 // device.
-                nightPass.sync()
+                nightPass.sync(enabled = nightPassEnabled())
                 onGranted(folders.grants())
             }
         }

@@ -63,6 +63,7 @@ class DataStoreSettings(private val store: DataStore<Preferences>, private val t
     private fun Preferences.toSettings(): Settings {
         val defaults = Settings()
         return Settings(
+            nightPassEnabled = this[Keys.NIGHT_PASS_ENABLED] ?: defaults.nightPassEnabled,
             qualityTarget = enumOr(this[Keys.QUALITY], defaults.qualityTarget, QualityTarget.entries),
             photoFormat = enumOr(this[Keys.PHOTO_FORMAT], defaults.photoFormat, PhotoFormat.entries),
             photoReversible = this[Keys.PHOTO_REVERSIBLE] ?: defaults.photoReversible,
@@ -78,6 +79,7 @@ class DataStoreSettings(private val store: DataStore<Preferences>, private val t
     }
 
     private fun Settings.writeInto(prefs: MutablePreferences) {
+        prefs[Keys.NIGHT_PASS_ENABLED] = nightPassEnabled
         prefs[Keys.QUALITY] = qualityTarget.name
         prefs[Keys.PHOTO_FORMAT] = photoFormat.name
         prefs[Keys.PHOTO_REVERSIBLE] = photoReversible
@@ -111,6 +113,7 @@ class DataStoreSettings(private val store: DataStore<Preferences>, private val t
 
     /** The ARCHITECTURE.md § 12 key list, spelled once. */
     private object Keys {
+        val NIGHT_PASS_ENABLED = booleanPreferencesKey("nightPassEnabled")
         val QUALITY = stringPreferencesKey("qualityTarget")
         val PHOTO_FORMAT = stringPreferencesKey("photoFormat")
         val PHOTO_REVERSIBLE = booleanPreferencesKey("photoReversible")

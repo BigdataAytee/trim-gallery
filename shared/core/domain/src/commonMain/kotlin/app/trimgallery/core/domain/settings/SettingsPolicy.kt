@@ -141,7 +141,8 @@ object SettingsPolicy {
      * WorkManager holds the constraints it was given; changing "start when full" without
      * telling it leaves the phone waiting for a condition the user turned off.
      */
-    fun requiresReschedule(old: Settings, new: Settings): Boolean = old.startWhenFull != new.startWhenFull ||
+    fun requiresReschedule(old: Settings, new: Settings): Boolean = old.nightPassEnabled != new.nightPassEnabled ||
+        old.startWhenFull != new.startWhenFull ||
         old.keepWorkingWhileUsing != new.keepWorkingWhileUsing ||
         old.stopByTime != new.stopByTime
 

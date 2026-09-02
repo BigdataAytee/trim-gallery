@@ -14,9 +14,11 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import app.trimgallery.core.data.TrimRepository
@@ -28,13 +30,17 @@ import app.trimgallery.core.ui.theme.TrimShape
 import app.trimgallery.core.ui.theme.TrimSpacing
 import app.trimgallery.core.ui.theme.TrimTheme
 import app.trimgallery.engine.LibraryStorage
+import app.trimgallery.engine.SettingsStore
 import app.trimgallery.engine.android.CrashReports
 import app.trimgallery.engine.android.GrantedFolders
 import app.trimgallery.engine.android.NightPass
+import app.trimgallery.engine.android.NightPassStatus
 import app.trimgallery.engine.android.StartupGuard
+import app.trimgallery.engine.android.WorkManagerScheduler
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.catch
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import org.koin.compose.koinInject
 
@@ -59,6 +65,7 @@ import org.koin.compose.koinInject
 fun HomeHost(
     modifier: Modifier = Modifier,
     onStartupFailure: () -> Unit = {},
+    onFolders: () -> Unit = {},
     chrome: @Composable BoxScope.() -> Unit = {},
     storage: LibraryStorage = koinInject(),
     repository: TrimRepository = koinInject(),
@@ -66,6 +73,8 @@ fun HomeHost(
     nightPass: NightPass = koinInject(),
     guard: StartupGuard = koinInject(),
     crashes: CrashReports = koinInject(),
+    scheduler: WorkManagerScheduler = koinInject(),
+    store: SettingsStore = koinInject(),
 ) {
     var grants by remember { mutableStateOf(folders.grants()) }
     var items by remember { mutableStateOf(emptyList<MediaItem>()) }
@@ -74,14 +83,31 @@ fun HomeHost(
     // Distinguishes "the database is still opening" from "there is genuinely nothing here",
     // so the first frame is not an empty-state message that is about to be wrong.
     var loaded by remember { mutableStateOf(false) }
+    var freedTotal by remember { mutableStateOf(0L) }
+    val scope = rememberCoroutineScope()
 
-    val picker = rememberFolderPicker(folders, nightPass) { grants = it }
+    // What the night pass is doing, and whether the user has it switched on at all. Both
+    // are read once and re-read when the switch is used: neither changes while this screen
+    // is open unless the user changes it here.
+    var enabled by remember { mutableStateOf(true) }
+    var nextRun by remember { mutableStateOf<String?>(null) }
+
+    LaunchedEffect(Unit) { enabled = store.read().nightPassEnabled }
+    LaunchedEffect(enabled, grants) { nextRun = nextRunLine(scheduler.status()) }
+
+    val picker = rememberFolderPicker(
+        folders = folders,
+        nightPass = nightPass,
+        nightPassEnabled = { enabled },
+    ) { grants = it }
 
     // What is already known, before any folder is walked. This is the whole of the fast
     // start: the rows were written the last time the app ran, and reading them is one
     // indexed query rather than a walk of every granted tree.
     LaunchedEffect(Unit) {
         items = repository.gallery()
+        // Summed from the recorded runs rather than held as a counter: see HomeBody.
+        freedTotal = repository.runSessions().sumOf { it.bytesFreed }
         loaded = true
     }
 
@@ -156,47 +182,127 @@ fun HomeHost(
         }
     }
 
-    Box(modifier.fillMaxSize().background(TrimTheme.colors.page)) {
+    Box(
+        modifier
+            .fillMaxSize()
+            .background(TrimTheme.colors.page)
+            .testTag(HomeTestTags.SCREEN),
+    ) {
         when {
             grants.isEmpty() && loaded -> NoFolderYet { picker.choose() }
-            items.isEmpty() -> ScanState(scanning = scanning, failure = failure) { picker.choose() }
-            else -> LibrarySummary(items = items, scanning = scanning, onChoose = { picker.choose() })
+            else -> HomeBody(
+                items = items,
+                freedTotal = freedTotal,
+                scanning = scanning,
+                failure = failure,
+                enabled = enabled,
+                nextRun = nextRun,
+                onToggle = {
+                    val next = !enabled
+                    enabled = next
+                    scope.launch {
+                        store.update { it.copy(nightPassEnabled = next) }
+                        nightPass.sync(enabled = next)
+                        nextRun = nextRunLine(scheduler.status())
+                    }
+                },
+                onFolders = onFolders,
+                onChoose = { picker.choose() },
+            )
         }
         chrome()
     }
 }
 
 /**
- * What is in the granted folders, in two numbers.
+ * Home, once there is a folder to talk about.
  *
- * The count and the total are the only things this screen can say honestly today. What
- * *could* be saved is a per-file question the probe and the predictor answer, and Big files
- * is the screen that asks it — inventing an estimate here would be the "saves about 200 MB"
- * that turns into 40 MB, on the first screen the user ever sees.
+ * Three facts and one switch. The freed total is summed from recorded runs rather than
+ * kept as a counter, for the reason the Space screen gives: a counter drifts the first time
+ * a run is killed mid-write, and a number the user cannot trust is worse than no number.
+ *
+ * There is no "Find big files" here yet. It is Home's primary action in BUILD.md § 9 and it
+ * arrives with the screen it opens — a button that goes nowhere is the thing this project
+ * has already written down as unforgivable.
  */
 @Composable
-private fun LibrarySummary(items: List<MediaItem>, scanning: Boolean, onChoose: () -> Unit) {
+private fun HomeBody(
+    items: List<MediaItem>,
+    freedTotal: Long,
+    scanning: Boolean,
+    failure: String?,
+    enabled: Boolean,
+    nextRun: String?,
+    onToggle: () -> Unit,
+    onFolders: () -> Unit,
+    onChoose: () -> Unit,
+) {
     val colors = TrimTheme.colors
     Column(
         verticalArrangement = Arrangement.spacedBy(TrimSpacing.INSET_DP.dp),
         modifier = Modifier.fillMaxSize().padding(TrimSpacing.INSET_DP.dp),
     ) {
         BasicText(
-            text = MediaFormatting.bytes(items.sumOf { it.size }),
+            text = if (freedTotal > 0) "Freed ${MediaFormatting.bytes(freedTotal)}" else "Nothing freed yet",
             style = TrimTheme.typography.title.copy(color = colors.text),
+            modifier = Modifier.testTag(HomeTestTags.FREED),
         )
+
         BasicText(
-            text = "${items.size} files in your granted folders" +
-                if (scanning) " · still looking" else "",
+            text = when {
+                items.isEmpty() && scanning -> "Looking through your folders…"
+                failure != null -> "That folder could not be read: $failure"
+                items.isEmpty() -> "Nothing here that this app can work with yet."
+                else -> "${items.size} files, ${MediaFormatting.bytes(items.sumOf { it.size })} in your folders"
+            },
             style = TrimTheme.typography.body.copy(color = colors.muted),
         )
-        Box(modifier = Modifier.pressScale(onChoose)) {
+
+        BasicText(
+            text = when {
+                !enabled -> "Overnight trimming is off."
+                nextRun != null -> nextRun
+                else -> "Nothing scheduled yet."
+            },
+            style = TrimTheme.typography.body.copy(color = colors.muted),
+            modifier = Modifier.testTag(HomeTestTags.NEXT_RUN),
+        )
+
+        BasicText(
+            text = if (enabled) "Turn overnight trimming off" else "Turn overnight trimming on",
+            style = TrimTheme.typography.label.copy(color = colors.accent),
+            modifier = Modifier.pressScale(onToggle).testTag(HomeTestTags.TOGGLE),
+        )
+
+        BasicText(
+            text = "Folders",
+            style = TrimTheme.typography.label.copy(color = colors.accent),
+            modifier = Modifier.pressScale(onFolders).testTag(HomeTestTags.FOLDERS),
+        )
+
+        if (items.isEmpty() && !scanning) {
             BasicText(
-                text = "Add another folder",
+                text = "Choose another folder",
                 style = TrimTheme.typography.label.copy(color = colors.accent),
+                modifier = Modifier.pressScale(onChoose),
             )
         }
     }
+}
+
+/**
+ * What the schedule can honestly be said to be.
+ *
+ * WorkManager gives a window rather than a time, and where in it the run lands is the OS's
+ * business. So this says what is true — that it is scheduled and under what conditions —
+ * rather than a clock time the app would be inventing. Same wording as the Space screen,
+ * because the same fact should not be phrased two ways in one app.
+ */
+private fun nextRunLine(status: NightPassStatus): String? = when {
+    !status.scheduled -> null
+    status.runAttempts > 0 ->
+        "Scheduled, but the last run did not finish. Export diagnostics from Settings has the detail."
+    else -> "Scheduled for tonight, once the phone is charging and idle."
 }
 
 @Composable
@@ -229,36 +335,6 @@ private fun NoFolderYet(onChoose: () -> Unit) {
                 BasicText(
                     text = "Choose folder",
                     style = TrimTheme.typography.label.copy(color = colors.accentOn),
-                )
-            }
-        }
-    }
-}
-
-/**
- * What Home shows while it has nothing to show: scanning, or a scan that failed, or a
- * granted folder that genuinely holds no media.
- */
-@Composable
-private fun ScanState(scanning: Boolean, failure: String?, onChoose: () -> Unit) {
-    val colors = TrimTheme.colors
-    Column(
-        verticalArrangement = Arrangement.spacedBy(TrimSpacing.INSET_DP.dp),
-        modifier = Modifier.padding(TrimSpacing.INSET_DP.dp),
-    ) {
-        BasicText(
-            text = when {
-                failure != null -> "That folder could not be read: $failure"
-                scanning -> "Looking through your folder…"
-                else -> "Nothing here that this app can work with yet."
-            },
-            style = TrimTheme.typography.body.copy(color = colors.muted),
-        )
-        if (!scanning) {
-            Box(modifier = Modifier.pressScale(onChoose)) {
-                BasicText(
-                    text = "Choose another folder",
-                    style = TrimTheme.typography.label.copy(color = colors.accent),
                 )
             }
         }
