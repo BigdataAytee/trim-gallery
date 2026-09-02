@@ -3,6 +3,7 @@ package app.trimgallery
 import android.app.Application
 import app.trimgallery.core.ui.motion.MotionSpec
 import app.trimgallery.di.androidEngineModule
+import app.trimgallery.engine.SettingsStore
 import app.trimgallery.engine.android.CrashReports
 import app.trimgallery.engine.android.ForegroundWatcher
 import app.trimgallery.engine.android.NightPass
@@ -10,6 +11,8 @@ import coil3.ImageLoader
 import coil3.SingletonImageLoader
 import coil3.request.crossfade
 import coil3.video.VideoFrameDecoder
+import kotlinx.coroutines.MainScope
+import kotlinx.coroutines.launch
 import org.koin.android.ext.koin.androidContext
 import org.koin.core.context.startKoin
 
@@ -62,7 +65,15 @@ class TrimGalleryApplication : Application() {
         //
         // After Koin, because it resolves from the graph; KEEP means calling it on every
         // start leaves an existing schedule untouched rather than resetting its period.
-        runCatching { koin?.get<NightPass>()?.sync() }
+        // In a coroutine because the switch lives in a suspending store: reading it on the
+        // main thread would block start-up on disk, and scheduling a beat later costs
+        // nothing — the work is periodic and nightly.
+        MainScope().launch {
+            runCatching {
+                val enabled = koin?.get<SettingsStore>()?.read()?.nightPassEnabled ?: true
+                koin?.get<NightPass>()?.sync(enabled = enabled)
+            }
+        }
 
         // Coil's singleton loader, with the video decoder registered so a video tile shows
         // a frame instead of a blank square (STACK.md names both artifacts).

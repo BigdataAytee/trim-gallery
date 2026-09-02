@@ -3392,3 +3392,38 @@ keyed on a signature ending `...OnInterruptedSinkSink` — one Sink per implemen
 Removing `IndexStep.Sink` changed the key, the suppression stopped matching, and a file that
 had *fewer* functions than before failed the build. Eight further entries named files this
 pivot deleted. Both kinds are now pruned.
+
+## Home and Folders (2 Sep 2026)
+
+**The overnight switch had to become a persisted setting.** There was no record of user
+intent anywhere: `NightPass.sync` schedules if a folder is granted and cancels if none is,
+which is a derivation, not a decision. A switch wired straight to the scheduler would have
+been undone by the next grant — the user turns it off, adds a folder a week later, and the
+phone is working overnight again with nothing on screen saying so. `Settings.nightPassEnabled`
+is the smallest thing that fixes it, and both existing `sync` call sites now pass it.
+
+**Reading it at start-up costs a coroutine.** `TrimGalleryApplication.onCreate` cannot
+suspend and the settings store can, so the sync moved into a `MainScope().launch`. Scheduling
+a beat later costs nothing for work that is periodic and nightly; blocking start-up on disk
+would cost every launch.
+
+**Folders was promoted, not written.** The list, the per-folder modes and the offload-target
+resolution already existed as the first section of `SettingsScreen`; this moved them into
+`FoldersScreen` and left Settings with quality, schedule and cap. What is genuinely new is
+removal — `GrantedFolders.release` for one folder rather than `releaseAll` — and the
+whole-phone entry point.
+
+**The whole-phone explanation is a screen, not a dialog, and it never asks.** BUILD.md § 4
+(b) requires the reason before the request; the journey asserts the *order* rather than the
+wording, because the wording will change and the order must not. Its last paragraph says the
+user does not need the permission, which is the sentence a screen written for the app would
+have left out.
+
+**"Find big files" is deliberately absent.** Home's primary action ships with Big files, in
+one change. This project's own CHANGELOG calls a button that appears to work and does not
+"an unforgivable" thing on the screen where a user decides whether to trust the app; putting
+one on the first screen they see would be worse.
+
+**Coverage, honestly.** Seven journeys against two screens, where the gallery had five
+against six. The suite is not yet what it was, and `assert-journeys-ran.py` names exactly
+what it now requires rather than implying more.

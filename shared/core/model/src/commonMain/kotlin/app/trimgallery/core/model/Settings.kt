@@ -7,6 +7,15 @@ enum class PhotoFormat { JPEG, HEIC }
 
 /** ARCHITECTURE.md § 12. One shared DataStore, identical on both platforms. */
 data class Settings(
+    /**
+     * Whether the night pass may run at all — Home's on/off switch.
+     *
+     * Persisted rather than derived, because it is the user's *intent* and nothing else
+     * records it. `NightPass.sync` schedules when a folder is granted and cancels when the
+     * last one goes, so a switch that only called the scheduler would be turned back on by
+     * the next grant change. A control that silently undoes itself is worse than no control.
+     */
+    val nightPassEnabled: Boolean = true,
     val qualityTarget: QualityTarget = QualityTarget.STANDARD,
     val photoFormat: PhotoFormat = PhotoFormat.JPEG,
     val photoReversible: Boolean = false,

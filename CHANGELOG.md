@@ -1,5 +1,37 @@
 # Changelog
 
+## Home and Folders
+
+The first two of the five screens, and the first emulator journeys since the gallery's went
+with it.
+
+**Home says three things and no more.** What has been freed, what the schedule is, and
+whether there is one at all. The freed total is summed from recorded runs rather than kept
+as a counter, for the reason the Space screen already gives: a counter drifts the first time
+a run is killed mid-write, and a number the user cannot trust is worse than none.
+
+**There is no "Find big files" button yet.** It is Home's primary action in BUILD.md § 9 and
+it arrives in the same change as the screen it opens. A button that goes nowhere is the
+thing this project has already written down as unforgivable.
+
+**The overnight switch is a persisted setting, not a call to the scheduler.**
+`Settings.nightPassEnabled` is new. `NightPass.sync` schedules when a folder is granted and
+cancels when the last one goes, so a switch that only called the scheduler would be turned
+back on by the next grant change — a control that silently undoes itself. Both existing
+callers now pass the stored value: the app's start-up, and the moment a new folder is
+granted.
+
+**Folders is its own screen.** It was the first section of Settings, which was right while
+this was a gallery and a granted folder was setup. In a utility it is the product. It gains
+what it never had: removing a folder, and the "Scan my whole phone" entry — which opens an
+explanation, never the system dialog. The last line of that explanation is the honest one:
+you do not need this, everything works on the folders you add yourself.
+
+**Seven journeys.** Home shows its three facts, the switch changes what it offers, and Home
+reaches Folders; a granted folder lists its modes, Free-the-space is saved, removing a
+folder takes it off the screen *and* out of the grants, and whole-phone access explains
+itself before Android is asked. All on the fixture harness kept back from the deletion.
+
 ## The index comes out
 
 Perceptual hashing, face clustering, search ranking, chat-media review, `IndexStep` and

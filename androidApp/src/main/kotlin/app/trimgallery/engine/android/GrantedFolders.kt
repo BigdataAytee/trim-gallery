@@ -83,6 +83,24 @@ open class GrantedFolders(private val context: Context) {
      * `folder_grant` row for a folder nobody has granted simply never joins, and re-granting
      * the folder restores whatever mode was chosen for it.
      */
+    /**
+     * Gives one folder's permission back.
+     *
+     * The same contract as [releaseAll] and for the same reasons: only the permission goes.
+     * Nothing in the user's folder is touched, nothing can be, and the `folder_grant` row
+     * is left alone so re-granting the folder restores the mode that was chosen for it.
+     *
+     * `open` so an instrumented test can grant and revoke without a system picker.
+     */
+    open fun release(uri: Uri) {
+        runCatching {
+            context.contentResolver.releasePersistableUriPermission(
+                uri,
+                Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_GRANT_WRITE_URI_PERMISSION,
+            )
+        }
+    }
+
     fun releaseAll() {
         context.contentResolver.persistedUriPermissions.forEach { permission ->
             runCatching {

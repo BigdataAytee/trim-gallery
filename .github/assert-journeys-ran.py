@@ -37,15 +37,26 @@ DEVICES = [name for name in os.environ.get("SMOKE_DEVICES", "").split(",") if na
 
 # Suite -> the tests in it that must have run and passed.
 REQUIRED = {
-    # The gallery journeys are gone with the gallery (PROJECT.md, "The pivot"). The five
-    # screens that replace it bring their own journeys as each lands, and this map grows
-    # again with them. Until then this job proves the engine on a device and that the app
-    # launches — less than it proved yesterday, and said plainly rather than papered over.
+    # The gallery journeys went with the gallery (PROJECT.md, "The pivot"). The five screens
+    # that replace it bring their own journeys as each lands, and this map grows with them.
     # The real Activity over the real graph with a folder granted, which is what a phone
     # does on every launch after the first and what no test covered until a build shipped
     # that crashed doing it.
     # The decoder the VMAF gate reads through. It can be proved here, unlike the encoder:
     # an ATD image has no hardware encoder but decoding in software is ordinary.
+    # Home and Folders: the first two screens of the utility, and the beginning of putting
+    # back the emulator coverage the gallery's journeys took with them.
+    "app.trimgallery.ui.HomeJourneyTest": [
+        "homeSaysWhatWasFreedAndWhenTheNextRunIs",
+        "theOvernightSwitchChangesWhatHomeOffers",
+        "homeOpensFolders",
+    ],
+    "app.trimgallery.ui.FoldersJourneyTest": [
+        "aGrantedFolderIsListedWithItsModes",
+        "choosingFreeSpaceIsSaved",
+        "removingAFolderTakesItOffTheScreen",
+        "wholePhoneAccessExplainsItselfFirst",
+    ],
     "app.trimgallery.engine.android.YuvSourceAndroidTest": [
         "decodesRealFramesAtTheRequestedWidth",
         "thePlanesAreExactlyTheSizeTheMetricsWillReadThemAs",

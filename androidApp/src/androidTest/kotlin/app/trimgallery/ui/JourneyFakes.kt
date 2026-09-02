@@ -41,6 +41,11 @@ internal class FakeGrantedFolders(context: Context, initial: List<FolderGrant> =
 
     override fun grants(): List<FolderGrant> = granted
 
+    /** Gives the grant back, as releasing the persisted permission would. */
+    override fun release(uri: Uri) {
+        granted = granted.filterNot { it.platformRef.value == uri.toString() }
+    }
+
     /** As the real one does: the tree URI is both the grant's id and its platform ref. */
     override fun take(uri: Uri) {
         granted = granted + FolderGrant(
