@@ -1,5 +1,31 @@
 # Changelog
 
+## This is not a gallery any more
+
+Trim becomes a background file-trimming utility with a minimal UI. People already have a
+gallery; what nobody else offers is a verified visually-lossless on-device encoder that
+keeps the original recoverable. That is what this app is now, and the user's own gallery
+becomes its front end through a share-sheet entry.
+
+**Nothing in the engine changes.** The optimise pipeline, probe and search, the predictor,
+safe replace, the undo bin and offload, the verify gate and its native metrics, the night
+scheduler and every guard, triage and the skip list, and the photo path are untouched, along
+with every test and build guard that holds them in place.
+
+**Five screens replace the gallery**: Home, Big files, Folders, History, Settings — plus a
+share-sheet target that trims one video and hands back a new file, never replacing the
+sender's copy, because a `content://` URI from another app cannot be safely replaced.
+
+**Big files reports what it cannot trim, and why** — already efficient, HDR, Motion Photo,
+RAW, document, APK — so a scan that compresses nothing still tells the user where their
+storage went. The reasons come from the skip list that already existed.
+
+**Access is two levels and the first one is the whole product.** SAF grants alone run every
+screen. Whole-phone scan sits behind an explicit "Scan my whole phone", needs a Play
+file-management declaration, and may be rejected; nothing depends on it.
+
+This change is documents only: BUILD.md, PRD.md and USER_JOURNEY.md rewritten to match, and
+the pivot with its reasoning recorded in PROJECT.md. No code moves until the next change.
 ## The gallery is gone
 
 `shared/feature/gallery` and the four empty feature shells beside it are deleted, along

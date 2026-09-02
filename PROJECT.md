@@ -3229,6 +3229,72 @@ regression at API 36. The untested hypothesis is that the player crash above too
 process with it and this test ran against the wreckage; the next run says whether that is
 true. It is recorded as unexplained rather than assumed fixed.
 
+## The pivot: this is not a gallery (2 Sep 2026)
+
+**Decided by the owner, 2 Sep 2026, and recorded here because it invalidates a third of the
+work in this repository.** Trim becomes a background file-trimming utility with a minimal
+UI. The gallery is deleted.
+
+**The reason.** People already have a gallery, usually the one the phone shipped with, and
+they did not ask for another. Every hour spent on the grid, the viewer, the hero transition,
+the editor, search, people, memories and the map was an hour spent competing for a place the
+user had already filled — while the thing nobody else offers, a verified visually-lossless
+on-device encoder with a recoverable original, sat behind it. The last four field reports
+were all about the gallery crashing, not about the engine, which is a fair summary of where
+the risk was concentrated and what it was buying.
+
+**"Agent" means the background worker.** `NightWorker` under WorkManager. No model, no
+inference, no network. BUILD.md § 2 rule 8 is unchanged: no `INTERNET` permission in the
+manifest, ever, stated in the UI as a feature.
+
+**What survives, entirely untouched.** The optimise engine, the probe and setting search,
+the predictor, the codec ladder, safe replace, the undo bin and offload, metadata copying,
+the verify gate and its native metrics, the night scheduler and every guard, triage and the
+skip list, the photo path, the Room schema, all build guards, and the whole test suite that
+proves them. That is the product; it always was.
+
+**What is deleted outright:** the gallery grid, tile, viewer, hero transition and its
+geometry, albums, trash and locked-folder screens, the Coil dependency, the ML Kit indexer
+and the offline basemap reader. Superseded, with no plausible future in a utility.
+
+**What is shelved:** memories, places, the editor, album and locked-folder domain code, and
+`pipeline/index` — perceptual hashing, face clustering and search ranking. Each moves to a
+`shelf/<area>` branch and is deleted from `main`, including its `settings.gradle.kts` entry.
+Recoverable, and out of the build. **Dead code left in a tree is worse than deleted code in
+a branch**, because it still compiles, still runs in CI, still gets refactored by anyone
+touching a shared type, and still has to be read by the next person deciding what matters.
+
+**Duplicates and chat-media review go with the index, and that is a consequence rather than
+an instruction.** Both are built on perceptual and exact hashing, and neither was named in
+the five screens. They are shelved on the same branch and can come back with it. Flagged to
+the owner rather than assumed.
+
+**`core/domain/trash` is kept, and only its screen is shelved.** It backs the undo window
+that History depends on, not just the Recently-deleted screen that is going. The two were
+easy to confuse and losing the first would have broken restore.
+
+**The name.** The user-visible label becomes "Trim". The package id stays `app.trimgallery`
+— changing it makes a different app to Play and to every installed copy, for no benefit
+beyond tidiness. Decided by the owner.
+
+**The share-sheet entry never replaces the sender's file.** A video arriving via
+`ACTION_SEND` is a `content://` URI owned by another app; there is no atomic replace to be
+had over someone else's store, so § 2 rule 3's guarantee cannot be honoured for it. The
+share path produces a new file and hands it back, and the screen says so. This is the only
+path in the app where a trim yields a copy instead of a replacement.
+
+**Whole-phone scan may never ship.** `MANAGE_EXTERNAL_STORAGE` needs a file-management
+declaration in the Play Console, is reviewed strictly, and **can be rejected**. It is
+therefore additive by construction: SAF grants are the whole product, every screen works on
+them alone, and nothing may degrade or advertise itself as incomplete without All files
+access. If the declaration is refused, v1 is unaffected.
+
+**The cost of the pivot, stated plainly.** Deleting the gallery deletes `GalleryJourneyTest`
+and `TapCrashReproductionTest`, which are today the only emulator coverage this app has. The
+new screens bring their own journeys as they land, one per pull request, but there is a
+window in between where the net is thinner than it is now. Accepted knowingly rather than
+discovered later.
+
 ## Deleting the gallery (2 Sep 2026)
 
 **One shelf branch, not six.** The plan called for `shelf/<area>` branches. A git branch
