@@ -1,7 +1,6 @@
 package app.trimgallery.ui
 
 import android.content.Context
-import androidx.compose.ui.semantics.SemanticsProperties
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.compose.ui.test.onAllNodesWithTag
 import androidx.compose.ui.test.onAllNodesWithText
@@ -12,11 +11,14 @@ import androidx.compose.ui.test.printToString
 import androidx.test.core.app.ApplicationProvider
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import app.trimgallery.core.data.TrimRepository
+import app.trimgallery.core.model.Settings
 import app.trimgallery.engine.LibraryStorage
+import app.trimgallery.engine.SettingsStore
 import app.trimgallery.engine.android.CrashReports
 import app.trimgallery.engine.android.GrantedFolders
 import app.trimgallery.engine.android.StartupGuard
 import app.trimgallery.feature.settings.SettingsTestTags
+import kotlinx.coroutines.runBlocking
 import org.junit.Assert.fail
 import org.junit.Rule
 import org.junit.Test
@@ -50,6 +52,11 @@ class SettingsJourneyTest {
                     declare<GrantedFolders>(FakeGrantedFolders(app, listOf(journeyGrant())))
                     declare<LibraryStorage>(FakeLibrary(listOf(journeyPhoto(app), journeyVideo(app))))
                     declare<TrimRepository>(inMemoryRepository(app))
+                    // The settings store is the real DataStore and it is a file on the
+                    // device, so it outlives this test and every other one in the run. This
+                    // test asserts the values on screen rather than a change from whatever
+                    // was there, so it starts from the defaults a new install has.
+                    runBlocking { get<SettingsStore>().update { Settings() } }
                 }
                 base.evaluate()
             }
@@ -70,19 +77,22 @@ class SettingsJourneyTest {
     fun keepOriginalsForCanBeChanged() {
         openSettings()
         awaitTag(SettingsTestTags.RETENTION, "the retention control")
-        val before = retentionLabel()
+        // The stored default, on screen. Asserted rather than read back into a variable:
+        // the value the control starts at is part of what this test is pinning, and reading
+        // a node's text out of its semantics configuration needs API that the rest of this
+        // suite does not use.
+        awaitText(startingLabel(), "the retention value a new install starts at")
 
         compose.onNodeWithTag(SettingsTestTags.RETENTION_MORE).performClick()
 
-        val deadline = System.currentTimeMillis() + TIMEOUT_MS
-        while (System.currentTimeMillis() < deadline && retentionLabel() == before) {
-            compose.waitForIdle()
-            Thread.sleep(POLL_MS)
-        }
-        if (retentionLabel() == before) {
-            fail("retention did not change from '$before'\n${compose.onRoot().printToString()}")
-        }
+        awaitText(steppedLabel(), "the retention value after one step up")
     }
+
+    /** What the control reads before it is touched: `Settings.DEFAULT_RETENTION_DAYS`. */
+    private fun startingLabel() = "${Settings.DEFAULT_RETENTION_DAYS} days"
+
+    /** And after one tap on `+`, which is what proves the tap reached the stored value. */
+    private fun steppedLabel() = "${Settings.DEFAULT_RETENTION_DAYS + RETENTION_STEP} days"
 
     /** Which build this is — the question every field report so far has turned on. */
     @Test
@@ -90,16 +100,6 @@ class SettingsJourneyTest {
         openSettings()
         awaitTag(SettingsTestTags.ABOUT, "the build identity")
     }
-
-    private fun retentionLabel(): String = compose.onAllNodesWithTag(SettingsTestTags.RETENTION)
-        .fetchSemanticsNodes()
-        .firstOrNull()
-        ?.let { node ->
-            node.config
-                .getOrNull(SemanticsProperties.Text)
-                ?.joinToString { it.text }
-        }
-        .orEmpty()
 
     private fun openSettings() {
         awaitTag(HomeTestTags.SCREEN, "home")
@@ -129,6 +129,8 @@ class SettingsJourneyTest {
     }
 
     private companion object {
+        /** Mirrors `RETENTION_STEP` in SettingsScreen, which is private to that file. */
+        const val RETENTION_STEP = 5
         const val TIMEOUT_MS = 20_000L
         const val POLL_MS = 100L
         const val SETTINGS_PILL = "Settings"
