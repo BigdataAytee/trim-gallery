@@ -3339,3 +3339,26 @@ no longer exists. The engine's own decode path is `MediaCodec` through `YuvSourc
 which passed on both devices in every one of these runs, so the evidence points away from a
 platform decoder bug. That is an argument, not a proof. If the share-sheet trim or any new
 video journey shows a negative buffer index at API 36, this entry is where to start.
+
+## Shelving what the gallery carried (2 Sep 2026)
+
+**`core/ui/motion` is not gallery code with some exceptions; it is shared code with one
+gallery piece in it.** `pressScale` drives every pressable surface in the app,
+`ProgressRing` is the Space screen's and the Optimise sheet's, and `TilePhase` backs the
+breathing modifier. Only `HeroGeometry`, `MotionSpec.Hero` and `MotionSpec.GridZoomMotion`
+described the grid-to-viewer transition. Reading the directory name and deleting the folder
+would have cost three working things.
+
+**A test that loses its subject is either deleted or re-anchored, never left asserting
+nothing.** Three `MotionSpecTest` cases described the hero and the grid and went with them.
+The fourth compared `Sheet.DELAY_MS` against `Hero.OPEN_MS`, which was defined as
+`ReducedMotion.DURATION_MS`; it now compares against that constant and still asserts what it
+was written for. Quietly weakening it to `assertTrue(true)` would have been the other thing.
+
+**The index pipeline is held back for its own change.** Perceptual hashing, face clustering,
+search ranking and chat-media review served screens that no longer exist, so they should go.
+But `TrimRepository` implements `IndexStep.Sink` — the removal changes a supertype on the
+data layer, deletes the `indexed()` write path and its hash packing, and leaves Room columns
+that need a decision rather than a deletion. That is surgery on the part of the system this
+pivot promised not to disturb, and it is isolated so that a failure in it cannot be confused
+with the shelving above. `MlKitIndexer` and the `Indexer` binding go with it.

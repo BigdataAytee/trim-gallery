@@ -1,5 +1,29 @@
 # Changelog
 
+## Shelving what the gallery carried
+
+The pieces that existed only to serve the gallery, out of the build: `core/ui/grid` (date
+sections, fast scroll, pinch zoom), `HeroGeometry` with `MotionSpec.Hero` and
+`GridZoomMotion`, the `album`, `memories`, `places`, `edit` and `lock` domain packages, and
+the offline basemap reader. All of it is on `shelf/pre-pivot` at `90895cf`.
+
+**`core/ui/motion` survives, minus the hero.** `pressScale` is used by `TrimApp`, and
+`ProgressRing` by both the Space screen and the Optimise sheet. Deleting the folder would
+have taken three working things with the one that had to go.
+
+**`MotionSpecTest` lost three assertions and kept a fourth by re-anchoring it.** The hero
+spring, the grid gutters and the overshoot check went with what they described. "The sheet
+starts after the opening move but finishes with it in view" compared against
+`Hero.OPEN_MS`, which was `ReducedMotion.DURATION_MS` — so it now compares against that
+directly and still asserts the thing it was written to assert.
+
+**The index pipeline is not in this change, deliberately.** Perceptual hashing, face
+clustering and search ranking served the deleted screens and should go, but `TrimRepository`
+*implements* `IndexStep.Sink`: removing them changes a supertype on the data layer, the
+`indexed()` write path, the hash packing and Room columns. That is engine surgery, not
+shelving, and it gets its own change for the same reason the startup wiring did — so that a
+failure in it is unambiguous.
+
 ## This is not a gallery any more
 
 Trim becomes a background file-trimming utility with a minimal UI. People already have a
