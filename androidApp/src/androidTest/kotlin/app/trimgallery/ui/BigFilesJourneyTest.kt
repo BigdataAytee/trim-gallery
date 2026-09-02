@@ -40,8 +40,9 @@ import org.koin.core.context.GlobalContext
  * writes its own verdicts to the in-memory repository, so what this asserts is the actual
  * decision path the night pass uses — a big H.264 video becomes a candidate with an
  * estimate, a tiny file is skipped as too small — rather than a screen fed prepared data.
- * Only the bytes are fake, and the Triager never reads bytes: it reads size, mime and the
- * container facts, which is why stubbing the reader costs nothing here.
+ * Only the bytes are fake. The Triager never reads bytes — it reads size, mime and the
+ * facts the container reader hands back — so the reader here returns the header each file
+ * would have had, and every rule downstream of it is the real one.
  *
  * The encode itself is still not exercised. The emulator has no hardware encoder and
  * BUILD.md § 2 rule 2 forbids the software one, so what a tap on Trim proves is that the
@@ -57,8 +58,8 @@ class BigFilesJourneyTest {
     /** Big enough, and in a codec the Triager knows it can beat. */
     private val big = videoItem(id = "big-video", name = "holiday.mp4", size = 400L * 1024 * 1024)
 
-    /** Under any threshold worth spending a battery on: the Triager should decline it. */
-    private val tiny = videoItem(id = "tiny-video", name = "clip.mp4", size = 12L * 1024)
+    /** Half a second long, which is what "too small" means for a video: no probe pays for it. */
+    private val tiny = videoItem(id = "tiny-video", name = TINY_NAME, size = 12L * 1024)
 
     private val compose = createAndroidComposeRule<MainActivity>()
 
@@ -77,7 +78,7 @@ class BigFilesJourneyTest {
                     declare(
                         TriageStep(
                             storage = storage,
-                            containers = NoContainerFacts,
+                            containers = JourneyContainers,
                             sink = repository,
                             nowMs = { System.currentTimeMillis() },
                         ),
@@ -163,14 +164,28 @@ class BigFilesJourneyTest {
     )
 
     /**
-     * A reader that parses nothing.
+     * The header these files would have had, if they had bytes.
      *
-     * Triage falls back to the item as scanned when the container cannot be read, which is
-     * exactly the state these fixtures are in: they have no bytes to parse. The size, the
-     * mime and the codec are what the verdict turns on, and those are declared.
+     * It has to be a reader rather than fields on the `MediaItem`, because that is where the
+     * facts come from in production: a SAF cursor yields name, size, mtime and mime and
+     * nothing else, and `TriageStep.enrich` folds the container's answer on top. A reader
+     * that returned null would leave both files with no duration and no bitrate, and
+     * `Triager.triageVideo` skips those as `UNSUPPORTED_CODEC` before it looks at anything
+     * else — every file the same verdict, which is not a decision path worth asserting.
+     *
+     * So each file gets the header its name implies: a long H.264 holiday video, and a
+     * half-second clip. **Duration, not size, is what makes a video too small** — a probe
+     * cycle on a one-second file costs more than it can ever return.
      */
-    private object NoContainerFacts : ContainerReader {
-        override suspend fun read(ref: MediaRef): ContainerFacts? = null
+    private object JourneyContainers : ContainerReader {
+        override suspend fun read(ref: MediaRef): ContainerFacts = ContainerFacts(
+            codec = "avc",
+            width = WIDTH,
+            height = HEIGHT,
+            fps = FPS,
+            bitrate = BITRATE,
+            durationMs = if (ref.value.endsWith(TINY_NAME)) TINY_DURATION_MS else BIG_DURATION_MS,
+        )
     }
 
     private companion object {
@@ -179,5 +194,13 @@ class BigFilesJourneyTest {
         const val WIDTH = 1920
         const val HEIGHT = 1080
         const val FPS = 30.0
+
+        /** 20 Mbps at 1080p: comfortably a candidate, and typical of a phone camera. */
+        const val BITRATE = 20_000_000L
+        const val BIG_DURATION_MS = 300_000L
+
+        /** Under `Triager.MIN_VIDEO_DURATION_MS`, which is what TOO_SMALL means for video. */
+        const val TINY_DURATION_MS = 500L
+        const val TINY_NAME = "clip.mp4"
     }
 }
