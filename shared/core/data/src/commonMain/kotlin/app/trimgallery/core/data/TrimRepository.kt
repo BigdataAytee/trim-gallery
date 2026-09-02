@@ -2,13 +2,11 @@ package app.trimgallery.core.data
 
 import app.trimgallery.core.data.db.TrimDatabase
 import app.trimgallery.core.domain.billing.Tier
-import app.trimgallery.core.model.FaceEmbedding
 import app.trimgallery.core.model.FolderGrant
 import app.trimgallery.core.model.FolderMode
 import app.trimgallery.core.model.GeoPoint
 import app.trimgallery.core.model.Job
 import app.trimgallery.core.model.JobState
-import app.trimgallery.core.model.Label
 import app.trimgallery.core.model.MediaItem
 import app.trimgallery.core.model.MediaKind
 import app.trimgallery.core.model.MediaRef
@@ -17,14 +15,12 @@ import app.trimgallery.core.model.RunSession
 import app.trimgallery.core.model.Settings
 import app.trimgallery.core.model.SkipReason
 import app.trimgallery.core.model.StopReason
-import app.trimgallery.core.model.TextBlock
 import app.trimgallery.core.model.UndoEntry
 import app.trimgallery.core.model.UndoLocation
 import app.trimgallery.core.model.UndoState
 import app.trimgallery.core.pipeline.LibraryDiff
 import app.trimgallery.core.pipeline.Predictor
 import app.trimgallery.core.pipeline.TriageStep
-import app.trimgallery.core.pipeline.index.IndexStep
 import app.trimgallery.core.pipeline.night.NightFacts
 import app.trimgallery.core.pipeline.night.NightRun
 import app.trimgallery.core.pipeline.replace.OriginalLocator
@@ -65,8 +61,7 @@ class TrimRepository(
     NightRun.Queue,
     NightRun.Checkpoint,
     NightRun.OnInterrupted,
-    TriageStep.Sink,
-    IndexStep.Sink {
+    TriageStep.Sink {
 
     private val queries get() = db.trimDatabaseQueries
 
@@ -577,90 +572,6 @@ class TrimRepository(
             updated_at = nowMs(),
             optimised_at = item.optimisedAt,
         )
-    }
-
-    // -------------------------------------------------------------- IndexStep.Sink
-
-    /*
-     * Every stage replaces rather than appends. A file that changed has new labels, and
-     * rows from the old version would keep it in search results for content it no longer
-     * contains — which reads to the user as the search being broken.
-     */
-
-    override suspend fun labels(item: MediaItem, labels: List<Label>) = withContext(io) {
-        queries.transaction {
-            queries.deleteLabelsFor(item.id)
-            labels.forEach { queries.insertLabel(item.id, it.text, it.confidence.toDouble(), SOURCE) }
-        }
-    }
-
-    override suspend fun faces(item: MediaItem, faces: List<FaceEmbedding>) = withContext(io) {
-        queries.transaction {
-            queries.deleteFacesFor(item.id)
-            faces.forEach { face ->
-                queries.insertFace(
-                    id = newId(),
-                    media_id = item.id,
-                    person_id = null, // clustering assigns this; see FaceClustering
-                    l = face.box.left.toDouble(),
-                    t = face.box.top.toDouble(),
-                    r = face.box.right.toDouble(),
-                    b = face.box.bottom.toDouble(),
-                    embedding = face.vector.toBytes(),
-                    quality = null,
-                )
-            }
-        }
-    }
-
-    override suspend fun text(item: MediaItem, blocks: List<TextBlock>) = withContext(io) {
-        queries.transaction {
-            queries.deleteTextFor(item.id)
-            blocks.forEach { block ->
-                queries.insertTextBlock(
-                    media_id = item.id,
-                    text = block.text,
-                    l = block.box.left.toDouble(),
-                    t = block.box.top.toDouble(),
-                    r = block.box.right.toDouble(),
-                    b = block.box.bottom.toDouble(),
-                    confidence = null,
-                )
-            }
-        }
-    }
-
-    override suspend fun hashes(item: MediaItem, phash: Long?, sha256: String?): Unit = withContext(io) {
-        queries.setHashes(phash = phash, sha256 = sha256?.fromHex(), now = nowMs(), id = item.id)
-    }
-
-    override suspend fun indexed(item: MediaItem): Unit = withContext(io) {
-        queries.setStatus(
-            status = MediaStatus.INDEXED.name,
-            skipReason = null,
-            now = nowMs(),
-            id = item.id,
-        )
-    }
-
-    /**
-     * Float embeddings as little-endian bytes.
-     *
-     * SCHEMA.md sizes the column for float16 and notes the estimate; this stores float32
-     * for now, because halving the precision of the one number people-clustering depends on
-     * is a decision to take with measurements rather than a schema comment. Recorded in
-     * PROJECT.md.
-     */
-    private fun FloatArray.toBytes(): ByteArray {
-        val out = ByteArray(size * 4)
-        forEachIndexed { index, value ->
-            val bits = value.toRawBits()
-            out[index * 4] = (bits and 0xFF).toByte()
-            out[index * 4 + 1] = ((bits shr 8) and 0xFF).toByte()
-            out[index * 4 + 2] = ((bits shr 16) and 0xFF).toByte()
-            out[index * 4 + 3] = ((bits shr 24) and 0xFF).toByte()
-        }
-        return out
     }
 
     // ------------------------------------------------------------------ mapping

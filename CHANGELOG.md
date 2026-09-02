@@ -1,5 +1,36 @@
 # Changelog
 
+## The index comes out
+
+Perceptual hashing, face clustering, search ranking, chat-media review, `IndexStep` and
+`MlKitIndexer` are gone, with the `Indexer` interface and the `Label`, `FaceEmbedding` and
+`TextBlock` model types. They existed to power search, people and duplicates, all of which
+went with the gallery.
+
+**`TrimRepository` no longer implements `IndexStep.Sink`.** The five write methods behind
+it — labels, faces, text, hashes, indexed — and the float-embedding packer they used are
+deleted. `fromHex` stays: another write path uses it.
+
+**Two things were checked before cutting, not after.** `MediaStatus.INDEXED` is *written* by
+the indexer and read by nothing — no triage rule, no query, no screen gated on it, so
+removing the writer changes no behaviour. And `IndexStep` was registered in Koin but never
+reachable from `NightRun`: it was built, bound, and never run, which is the same pattern
+this whole project has been correcting.
+
+**`MediaStatus.INDEXED` is kept even so, and the enum says why.** It is a persisted value:
+rows written by an earlier install still carry the string, and an enum missing the constant
+fails to parse them. Removing it is a migration, not a deletion.
+
+**The index tables stay in the schema, deliberately.** Dropping `label`, `face` and
+`text_block` means a SQLDelight migration against a database that already holds real job
+history and undo entries. An unused table costs nothing; a bad migration costs a user their
+originals. It goes on the next migration that has to happen anyway.
+
+**Stale detekt baseline entries pruned.** Eight suppressions pointed at files deleted across
+this pivot, and one — `TrimRepository`'s function count — was keyed on a signature that
+included `IndexStep.Sink` and stopped matching the moment the supertype went. Dead config is
+the same problem as dead code.
+
 ## Shelving what the gallery carried
 
 The pieces that existed only to serve the gallery, out of the build: `core/ui/grid` (date

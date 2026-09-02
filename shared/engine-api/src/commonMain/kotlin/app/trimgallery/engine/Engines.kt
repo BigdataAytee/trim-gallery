@@ -1,12 +1,9 @@
 package app.trimgallery.engine
 
-import app.trimgallery.core.model.FaceEmbedding
 import app.trimgallery.core.model.FolderGrant
-import app.trimgallery.core.model.Label
 import app.trimgallery.core.model.MediaItem
 import app.trimgallery.core.model.MediaRef
 import app.trimgallery.core.model.Settings
-import app.trimgallery.core.model.TextBlock
 import app.trimgallery.core.model.UndoEntry
 import app.trimgallery.core.model.UndoLocation
 import kotlinx.coroutines.flow.Flow
@@ -146,13 +143,6 @@ interface PhotoCodec {
 
     /** oxipng. Lossless by construction, so BUILD.md § 5 gives it no quality gate. */
     suspend fun pngOptimise(src: ByteArray): ByteArray
-}
-
-/** On-device indexing: ML Kit on Android, Vision on iOS. Nothing leaves the device. */
-interface Indexer {
-    suspend fun labels(ref: MediaRef): List<Label>
-    suspend fun faces(ref: MediaRef): List<FaceEmbedding>
-    suspend fun text(ref: MediaRef): List<TextBlock>
 }
 
 /**

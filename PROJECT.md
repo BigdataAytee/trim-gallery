@@ -3362,3 +3362,33 @@ data layer, deletes the `indexed()` write path and its hash packing, and leaves 
 that need a decision rather than a deletion. That is surgery on the part of the system this
 pivot promised not to disturb, and it is isolated so that a failure in it cannot be confused
 with the shelving above. `MlKitIndexer` and the `Indexer` binding go with it.
+
+## Taking the index out (2 Sep 2026)
+
+**Checked before cutting.** Two facts decided the shape of this change, and both were
+established by reading rather than assumed. `MediaStatus.INDEXED` is written by the indexer
+and read by nothing — no triage rule, no query, no screen — so removing the writer changes
+no behaviour. And `IndexStep` was a Koin `single` that `NightRun` never resolved: bound into
+the graph, never run. The feared entanglement with the night pass did not exist.
+
+**The supertype was the real work.** `TrimRepository` implemented `IndexStep.Sink`, so this
+touched the data layer's declaration and five write paths. Isolating it was worth it for
+exactly one reason: if the engine had broken, the failure would have been unambiguous rather
+than buried in six thousand lines of shelving.
+
+**`MediaStatus.INDEXED` survives its own writer.** It is persisted. Rows from an earlier
+install carry the string `"INDEXED"`, and an enum without the constant fails to parse them.
+The enum now carries a comment saying so, because the next person to notice an unwritten
+value will otherwise delete it.
+
+**The index tables stay in the schema.** Dropping `label`, `face` and `text_block` is a
+SQLDelight migration against a database holding real job history and undo entries. An unused
+table costs nothing. A bad migration costs a user their originals — and this app's whole
+claim is that the original is recoverable. It rides along with the next migration that has
+to happen for another reason.
+
+**Detekt baselines rot silently.** `TrimRepository`'s `TooManyFunctions` suppression was
+keyed on a signature ending `...OnInterruptedSinkSink` — one Sink per implemented interface.
+Removing `IndexStep.Sink` changed the key, the suppression stopped matching, and a file that
+had *fewer* functions than before failed the build. Eight further entries named files this
+pivot deleted. Both kinds are now pruned.
