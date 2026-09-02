@@ -89,6 +89,13 @@ REQUIRED = {
         "theNightPassCanResolveEverythingItRuns",
         "theWholeOptimiseChainResolves",
     ],
+    # Listed for its capability report, which runs anywhere, so that its sibling encode
+    # test shows up in the stood-down line rather than skipping invisibly. A suite absent
+    # from this map is not examined at all, so its skips are not reported either — which
+    # is how "1 skipped" reached a field report with nothing here able to say what it was.
+    "app.trimgallery.engine.android.Milestone1EncodeTest": [
+        "reportsCodecCapabilities",
+    ],
     "app.trimgallery.ui.MainActivityGrantedLaunchTest": [
         "theRealActivityWithAFolderGrantedDrawsTheGrid",
         "theLaunchMarkIsClearedOnceAFrameIsDrawn",
