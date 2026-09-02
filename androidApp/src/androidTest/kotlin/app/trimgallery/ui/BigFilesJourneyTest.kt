@@ -12,7 +12,9 @@ import androidx.test.core.app.ApplicationProvider
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import app.trimgallery.core.data.TrimRepository
 import app.trimgallery.core.model.MediaItem
+import app.trimgallery.core.model.MediaKind
 import app.trimgallery.core.model.MediaRef
+import app.trimgallery.core.model.MediaStatus
 import app.trimgallery.core.pipeline.TriageStep
 import app.trimgallery.engine.ContainerFacts
 import app.trimgallery.engine.ContainerReader
@@ -21,6 +23,7 @@ import app.trimgallery.engine.android.CrashReports
 import app.trimgallery.engine.android.GrantedFolders
 import app.trimgallery.engine.android.StartupGuard
 import app.trimgallery.feature.compress.BigFilesTestTags
+import app.trimgallery.feature.compress.OptimiseTestTags
 import org.junit.Assert.fail
 import org.junit.Rule
 import org.junit.Test
@@ -117,7 +120,7 @@ class BigFilesJourneyTest {
         openBigFiles()
         awaitTag(BigFilesTestTags.trim(big.id), "the trim control")
         compose.onNodeWithTag(BigFilesTestTags.trim(big.id)).performClick()
-        awaitTag(app.trimgallery.feature.compress.OptimiseTestTags.SHEET, "the optimise sheet")
+        awaitTag(OptimiseTestTags.SHEET, "the optimise sheet")
     }
 
     private fun openBigFiles() {
@@ -140,7 +143,7 @@ class BigFilesJourneyTest {
         id = id,
         platformRef = MediaRef("file:///dev/null/$name"),
         name = name,
-        kind = app.trimgallery.core.model.MediaKind.VIDEO,
+        kind = MediaKind.VIDEO,
         codec = "video/avc",
         width = WIDTH,
         height = HEIGHT,
@@ -153,7 +156,7 @@ class BigFilesJourneyTest {
         cameraModel = null,
         phash = null,
         sha256 = null,
-        status = app.trimgallery.core.model.MediaStatus.NEW,
+        status = MediaStatus.NEW,
         mtime = System.currentTimeMillis(),
         folderGrantId = JOURNEY_TREE,
         mime = "video/mp4",
