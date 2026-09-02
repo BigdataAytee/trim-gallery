@@ -423,11 +423,11 @@ class TrimRepository(
     /**
      * The changes History lists, newest first.
      *
-     * **Nothing writes a `job` row yet.** The table has no INSERT anywhere in this project:
-     * `VideoOptimiseStep` — the assembly that would record one — is the piece
-     * `AndroidEngineModule` still has a comment in place of. So this returns an empty list
-     * on every device today, and the screen says so rather than showing a blank list that
-     * reads as a bug. Recorded in PROJECT.md.
+     * Job rows are written now: `OptimiseController` records one before each encode it
+     * starts, and `VideoOptimiseStep` is bound into the night pass. This returned an empty
+     * list on every device for four milestones while both of those were missing, and the
+     * comment saying so outlived the fix — which is its own small lesson about comments
+     * that describe an absence.
      */
     suspend fun succeededJobs(limit: Long = HISTORY_LIMIT): List<Job> = withContext(io) {
         queries.selectSucceededJobs(limit, ::toJob).executeAsList()
@@ -436,6 +436,21 @@ class TrimRepository(
     /** Every undo row, whatever its state, keyed by the media it belongs to. */
     suspend fun undoByMedia(): Map<String, UndoEntry> = withContext(io) {
         queries.selectAllUndo(::toUndoEntry).executeAsList().associateBy { it.mediaId }
+    }
+
+    /**
+     * What triage decided is worth optimising, biggest saving first.
+     *
+     * Sorted here rather than in SQL because the ordering is a property of the screen, not
+     * of the table: Big files leads with the largest saving because that is the row most
+     * worth a tap, and a different screen could reasonably want a different order. The
+     * estimate is the Triager's own projection — the same number the night pass acts on,
+     * not a second guess computed for display.
+     */
+    suspend fun candidates(): List<MediaItem> = withContext(io) {
+        queries.selectByStatus(MediaStatus.CANDIDATE.name, ::toMediaItem)
+            .executeAsList()
+            .sortedByDescending { it.estSaving ?: 0L }
     }
 
     /** Everything triage declined to touch, for the Skipped list. */

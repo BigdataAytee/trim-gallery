@@ -1,5 +1,38 @@
 # Changelog
 
+## Big files
+
+The screen the utility exists for, and Home's "Find big files" now has somewhere to go.
+
+**"Find big files" is `TriageStep.run`, not a second opinion.** Every estimate on the screen
+is the Triager's own projection and every skip reason is its own verdict — the same
+decisions the night pass acts on, written to the same rows. A screen computing its own
+numbers would eventually disagree with the thing that does the work, and the user would be
+right to believe neither.
+
+**Each row says both numbers**, current size and what it could become. One alone is not a
+decision: "380 MB" does not say whether it is worth a tap, and "saves 215 MB" does not say
+what is being risked. The total is worded "could free about", because nothing has been
+encoded or verified at that point.
+
+**"Large but can't be trimmed" is not a consolation prize.** A scan that finds nothing
+compressible still has to say where the storage went, or it wasted the user's time and
+battery. The reasons and their wording come from `SkipList`, which already had them —
+"Already efficient", "RAW files hold the sensor's own data", and the rest — grouped by
+reason, because "HDR video" said forty times is a wall of text hiding the line that mattered.
+
+**Trim runs one file at a time**, through the same `OptimiseController` the long-press flow
+used, so the job row, the daily count and the undo entry all behave as they were already
+tested to. Trim-selected and trim-all need a queue on that controller and land separately.
+
+**Triage is real in the journey.** The step runs over fake files with declared sizes and
+writes its own verdicts, so the suite asserts the actual decision path rather than a screen
+fed prepared data. Only the bytes are fake, and the Triager never reads bytes.
+
+**One stale comment corrected.** `TrimRepository.succeededJobs` still claimed nothing ever
+writes a job row and that `VideoOptimiseStep` was unbound. Both stopped being true two
+milestones ago, and History is about to depend on it.
+
 ## Home and Folders
 
 The first two of the five screens, and the first emulator journeys since the gallery's went

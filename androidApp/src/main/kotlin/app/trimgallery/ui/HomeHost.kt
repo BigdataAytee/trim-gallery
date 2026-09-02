@@ -66,6 +66,7 @@ fun HomeHost(
     modifier: Modifier = Modifier,
     onStartupFailure: () -> Unit = {},
     onFolders: () -> Unit = {},
+    onFindBigFiles: () -> Unit = {},
     chrome: @Composable BoxScope.() -> Unit = {},
     storage: LibraryStorage = koinInject(),
     repository: TrimRepository = koinInject(),
@@ -207,6 +208,7 @@ fun HomeHost(
                     }
                 },
                 onFolders = onFolders,
+                onFindBigFiles = onFindBigFiles,
                 onChoose = { picker.choose() },
             )
         }
@@ -221,9 +223,9 @@ fun HomeHost(
  * kept as a counter, for the reason the Space screen gives: a counter drifts the first time
  * a run is killed mid-write, and a number the user cannot trust is worse than no number.
  *
- * There is no "Find big files" here yet. It is Home's primary action in BUILD.md § 9 and it
- * arrives with the screen it opens — a button that goes nowhere is the thing this project
- * has already written down as unforgivable.
+ * "Find big files" leads, because it is the one thing a person opens this app to do. It was
+ * held back until the screen it opens existed: a button that goes nowhere is the thing this
+ * project has already written down as unforgivable.
  */
 @Composable
 private fun HomeBody(
@@ -235,6 +237,7 @@ private fun HomeBody(
     nextRun: String?,
     onToggle: () -> Unit,
     onFolders: () -> Unit,
+    onFindBigFiles: () -> Unit,
     onChoose: () -> Unit,
 ) {
     val colors = TrimTheme.colors
@@ -266,6 +269,15 @@ private fun HomeBody(
             },
             style = TrimTheme.typography.body.copy(color = colors.muted),
             modifier = Modifier.testTag(HomeTestTags.NEXT_RUN),
+        )
+
+        // The primary action, and it leads because it is the one thing a person opens this
+        // app to do. It arrives now rather than with Home itself because until Big files
+        // existed it would have been a button that goes nowhere.
+        BasicText(
+            text = "Find big files",
+            style = TrimTheme.typography.label.copy(color = colors.accent),
+            modifier = Modifier.pressScale(onFindBigFiles).testTag(HomeTestTags.FIND),
         )
 
         BasicText(

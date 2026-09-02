@@ -3427,3 +3427,40 @@ one on the first screen they see would be worse.
 **Coverage, honestly.** Seven journeys against two screens, where the gallery had five
 against six. The suite is not yet what it was, and `assert-journeys-ran.py` names exactly
 what it now requires rather than implying more.
+
+## Big files (2 Sep 2026)
+
+**The screen runs triage rather than describing files.** "Find big files" calls
+`TriageStep.run` over the granted folders and then reads back what it wrote. That was the
+one design decision worth getting right here: the alternative — a screen that sizes files
+and guesses at savings itself — would have produced a second set of numbers that drifts from
+the ones the night pass acts on, and two disagreeing estimates are worse than none.
+
+**Triage is re-run on every visit.** It reads container headers only for files the library
+diff marked new or changed, so a repeat visit over an unchanged library is cheap, and a
+visit after a weekend of filming is exactly when the numbers should move.
+
+**The estimate is labelled a projection everywhere it appears.** "Could free about" on the
+total, "→ about" on each row. The number is the Triager's factor-based prediction, not a
+probe result; the probe runs during the encode. A "saves 200 MB" that turns into 40 MB costs
+the user's trust in every other number in the app.
+
+**Trim is one file at a time, deliberately.** `OptimiseController` runs a single encode —
+several at once would fight for the one hardware encoder the phone has — and its job-row,
+daily-count and undo behaviour is pinned by five journeys' worth of detail. Trim-selected
+and trim-all need a queue on that controller, and that is its own change rather than a
+rider on this one.
+
+**Two of the reasons in the field report cannot occur yet.** "Document" and "APK" were named
+as things the can't-be-trimmed list should explain. There is no skip reason for either,
+because a SAF-granted media folder does not contain them — the scan never sees a `.pdf` or
+an `.apk`. They become reachable only under whole-phone access, which may never ship
+(BUILD.md § 4). Inventing verdicts nothing can produce would have put two permanently empty
+groups on the screen.
+
+**The journey runs real triage.** Fake files with declared sizes, a container reader that
+parses nothing, and the actual `TriageStep` writing actual verdicts: a 400 MB H.264 video
+becomes a candidate with an estimate, a 12 KB one is skipped as too small. The Triager reads
+size, mime and container facts — never bytes — which is why stubbing the reader costs this
+suite nothing. The encode itself is still a phone test: the emulator has no hardware
+encoder, and rule 2 forbids the software one.
