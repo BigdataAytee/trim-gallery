@@ -2,6 +2,16 @@
 
 Every item you have reported, with the pull request that addressed it and an honest status.
 
+> **The pivot, 2 Sep 2026.** Trim is no longer a gallery — it is a background file-trimming
+> utility with five screens (PROJECT.md, "The pivot"). Items 1–4, 6, 7, 19, 20, 21 and 22
+> below were gallery defects and gallery features; the code they refer to is being deleted,
+> so they are **moot** rather than fixed, and are marked so. Nothing about the engine
+> changed, and the items about it stand exactly as they were.
+>
+> They are kept rather than removed because a status file that quietly drops what it once
+> promised is the drift this file exists to prevent. You reported them; you are owed the
+> answer that the answer is now "this screen is going away".
+
 **Nothing here says "done".** A thing is done when it has passed a UI test on the emulator
 *and* you have confirmed it on your phone. Until both, the most this file will say is
 **"believed fixed"** — code that was written and merged and has never been watched working.
@@ -15,6 +25,7 @@ Keep this current. A status list that drifts is worse than none, because it is b
 | 🟡 | **Believed fixed** | merged, and there is a test — but not both of the above |
 | 🔨 | **In flight** | pull request open, not merged |
 | ⛔ | **Not built** | the code exists; nothing in the app reaches it |
+| ⚰️ | **Moot** | the screen or feature is deleted by the pivot; nothing to fix |
 
 ---
 
