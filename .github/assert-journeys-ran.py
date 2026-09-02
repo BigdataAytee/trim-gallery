@@ -71,6 +71,7 @@ REQUIRED = {
     ],
     "app.trimgallery.ui.SettingsJourneyTest": [
         "keepOriginalsForCanBeChanged",
+        "theCeilingIsExplainedRatherThanOfferedAsADeadControl",
         "settingsSaysWhichBuildThisIs",
     ],
     "app.trimgallery.ui.FoldersJourneyTest": [

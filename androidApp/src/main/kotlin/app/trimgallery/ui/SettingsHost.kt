@@ -14,6 +14,8 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.unit.dp
+import app.trimgallery.core.domain.billing.Entitlements
+import app.trimgallery.core.domain.billing.Tier
 import app.trimgallery.core.ui.motion.pressScale
 import app.trimgallery.core.ui.theme.TrimSpacing
 import app.trimgallery.core.ui.theme.TrimTheme
@@ -38,7 +40,12 @@ import org.koin.compose.koinInject
  * platform, which is what keeps it compiling for iOS.
  */
 @Composable
-fun SettingsHost(onBack: () -> Unit, modifier: Modifier = Modifier, store: SettingsStore = koinInject()) {
+fun SettingsHost(
+    onBack: () -> Unit,
+    modifier: Modifier = Modifier,
+    store: SettingsStore = koinInject(),
+    tier: Tier = koinInject(),
+) {
     val scope = rememberCoroutineScope()
     val colors = TrimTheme.colors
 
@@ -56,6 +63,10 @@ fun SettingsHost(onBack: () -> Unit, modifier: Modifier = Modifier, store: Setti
                 onStartWhenFull = { on -> scope.launch { store.update { it.copy(startWhenFull = on) } } },
                 onNightlyCap = { minutes -> scope.launch { store.update { it.copy(nightlyCapMinutes = minutes) } } },
                 onUndoRetention = { days -> scope.launch { store.update { it.copy(undoRetentionDays = days) } } },
+                // Asked of the same function the store sanitises with, rather than restated
+                // here: `Int.MAX_VALUE` clamps to the ceiling, so the screen's bound and the
+                // store's bound cannot drift apart.
+                retentionMax = Entitlements.retentionDays(tier, Int.MAX_VALUE),
                 modifier = Modifier.fillMaxSize().systemBarsPadding(),
                 header = { BackToHome(onBack) },
                 // The two things here that are Android's rather than the app's, so they

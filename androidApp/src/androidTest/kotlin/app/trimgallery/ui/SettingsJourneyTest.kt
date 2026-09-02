@@ -72,27 +72,49 @@ class SettingsJourneyTest {
      * It decides how long an original survives in the bin under "Free the space", which is
      * the only mode that ever loses a file for good. A stepper that renders but does not
      * change the stored value would be the worst kind of working-looking control.
+     *
+     * Down rather than up, and that is the whole point of the test below: on the free plan
+     * the default *is* the ceiling, so down is the only direction that can move.
      */
     @Test
     fun keepOriginalsForCanBeChanged() {
         openSettings()
         awaitTag(SettingsTestTags.RETENTION, "the retention control")
-        // The stored default, on screen. Asserted rather than read back into a variable:
-        // the value the control starts at is part of what this test is pinning, and reading
-        // a node's text out of its semantics configuration needs API that the rest of this
-        // suite does not use.
         awaitText(startingLabel(), "the retention value a new install starts at")
 
-        compose.onNodeWithTag(SettingsTestTags.RETENTION_MORE).performClick()
+        compose.onNodeWithTag(SettingsTestTags.RETENTION_LESS).performClick()
 
-        awaitText(steppedLabel(), "the retention value after one step up")
+        awaitText(steppedLabel(), "the retention value after one step down")
+    }
+
+    /**
+     * At the plan's ceiling there is no `+`, and a line says why.
+     *
+     * This is the bug the first version of this test found, and it was in the screen rather
+     * than the test: free retention is capped at 30 days, `Settings` defaults to 30 days,
+     * and every write above it was sanitised straight back by `Entitlements.retentionDays`.
+     * The `+` was there, it animated under a finger, and it could never change anything.
+     */
+    @Test
+    fun theCeilingIsExplainedRatherThanOfferedAsADeadControl() {
+        openSettings()
+        awaitText(startingLabel(), "the retention value a new install starts at")
+        awaitTag(SettingsTestTags.RETENTION_CAP, "the line explaining the ceiling")
+
+        val plus = compose.onAllNodesWithTag(SettingsTestTags.RETENTION_MORE).fetchSemanticsNodes()
+        if (plus.isNotEmpty()) {
+            fail(
+                "a step-up control is offered at the plan's ceiling, where it cannot move\n" +
+                    compose.onRoot().printToString(),
+            )
+        }
     }
 
     /** What the control reads before it is touched: `Settings.DEFAULT_RETENTION_DAYS`. */
     private fun startingLabel() = "${Settings.DEFAULT_RETENTION_DAYS} days"
 
-    /** And after one tap on `+`, which is what proves the tap reached the stored value. */
-    private fun steppedLabel() = "${Settings.DEFAULT_RETENTION_DAYS + RETENTION_STEP} days"
+    /** And after one tap on `−`, which is what proves the tap reached the stored value. */
+    private fun steppedLabel() = "${Settings.DEFAULT_RETENTION_DAYS - RETENTION_STEP} days"
 
     /** Which build this is — the question every field report so far has turned on. */
     @Test

@@ -165,6 +165,10 @@ val androidEngineModule = module {
     // The tier is a lambda rather than a value for the same reason: it changes while the
     // app is running, at the moment the purchase completes, and a captured copy would leave
     // a paying user on free-tier settings until the next launch.
+    // The tier itself, bound so a screen can ask what the user is entitled to rather than
+    // assuming. Everything that clamps by tier already goes through `currentTier()`; this is
+    // the same answer, reachable from the UI.
+    single<Tier> { currentTier() }
     single<SettingsStore> { DataStoreSettings(androidContext()) { currentTier() } }
 
     /*
