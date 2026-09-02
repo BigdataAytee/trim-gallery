@@ -3170,3 +3170,27 @@ suite is skipped.
 XL; its Android version has not arrived (the message was cut off twice). If it differs, a
 second managed device at that level joins the smoke matrix and the twenty-tap bar applies to
 both.
+
+## Two emulator API levels (2 Sep 2026)
+
+**API 36 alongside 34, both on the Pixel 6 profile.** The tap crash was found at 34 and the
+phone reporting it is a Pixel 9 Pro XL, which shipped on Android 14 and takes updates
+through 16. The exact version has not reached me, so the matrix brackets the range instead
+of guessing a point in it: 34 and 36 sit either side of 35, and a platform-behaviour
+difference anywhere between them shows up as one device red and the other green. If the
+phone turns out to be on 15, the second device's `apiLevel` is a one-line change.
+
+**The hardware profile stays Pixel 6 on both.** Changing screen size and API level in the
+same step would leave any failure with two candidate causes and no way to separate them.
+Geometry is covered where it belongs — `HeroGeometryTest` walks the whole animation range
+rather than whatever fraction one screen size happens to sample.
+
+**`--continue`, not fail-fast.** A crash present on one API level and absent on the other is
+the single most useful thing this matrix can find, and stopping at the first red device
+would throw that away.
+
+**The results check is per device.** `assert-journeys-ran.py` now takes the device list from
+`SMOKE_DEVICES` and requires every named journey to have run and passed under each one,
+naming the device in the failure line. Discovering devices from the reports on disk was
+rejected: an emulator that never booted would then look like a smaller matrix rather than a
+failure, which is the same class of bug as a green job that ran no tests.

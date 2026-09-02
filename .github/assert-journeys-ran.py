@@ -26,6 +26,15 @@ import xml.etree.ElementTree as ElementTree
 
 RESULTS = pathlib.Path("androidApp/build/outputs/androidTest-results")
 
+"""The devices every journey has to have run on, named rather than discovered.
+
+Discovering them from the reports on disk would make a device whose emulator never booted
+look like a smaller matrix rather than a failure — and the whole point of a second API
+level is that a journey passing on one of them proves nothing about the other. Results are
+written to `.../managedDevice/<variant>/<device>/`, so the device is the directory holding
+the XML."""
+DEVICES = [name for name in os.environ.get("SMOKE_DEVICES", "").split(",") if name.strip()] or ["pixel"]
+
 # Suite -> the tests in it that must have run and passed.
 REQUIRED = {
     "app.trimgallery.ui.GalleryJourneyTest": [
@@ -117,8 +126,17 @@ def main() -> int:
     ]
     required = set(expected)
 
-    ran, bad, stood_down = set(), [], []
+    ran, bad, stood_down = {device: set() for device in DEVICES}, [], []
     for report in reports:
+        # Matched as a whole path segment anywhere in the path, rather than by assuming
+        # which directory level AGP puts the device at. The layout has moved between
+        # versions, and reading it wrongly would mark every journey as not-run — a red
+        # build with a diagnosis pointing at the app instead of at this line. Segment
+        # equality, so `pixel` never matches the `pixelNext` directory.
+        device = next((name for name in DEVICES if name in report.parts), None)
+        if device is None:
+            print(f"(results at {report} belong to no listed device: {', '.join(DEVICES)})")
+            continue
         for case in ElementTree.parse(report).iter("testcase"):
             suite = case.get("classname")
             if suite not in REQUIRED:
@@ -133,13 +151,20 @@ def main() -> int:
                 if case.find("skipped") is not None:
                     stood_down.append(name)
                 continue
-            ran.add(name)
+            ran[device].add(name)
             for outcome in ("failure", "error", "skipped"):
                 node = case.find(outcome)
                 if node is not None:
-                    bad.append((name, outcome, node.get("message", ""), (node.text or "")))
+                    bad.append((f"{device}/{name}", outcome, node.get("message", ""), (node.text or "")))
 
-    missing = [name for name in expected if name not in ran]
+    # Every journey, on every device. "It passed on one of the two API levels" is the
+    # answer this check exists to refuse.
+    missing = [
+        f"{device}/{name}"
+        for device in DEVICES
+        for name in expected
+        if name not in ran[device]
+    ]
     if missing:
         print(f"These journeys did not run at all: {', '.join(missing)}")
     for name, outcome, message, detail in bad:
@@ -154,11 +179,17 @@ def main() -> int:
         _also_append(missing, bad)
         return 1
 
-    print(f"All {len(expected)} screen journeys ran and passed on the device.")
+    print(
+        f"All {len(expected)} screen journeys ran and passed on each of "
+        f"{len(DEVICES)} device(s): {', '.join(DEVICES)}."
+    )
     if stood_down:
         # Not a failure, and not silence either: this is the line that keeps a green tick
         # from being read as "everything was proved here".
-        print(f"Not proved on this machine ({len(stood_down)} stood down): {', '.join(sorted(set(stood_down)))}")
+        # Counted unique: the same test stands down once per device, and "4 stood down"
+        # beside a list of two names reads like something is missing.
+        names = sorted(set(stood_down))
+        print(f"Not proved on this machine ({len(names)} stood down): {', '.join(names)}")
     return 0
 
 

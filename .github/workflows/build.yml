@@ -480,8 +480,13 @@ jobs:
           # nowhere else, so `connectedSmokeAndroidTest` on a real phone builds arm64-v8a
           # alone rather than cross-compiling the whole native tree twice for an
           # architecture that device cannot execute.
-          ./gradlew :androidApp:pixelSmokeAndroidTest \
-            -Ptrimgallery.smoke.x86_64=true \
+          #
+          # Both devices, in one invocation, with --continue so the second still runs when
+          # the first goes red. A crash that only appears on one API level is exactly the
+          # kind this suite exists to find, and stopping at the first failure would hide
+          # which of the two levels has it.
+          ./gradlew :androidApp:pixelSmokeAndroidTest :androidApp:pixelNextSmokeAndroidTest \
+            -Ptrimgallery.smoke.x86_64=true --continue \
             --console=plain --info 2>&1 | tee /tmp/smoke.log
 
       # meson's own log records the exact sanity-check command and its output, which is the
@@ -504,6 +509,10 @@ jobs:
       # So the result XML is read back and each journey must be there, and must have run.
       - name: Prove the screen journeys actually ran
         if: always()
+        # Named here rather than discovered, so a device whose emulator never booted is a
+        # failure rather than a smaller matrix nobody noticed.
+        env:
+          SMOKE_DEVICES: pixel,pixelNext
         run: python3 .github/assert-journeys-ran.py
 
       - uses: actions/upload-artifact@v4

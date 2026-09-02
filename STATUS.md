@@ -53,8 +53,8 @@ Keep this current. A status list that drifts is worse than none, because it is b
 |---|---|---|---|
 | 23 | Make the emulator crash the way the phone does: real photos and videos, real Coil, tap a photo tile, tap a video tile, twenty times each | [#36](https://github.com/BigdataAytee/trim-gallery/pull/36) | 🔨 **reproduced on the first tap of both kinds.** Real `MainActivity`, `content://` documents through a test provider, production `ImageLoader`, 8-megapixel photographs |
 | 24 | Report the root cause with file and line before fixing | [#36](https://github.com/BigdataAytee/trim-gallery/pull/36) | 🔨 `HeroGeometry.lerpRadius` returned a negative corner radius past fraction 1.0 because `OPEN_EASING` overshoots; `HeroViewer` passed it to `RoundedCornerShape`, which throws. Every earlier tap journey ran with `reduceMotion = true`, which never overshoots. Fix: clamp at the source, with three JVM tests |
-| 25 | A second emulator target at my phone's API level | — | ⛔ **waiting on the Android version** of the Pixel 9 Pro XL; the emulator is API 34 |
-| 26 | No build until both tile types survive twenty taps on both API levels | — | 🔨 the twenty-tap suite is required in CI; no build has been sent |
+| 25 | A second emulator target at my phone's API level | [#36](https://github.com/BigdataAytee/trim-gallery/pull/36) | 🔨 **added at API 36**, alongside 34. The exact Android version never arrived, so the matrix brackets what a Pixel 9 Pro XL can run rather than guessing a point in it. Every journey must now pass on **both** levels; the check names which one failed. One line changes it to 35 if you are on Android 15 |
+| 26 | No build until both tile types survive twenty taps on both API levels | [#36](https://github.com/BigdataAytee/trim-gallery/pull/36) | 🔨 the twenty-tap suite is required on both devices; no build has been sent |
 
 ---
 

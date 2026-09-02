@@ -43,6 +43,17 @@ missed. Three JVM tests pin it — the easing must keep overshooting (so nobody 
 flattening the curve), the radius must never go negative past 1.0, and it must still
 interpolate normally inside 0..1.
 
+### Two API levels, and a check that requires both
+
+The emulator was API 34 and the phone the field reports come from is not. A second managed
+device runs the same suite at **API 36**, and CI runs both in one invocation with
+`--continue`, so a failure on one still reports the other rather than hiding it.
+
+The results check counts per device now. A journey has to have run and passed on *every*
+listed device, and the device is named in the failure line, so "it passed on one of the two
+API levels" is an answer the job refuses rather than reports as green. A device whose
+emulator never booted is a failure too, not a quietly smaller matrix.
+
 ### Failures now say what failed
 
 The instrumentation result check appends one line per failed or missing journey to the
