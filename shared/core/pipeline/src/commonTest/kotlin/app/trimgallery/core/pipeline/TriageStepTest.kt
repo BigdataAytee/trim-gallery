@@ -147,6 +147,36 @@ class TriageStepTest {
     }
 
     @Test
+    fun `a stored row nothing has judged yet is triaged even though the diff is quiet`() = runTest {
+        // Home's start-up walk writes the library it finds so the app has a file count
+        // before any triage has run. To the diff those rows are unchanged, so without this
+        // the first pass over a fresh install writes no verdicts at all and "Find big files"
+        // opens on an empty screen.
+        val row = video("a", status = MediaStatus.NEW)
+        val sink = FakeSink(rows = listOf(row))
+        val report = TriageStep(FakeStorage(listOf(row)), FakeContainers(), sink, nowMs = { 1L }).run(listOf(grant))
+
+        assertEquals(listOf(Triple<String, MediaStatus, SkipReason?>("a", MediaStatus.CANDIDATE, null)), sink.verdicts)
+        // Not counted as added: it was already in the database, only never judged.
+        assertEquals(0, report.added)
+        assertEquals(1, report.untriaged)
+    }
+
+    @Test
+    fun `a row that already has a verdict is left alone`() = runTest {
+        // The other half of the rule above: this is what stops every pass re-reading the
+        // header of every file in the library.
+        val row = video("a", status = MediaStatus.CANDIDATE)
+        val containers = FakeContainers()
+        val sink = FakeSink(rows = listOf(row))
+        val report = TriageStep(FakeStorage(listOf(row)), containers, sink, nowMs = { 1L }).run(listOf(grant))
+
+        assertTrue(sink.verdicts.isEmpty())
+        assertTrue(containers.read.isEmpty())
+        assertEquals(0, report.untriaged)
+    }
+
+    @Test
     fun `a deleted file has its row removed`() = runTest {
         val sink = FakeSink(rows = listOf(video("a"), video("b")))
         TriageStep(FakeStorage(listOf(video("a"))), FakeContainers(), sink, nowMs = { 1L }).run(listOf(grant))
@@ -204,7 +234,11 @@ class TriageStepTest {
     fun `the container is read only for files that changed`() = runTest {
         // The scan is one cursor query over thousands of rows; opening every one of those
         // files to read its header would turn a second into a minute on a large library.
-        val unchanged = video("a")
+        //
+        // Stored *with a verdict*, which is what an already-triaged row looks like. A stored
+        // row still at NEW is a row nothing has judged, and that one does get read — see
+        // `a stored row nothing has judged yet is triaged even though the diff is quiet`.
+        val unchanged = video("a", status = MediaStatus.SKIPPED)
         val containers = FakeContainers()
         val sink = FakeSink(rows = listOf(unchanged))
 

@@ -9,6 +9,7 @@ package app.trimgallery.ui
  */
 object HomeTestTags {
     const val SCREEN = "home-screen"
+    const val FIND = "home-find-big-files"
     const val FREED = "home-freed"
     const val NEXT_RUN = "home-next-run"
     const val TOGGLE = "home-toggle"

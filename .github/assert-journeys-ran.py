@@ -51,6 +51,13 @@ REQUIRED = {
         "theOvernightSwitchChangesWhatHomeOffers",
         "homeOpensFolders",
     ],
+    # Big files: the screen the utility exists for. Triage runs for real in this suite —
+    # only the bytes are faked — so what it proves is the decision path the night pass uses.
+    "app.trimgallery.ui.BigFilesJourneyTest": [
+        "findingBigFilesListsTheOnesWorthTrimming",
+        "filesThatCannotBeTrimmedAreListedWithTheirReason",
+        "trimmingAFileOpensItsSheet",
+    ],
     "app.trimgallery.ui.FoldersJourneyTest": [
         "aGrantedFolderIsListedWithItsModes",
         "choosingFreeSpaceIsSaved",
