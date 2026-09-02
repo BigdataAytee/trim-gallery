@@ -122,3 +122,110 @@ internal fun inMemoryRepository(context: Context): TrimRepository {
 
 private const val PHOTO_PX = 64
 private const val JPEG_QUALITY = 90
+
+// ------------------------------------------------------------- a library over content://
+
+/**
+ * The authority `JourneyDocumentsProvider` answers on, declared in the test manifest.
+ *
+ * Every item below is addressed through it, so that the app reads the way it reads on a
+ * phone: through `ContentResolver`, off a provider, with none of the shortcuts a `file://`
+ * path allows.
+ */
+internal const val DOCUMENTS_AUTHORITY = "app.trimgallery.journey.documents"
+
+/** A document URI shaped like SAF's: the tree, then the document under it. */
+internal fun documentUri(name: String): Uri =
+    Uri.parse("content://$DOCUMENTS_AUTHORITY/tree/journey%3ACamera/document/journey%3ACamera%2F$name")
+
+/**
+ * A photograph the size a phone camera writes, served over `content://`.
+ *
+ * `PHOTO_PX` is 64. That is fine for asserting that a tile exists and wrong for asserting
+ * that the viewer survives opening it: a real photograph is eight to fifty megapixels, and
+ * the decode, the bitmap, the memory and the transition all scale with it. This one is
+ * eight megapixels — the smallest size that is honestly "a photo from a phone".
+ *
+ * `width` and `height` are zero, as `SafStorage.scan` leaves them: it reads one cursor per
+ * folder and never opens the file, so on a first run every item is undated *and* unsized
+ * until the container reader gets to it. A test that filled these in would be testing a
+ * library the app never actually sees.
+ */
+internal fun documentPhoto(context: Context, index: Int): MediaItem {
+    val name = "camera-$index.jpg"
+    writeCameraSizedJpeg(context, name, seed = index)
+    return documentItem(
+        id = "document-photo-$index",
+        name = name,
+        kind = MediaKind.PHOTO,
+        mime = "image/jpeg",
+        size = File(context.cacheDir, name).length(),
+        mtime = 10_000L + index,
+    )
+}
+
+/** The golden clip under a camera-like name, served over `content://`. */
+internal fun documentVideo(context: Context, index: Int): MediaItem {
+    val name = "camera-$index.mp4"
+    val source = copyOutOfAssets(context, GOLDEN_CLIP)
+    val copy = File(context.cacheDir, name).apply { source.copyTo(this, overwrite = true) }
+    return documentItem(
+        id = "document-video-$index",
+        name = name,
+        kind = MediaKind.VIDEO,
+        mime = "video/mp4",
+        size = copy.length(),
+        mtime = 20_000L + index,
+    )
+}
+
+@Suppress("LongParameterList")
+private fun documentItem(id: String, name: String, kind: MediaKind, mime: String, size: Long, mtime: Long) = MediaItem(
+    id = id,
+    platformRef = MediaRef(documentUri(name).toString()),
+    name = name,
+    kind = kind,
+    codec = null,
+    width = 0,
+    height = 0,
+    fps = null,
+    bitrate = null,
+    size = size,
+    duration = null,
+    takenAt = null,
+    location = null,
+    cameraModel = null,
+    phash = null,
+    sha256 = null,
+    status = MediaStatus.NEW,
+    mtime = mtime,
+    folderGrantId = JOURNEY_TREE,
+    mime = mime,
+)
+
+/**
+ * An 8-megapixel JPEG with a picture in it.
+ *
+ * RGB_565 rather than ARGB_8888 so the bitmap being encoded is 16 MB rather than 32 in the
+ * test process, and recycled as soon as it is written. A gradient plus a few blocks, so
+ * that the encoder produces a file of realistic size and a decode has real work to do —
+ * a flat colour compresses to almost nothing and decodes in a blink.
+ */
+private fun writeCameraSizedJpeg(context: Context, name: String, seed: Int): File {
+    val bitmap = Bitmap.createBitmap(CAMERA_W, CAMERA_H, Bitmap.Config.RGB_565)
+    val canvas = android.graphics.Canvas(bitmap)
+    val paint = android.graphics.Paint()
+    val band = CAMERA_H / BANDS
+    for (i in 0 until BANDS) {
+        paint.color = Color.rgb((i * 23 + seed * 41) % 256, (i * 71 + seed * 13) % 256, (i * 131) % 256)
+        canvas.drawRect(0f, (i * band).toFloat(), CAMERA_W.toFloat(), ((i + 1) * band).toFloat(), paint)
+    }
+    return File(context.cacheDir, name).apply {
+        outputStream().use { bitmap.compress(Bitmap.CompressFormat.JPEG, JPEG_QUALITY, it) }
+        bitmap.recycle()
+    }
+}
+
+private const val CAMERA_W = 3264
+private const val CAMERA_H = 2448
+private const val BANDS = 24

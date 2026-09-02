@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  The test APK's own manifest, for one thing: a ContentProvider that serves the journey
+  files over `content://`.
+
+  Every fixture until now handed the app `file://` URIs, and `JourneyFixtures` says so in a
+  comment — "that is the one seam". It is not a small seam. A phone's library arrives as SAF
+  document URIs, and everything that reads a picture goes somewhere different for them:
+  Coil picks a different fetcher, `MediaMetadataRetriever` takes a different setDataSource
+  overload, and ExoPlayer builds a different DataSource. A suite that only ever passes
+  `file://` cannot fail the way a phone fails.
+-->
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+
+    <application>
+        <provider
+            android:name="app.trimgallery.ui.JourneyDocumentsProvider"
+            android:authorities="app.trimgallery.journey.documents"
+            android:exported="false"
+            android:grantUriPermissions="true" />
+    </application>
+</manifest>

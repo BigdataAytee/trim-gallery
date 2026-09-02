@@ -1,5 +1,87 @@
 # Changelog
 
+## The tap crash, found where the phone has it
+
+Four builds crashed the moment a picture was tapped, and four builds of tap journeys stayed
+green. This change is the test that made the emulator crash the way the phone does, the stack
+trace it produced, and the one-line fix that trace named.
+
+### What the emulator now does that it never did
+
+`TapCrashReproductionTest` runs the **real `MainActivity`** — not `GalleryHost` in a bare
+`ComponentActivity` — over a folder of nine files served as **`content://` documents** by a
+test-manifest `ContentProvider`, loaded by the **production Coil `ImageLoader`**, with
+eight-megapixel photographs rather than 64-pixel squares. It taps a photo tile, waits for
+the viewer, drags it closed, and does that twenty times; then the same for video tiles. It
+is a required suite: the job fails if either test is missing from the results.
+
+It went red on the **first tap of both kinds**:
+
+```
+java.lang.IllegalArgumentException: Corner size in Px can't be negative(topStart = -0.13895845, topEnd = -0.13895845, bottomEnd = -0.13895845, bottomStart = -0.13895845)!
+    at androidx.compose.foundation.shape.CornerBasedShape.createOutline-Pq9zytI(CornerBasedShape.kt:125)
+```
+
+### The cause
+
+`MotionSpec.Hero.OPEN_EASING` is `Easing(0.2f, 0.9f, 0.25f, 1.1f)` — the second control
+point sits above 1, so the open overshoots on purpose and the image lands with a spring.
+`HeroGeometry.lerpRadius` interpolated from the tile's 4 dp to the viewer's 0 dp with no
+clamp, so for a few frames past fraction 1.0 it returned a negative radius, and
+`HeroViewer` handed that to `RoundedCornerShape`, which throws.
+
+Every earlier tap journey ran `TrimTheme(reduceMotion = true)`, under which `HeroViewer`
+snaps its progress to exactly 1.0 and never overshoots. `MainActivity` reads the system's
+animator scale and gets `false` on any normal phone. That is the whole difference between
+green CI and a crash on every tap.
+
+### The fix
+
+`lerpRadius` clamps at zero, at the source rather than the call site: the frame's width and
+height were already clamped at the call site for the same overshoot and the radius was
+missed. Three JVM tests pin it — the easing must keep overshooting (so nobody "fixes" this by
+flattening the curve), the radius must never go negative past 1.0, and it must still
+interpolate normally inside 0..1.
+
+### The second API level found a bug on its first run
+
+`TilePreview` and `VideoPlayer` both built their ExoPlayer inside `remember` and configured
+it there — during composition, on whatever thread composition happens to be on.
+`ExoPlayer.Builder` takes the current thread's looper, and a thread without one falls back
+to main, so the player expects main while the calls come from a Compose worker:
+
+```
+java.lang.IllegalStateException: Player is accessed on the wrong thread.
+Current thread: 'DefaultDispatcher-worker-4'   Expected thread: 'main'
+    at androidx.media3.exoplayer.ExoPlayerImpl.verifyApplicationThread(ExoPlayerImpl.java:3102)
+    at app.trimgallery.ui.TilePreviewKt.TilePreview(TilePreview.kt:35)
+```
+
+Both now state `setLooper(Looper.getMainLooper())`, configure the player in a
+`LaunchedEffect` on `Dispatchers.Main`, and post `release()` to main rather than calling it
+from the applier thread. Compose makes no promise about the composing thread; Media3 asks
+that every access be on one thread. Saying which one is the whole fix.
+
+It passed on API 34 and failed on API 36, which is the argument for the second device.
+
+### Two API levels, and a check that requires both
+
+The emulator was API 34 and the phone the field reports come from is not. A second managed
+device runs the same suite at **API 36**, and CI runs both in one invocation with
+`--continue`, so a failure on one still reports the other rather than hiding it.
+
+The results check counts per device now. A journey has to have run and passed on *every*
+listed device, and the device is named in the failure line, so "it passed on one of the two
+API levels" is an answer the job refuses rather than reports as green. A device whose
+emulator never booted is a failure too, not a quietly smaller matrix.
+
+### Failures now say what failed
+
+The instrumentation result check appends one line per failed or missing journey to the
+smoke log, and the failure summary hoists those lines into the head of the job log and into
+`::error::` annotations. Four CI cycles were spent reading around a log window before this;
+that does not happen again.
+
 ## Optimise, on one file, because you asked
 
 The first place a person can make this app change a file. Everything under it was built and

@@ -47,6 +47,16 @@ Keep this current. A status list that drifts is worse than none, because it is b
 | 12 | This list | — | you are reading it |
 | 13 | Emulator UI tests, and the "launches" check must run them | [#28](https://github.com/BigdataAytee/trim-gallery/pull/28) | 🔨 open — five journeys, plus a check that the job really ran them |
 
+## Fourth report — "keeps stopping the moment I tap a picture"
+
+| # | What you asked for | PR | Status |
+|---|---|---|---|
+| 23 | Make the emulator crash the way the phone does: real photos and videos, real Coil, tap a photo tile, tap a video tile, twenty times each | [#36](https://github.com/BigdataAytee/trim-gallery/pull/36) | 🔨 **reproduced on the first tap of both kinds.** Real `MainActivity`, `content://` documents through a test provider, production `ImageLoader`, 8-megapixel photographs |
+| 24 | Report the root cause with file and line before fixing | [#36](https://github.com/BigdataAytee/trim-gallery/pull/36) | 🔨 `HeroGeometry.lerpRadius` returned a negative corner radius past fraction 1.0 because `OPEN_EASING` overshoots; `HeroViewer` passed it to `RoundedCornerShape`, which throws. Every earlier tap journey ran with `reduceMotion = true`, which never overshoots. Fix: clamp at the source, with three JVM tests |
+| 25 | A second emulator target at my phone's API level | [#36](https://github.com/BigdataAytee/trim-gallery/pull/36) | 🔨 **added at API 36**, alongside 34, and it found a real bug on its first run: both ExoPlayers were configured during composition and crashed with "Player is accessed on the wrong thread" at API 36 while passing at API 34. Every journey must now pass on **both** levels; the check names which one failed |
+| 25a | Tapping a video, at API 36 | [#36](https://github.com/BigdataAytee/trim-gallery/pull/36) | 🔨 `TilePreview.kt` and `VideoPlayer.kt` now pin the player to the main looper and touch it only there. This is the same journey your field report was about |
+| 26 | No build until both tile types survive twenty taps on both API levels | [#36](https://github.com/BigdataAytee/trim-gallery/pull/36) | 🔨 the twenty-tap suite is required on both devices; no build has been sent |
+
 ---
 
 ## Screens and features that do not exist in the app yet
@@ -91,8 +101,9 @@ and your own library. Everything in the table above is still 🟡 until you have
 
 ## Still waiting on you
 
-- **The stack trace for the video-tap crash** (item 6). Settings → Export diagnostics. If the
-  app cannot get that far, the recovery screen in [#26](https://github.com/BigdataAytee/trim-gallery/pull/26) offers the same export.
+- **The Android version on the Pixel 9 Pro XL** (item 25). The message naming it was cut off
+  twice. The stack trace for the tap crash (item 6) is no longer needed — the emulator
+  produced it (item 23).
 - **Folder mode defaults.** BUILD.md § 6 says Offload/Free by default where external storage
   exists; the app ships **Keep** for every folder, because Keep is the only mode that never
   removes an original and nobody had been asked. Your call.

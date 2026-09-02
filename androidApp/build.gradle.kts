@@ -150,6 +150,23 @@ android {
                     // native speed rather than being emulated instruction by instruction.
                     systemImageSource = "aosp-atd"
                 }
+
+                // The second API level, because the phone the field reports come from is not
+                // on the first one. A Pixel 9 Pro XL shipped on Android 14 and takes updates
+                // through 16, so 34 and 36 bracket every version it can be running, and a
+                // platform-behaviour difference between them shows up as one of these two
+                // going red while the other stays green.
+                //
+                // The hardware profile stays Pixel 6 on purpose. The variable being covered
+                // here is the API level; changing the screen at the same time would leave a
+                // failure with two possible causes and no way to tell them apart. Geometry
+                // is covered where it belongs, in HeroGeometryTest, over the whole range of
+                // the animation rather than at whatever fraction one screen size samples.
+                create("pixelNext") {
+                    device = "Pixel 6"
+                    apiLevel = 36
+                    systemImageSource = "aosp-atd"
+                }
             }
         }
     }

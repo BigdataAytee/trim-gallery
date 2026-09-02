@@ -3126,3 +3126,105 @@ the encode — the same snapshot the safe-replace contract is checked against. T
 this number, the `job` row stores it, and Space subtracts it from the new size to report what
 was freed, so a stale value is a wrong saving on the screen the feature is judged by. Found by
 the emulator journey, which is the argument for having it.
+
+## The tap crash, root-caused (2 Sep 2026)
+
+**The crash was `HeroGeometry.lerpRadius` going negative under an overshooting easing.**
+`MotionSpec.Hero.OPEN_EASING = Easing(0.2f, 0.9f, 0.25f, 1.1f)` overshoots by design;
+`lerpRadius` interpolated 4 dp → 0 dp with no clamp; `HeroViewer` passed the result to
+`RoundedCornerShape`, which throws `IllegalArgumentException: Corner size in Px can't be
+negative`. Reproduced on the emulator on the first tap of a photo and of a video, with the
+trace naming `CornerBasedShape.kt:125` under a Compose layer update.
+
+**Why four builds of green journeys missed it.** Every tile-tap journey ran
+`TrimTheme(reduceMotion = true)`, and under reduced motion `HeroViewer` snaps progress to
+exactly 1.0 — it never overshoots. `MainActivity` reads the system animator scale and gets
+`false` on any phone with animations on. The tests had quietly opted out of the one thing
+that crashed. A reproduction suite that fakes the host is only as honest as the fakes, and
+this one was faked at the point of failure.
+
+**Clamp at the source, not the call site.** The frame's width and height were already
+clamped at the call site in `HeroViewer` for the same overshoot, and the radius, computed
+next to them, was not. A value that cannot be negative should not be able to leave the
+function that computes it. The easing is not flattened: a test asserts `OPEN_EASING.y2 > 1`
+so the spring survives and the geometry has to.
+
+**The suspects the field report named, and what the evidence says.** The test removes the
+phone/emulator differences together — real Activity, `content://` documents through a
+provider, production Coil, camera-sized photographs, twenty taps — and the trace points at
+one of the four: the hero geometry with a real window. Coil's loader, the shared-element
+transition mechanics and the video frame decoder are not cleared by this; they are simply
+not what threw. The test keeps running all of them on every push, so if one of them is a
+second crash it will be the next red job, with its own trace.
+
+**`TapCrashReproductionTest` is a required suite.** The results check fails the job unless
+both tests ran and passed, so a green job means twenty taps of each kind survived — not that
+the test was compiled.
+
+**The one skipped test is `Milestone1EncodeTest`, and it is not in this suite.** Its second
+test `assumeTrue`s a hardware encoder, which an `aosp-atd` image does not have, and BUILD.md
+§ 2 rule 2 forbids the software one. It stands down with that reason; nothing in the tap
+suite is skipped.
+
+**Still open: the phone's API level.** The emulator is API 34. The phone is a Pixel 9 Pro
+XL; its Android version has not arrived (the message was cut off twice). If it differs, a
+second managed device at that level joins the smoke matrix and the twenty-tap bar applies to
+both.
+
+## Two emulator API levels (2 Sep 2026)
+
+**API 36 alongside 34, both on the Pixel 6 profile.** The tap crash was found at 34 and the
+phone reporting it is a Pixel 9 Pro XL, which shipped on Android 14 and takes updates
+through 16. The exact version has not reached me, so the matrix brackets the range instead
+of guessing a point in it: 34 and 36 sit either side of 35, and a platform-behaviour
+difference anywhere between them shows up as one device red and the other green. If the
+phone turns out to be on 15, the second device's `apiLevel` is a one-line change.
+
+**The hardware profile stays Pixel 6 on both.** Changing screen size and API level in the
+same step would leave any failure with two candidate causes and no way to separate them.
+Geometry is covered where it belongs — `HeroGeometryTest` walks the whole animation range
+rather than whatever fraction one screen size happens to sample.
+
+**`--continue`, not fail-fast.** A crash present on one API level and absent on the other is
+the single most useful thing this matrix can find, and stopping at the first red device
+would throw that away.
+
+**The results check is per device.** `assert-journeys-ran.py` now takes the device list from
+`SMOKE_DEVICES` and requires every named journey to have run and passed under each one,
+naming the device in the failure line. Discovering devices from the reports on disk was
+rejected: an emulator that never booted would then look like a smaller matrix rather than a
+failure, which is the same class of bug as a green job that ran no tests.
+
+## The player's thread (2 Sep 2026)
+
+**Every ExoPlayer states its looper, and is only touched on it.** `TilePreview` and
+`VideoPlayer` built and configured their player inside `remember`, which runs during
+composition. `ExoPlayer.Builder` captures the current thread's looper; a Compose worker
+thread has none, so the builder falls back to main and the following `setMediaItem` — on
+that worker — throws `IllegalStateException: Player is accessed on the wrong thread`.
+
+**Why it took until now to appear.** Compose composes on the main thread in the app as it
+runs today, so the mismatch never happened in practice. That is a coincidence of the
+current runtime, not a guarantee: Compose does not promise which thread composition runs
+on. The API 36 emulator composed on a worker and the crash was immediate.
+
+**Construction, configuration and release are all player accesses.** The fix is not only to
+move `setMediaItem` — `release()` in `onDispose` runs on the applier thread too, so it is
+posted to main. A rule that holds for one call and not the others is not a rule.
+
+**The second emulator paid for itself on its first run.** It was added because the phone in
+the field reports is not on API 34, and it immediately found a real defect on the exact
+path that field report was about — tapping a video — that the API 34 device passes.
+
+## What the two-device matrix has and has not settled (2 Sep 2026)
+
+**`TapCrashReproductionTest` passes on both API 34 and API 36**: twenty taps of a photo tile
+and twenty of a video tile, in the real Activity over `content://` documents. The hero
+radius clamp holds at both levels.
+
+**`GalleryJourneyTest.tappingAPhotoOpensTheViewer` timed out on API 36** with the grid
+showing its empty state, on a run where `grantingAFolderRendersTheGrid` passed on the same
+device and asserted both files were scanned and persisted. So it is not a storage or scan
+regression at API 36. The untested hypothesis is that the player crash above took the
+process with it and this test ran against the wreckage; the next run says whether that is
+true. It is recorded as unexplained rather than assumed fixed.

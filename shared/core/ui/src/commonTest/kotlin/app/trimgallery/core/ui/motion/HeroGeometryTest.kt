@@ -159,4 +159,36 @@ class HeroGeometryTest {
             assertTrue(frame.height >= 0f, "height ${frame.height} at $fraction")
         }
     }
+
+    // ---- the tap crash -----------------------------------------------------------------
+
+    @Test
+    fun `the open easing overshoots on purpose`() {
+        // Documented so nobody "fixes" the crash below by flattening the curve. The spring
+        // at the end of the open is DESIGN_SYSTEM.md's, and the radius clamp exists so the
+        // geometry can survive it.
+        assertTrue(MotionSpec.Hero.OPEN_EASING.y2 > 1f, "OPEN_EASING is meant to overshoot")
+    }
+
+    @Test
+    fun `the radius never goes negative when the easing overshoots`() {
+        // "Corner size in Px can't be negative": RoundedCornerShape throws on the main
+        // thread for any value below zero, and the open animation reaches fraction ~1.035.
+        // This was "Trim Gallery keeps stopping the moment I tap a picture", four builds
+        // running, and every tap journey missed it because reduceMotion snaps to exactly 1.
+        for (fraction in listOf(1.0f, 1.01f, 1.035f, 1.1f, 1.5f)) {
+            assertTrue(
+                HeroGeometry.lerpRadius(fraction) >= 0f,
+                "radius at fraction $fraction is ${HeroGeometry.lerpRadius(fraction)}",
+            )
+        }
+    }
+
+    @Test
+    fun `the radius still interpolates normally inside the range`() {
+        // The clamp must not flatten the transition itself.
+        assertEquals(MotionSpec.Hero.TILE_RADIUS_DP, HeroGeometry.lerpRadius(0f))
+        assertEquals(MotionSpec.Hero.HERO_RADIUS_DP, HeroGeometry.lerpRadius(1f))
+        assertTrue(HeroGeometry.lerpRadius(0.5f) in MotionSpec.Hero.HERO_RADIUS_DP..MotionSpec.Hero.TILE_RADIUS_DP)
+    }
 }
