@@ -69,7 +69,7 @@ fun TrimApp(startInRecovery: Boolean = false, modifier: Modifier = Modifier) {
     Box(modifier.fillMaxSize()) {
         when (screen) {
             Screen.SETTINGS -> SettingsHost(onBack = { screen = Screen.HOME }, modifier = Modifier.fillMaxSize())
-            Screen.SPACE -> SpaceHost(onBack = { screen = Screen.HOME }, modifier = Modifier.fillMaxSize())
+            Screen.HISTORY -> HistoryHost(onBack = { screen = Screen.HOME }, modifier = Modifier.fillMaxSize())
             Screen.FOLDERS -> FoldersHost(onBack = { screen = Screen.HOME }, modifier = Modifier.fillMaxSize())
             Screen.BIG_FILES -> BigFilesHost(onBack = { screen = Screen.HOME }, modifier = Modifier.fillMaxSize())
             Screen.HOME -> HomeHost(
@@ -85,7 +85,7 @@ fun TrimApp(startInRecovery: Boolean = false, modifier: Modifier = Modifier) {
                             .systemBarsPadding()
                             .padding(TrimSpacing.INSET_DP.dp),
                     ) {
-                        Pill("Space") { screen = Screen.SPACE }
+                        Pill("History") { screen = Screen.HISTORY }
                         Pill("Settings") { screen = Screen.SETTINGS }
                     }
                 },
@@ -95,7 +95,7 @@ fun TrimApp(startInRecovery: Boolean = false, modifier: Modifier = Modifier) {
 }
 
 /** What is on top. One level deep, which is the whole of this app's navigation. */
-private enum class Screen { HOME, BIG_FILES, FOLDERS, SETTINGS, SPACE }
+private enum class Screen { HOME, BIG_FILES, FOLDERS, SETTINGS, HISTORY }
 
 /**
  * The way off the grid: a small pill over its top-right corner.

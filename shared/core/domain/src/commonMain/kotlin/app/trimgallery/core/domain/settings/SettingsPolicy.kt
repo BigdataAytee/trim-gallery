@@ -156,12 +156,6 @@ object SettingsPolicy {
         if (old.qualityTarget != QualityTarget.COMPACT && new.qualityTarget == QualityTarget.COMPACT) {
             add(COMPACT_WARNING)
         }
-        if (old.faceClusteringEnabled && !new.faceClusteringEnabled) {
-            add(
-                "Trim will stop grouping people, and the face data it already made is deleted. " +
-                    "None of it ever left this phone.",
-            )
-        }
         if (new.undoRetentionDays < old.undoRetentionDays) {
             add(
                 "New originals will be kept for ${new.undoRetentionDays} days. " +

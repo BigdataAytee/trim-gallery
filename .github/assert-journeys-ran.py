@@ -39,11 +39,15 @@ DEVICES = [name for name in os.environ.get("SMOKE_DEVICES", "").split(",") if na
 REQUIRED = {
     # The gallery journeys went with the gallery (PROJECT.md, "The pivot"). The five screens
     # that replace it bring their own journeys as each lands, and this map grows with them.
-    # The real Activity over the real graph with a folder granted, which is what a phone
-    # does on every launch after the first and what no test covered until a build shipped
-    # that crashed doing it.
-    # The decoder the VMAF gate reads through. It can be proved here, unlike the encoder:
-    # an ATD image has no hardware encoder but decoding in software is ordinary.
+    #
+    # That the app starts at all, over the real graph. It went missing from this map when the
+    # gallery's entries were deleted around it — the class was still there and still running,
+    # but nothing required it any more, so it could have stopped running and left CI green.
+    # Which is the one thing this file exists to prevent.
+    "app.trimgallery.ui.MainActivityLaunchTest": [
+        "mainActivityReachesResumed",
+        "mainActivitySurvivesRecreation",
+    ],
     # Home and Folders: the first two screens of the utility, and the beginning of putting
     # back the emulator coverage the gallery's journeys took with them.
     "app.trimgallery.ui.HomeJourneyTest": [
@@ -58,12 +62,25 @@ REQUIRED = {
         "filesThatCannotBeTrimmedAreListedWithTheirReason",
         "trimmingAFileOpensItsSheet",
     ],
+    # History and Settings: screens 4 and 5. History's populated state needs a job row and
+    # an undo entry, which needs an encode the emulator cannot do, so what is asserted here
+    # is the state every new install is actually in.
+    "app.trimgallery.ui.HistoryJourneyTest": [
+        "historyOpensAndShowsTheFreedTotal",
+        "anEmptyHistorySaysSoRatherThanShowingNothing",
+    ],
+    "app.trimgallery.ui.SettingsJourneyTest": [
+        "keepOriginalsForCanBeChanged",
+        "settingsSaysWhichBuildThisIs",
+    ],
     "app.trimgallery.ui.FoldersJourneyTest": [
         "aGrantedFolderIsListedWithItsModes",
         "choosingFreeSpaceIsSaved",
         "removingAFolderTakesItOffTheScreen",
         "wholePhoneAccessExplainsItselfFirst",
     ],
+    # The decoder the VMAF gate reads through. It can be proved here, unlike the encoder:
+    # an ATD image has no hardware encoder but decoding in software is ordinary.
     "app.trimgallery.engine.android.YuvSourceAndroidTest": [
         "decodesRealFramesAtTheRequestedWidth",
         "thePlanesAreExactlyTheSizeTheMetricsWillReadThemAs",

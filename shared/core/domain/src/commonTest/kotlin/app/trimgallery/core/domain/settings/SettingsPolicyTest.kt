@@ -156,13 +156,6 @@ class SettingsPolicyTest {
         assertTrue(SettingsPolicy.notices(compact, Settings()).isEmpty())
     }
 
-    @Test
-    fun `turning face clustering off says what happens to the data`() {
-        val notices = SettingsPolicy.notices(Settings(), Settings(faceClusteringEnabled = false))
-        assertEquals(1, notices.size)
-        assertTrue(notices.single().contains("ever left this phone"), notices.single())
-    }
-
     /** Entitlements keeps existing undo rows on the expiry they were created with. */
     @Test
     fun `shortening retention says it applies to new originals only`() {

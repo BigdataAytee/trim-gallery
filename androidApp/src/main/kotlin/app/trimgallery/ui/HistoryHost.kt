@@ -19,7 +19,7 @@ import app.trimgallery.core.ui.motion.pressScale
 import app.trimgallery.core.ui.theme.TrimTheme
 import app.trimgallery.engine.android.NightPassStatus
 import app.trimgallery.engine.android.WorkManagerScheduler
-import app.trimgallery.feature.space.SpaceScreen
+import app.trimgallery.feature.space.HistoryScreen
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import kotlinx.datetime.LocalDate
@@ -41,7 +41,7 @@ import app.trimgallery.core.domain.space.SpaceScreen as SpaceRules
  * nothing.
  */
 @Composable
-fun SpaceHost(
+fun HistoryHost(
     onBack: () -> Unit,
     modifier: Modifier = Modifier,
     repository: TrimRepository = koinInject(),
@@ -54,7 +54,7 @@ fun SpaceHost(
 
     Box(modifier.fillMaxSize().background(colors.page)) {
         snapshot?.let { space ->
-            SpaceScreen(
+            HistoryScreen(
                 state = space.state,
                 history = space.history,
                 skipped = space.skipped,
@@ -67,17 +67,16 @@ fun SpaceHost(
                 onRestore = {},
                 onSecondaryAction = {},
                 modifier = Modifier.fillMaxSize().systemBarsPadding(),
-                header = { BackToPhotos(onBack) },
-                artwork = { Thumbnail(it) },
+                header = { BackToHome(onBack) },
             )
         }
     }
 }
 
 @Composable
-private fun BackToPhotos(onBack: () -> Unit) {
+private fun BackToHome(onBack: () -> Unit) {
     BasicText(
-        text = "← Photos",
+        text = "← Home",
         style = TrimTheme.typography.label.copy(color = TrimTheme.colors.accent),
         modifier = Modifier.pressScale(onBack),
     )

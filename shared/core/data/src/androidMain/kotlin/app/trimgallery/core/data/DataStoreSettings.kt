@@ -73,7 +73,6 @@ class DataStoreSettings(private val store: DataStore<Preferences>, private val t
             carefulVerify = this[Keys.CAREFUL_VERIFY] ?: defaults.carefulVerify,
             startWhenFull = this[Keys.START_WHEN_FULL] ?: defaults.startWhenFull,
             keepWorkingWhileUsing = this[Keys.KEEP_WORKING] ?: defaults.keepWorkingWhileUsing,
-            faceClusteringEnabled = this[Keys.FACE_CLUSTERING] ?: defaults.faceClusteringEnabled,
             stopByTime = this[Keys.STOP_BY],
         )
     }
@@ -89,7 +88,6 @@ class DataStoreSettings(private val store: DataStore<Preferences>, private val t
         prefs[Keys.CAREFUL_VERIFY] = carefulVerify
         prefs[Keys.START_WHEN_FULL] = startWhenFull
         prefs[Keys.KEEP_WORKING] = keepWorkingWhileUsing
-        prefs[Keys.FACE_CLUSTERING] = faceClusteringEnabled
         // Removed rather than written as empty: absent means "no stop time", and an empty
         // string that parses to nothing would be a second way to say the same thing.
         //
@@ -123,7 +121,6 @@ class DataStoreSettings(private val store: DataStore<Preferences>, private val t
         val CAREFUL_VERIFY = booleanPreferencesKey("carefulVerify")
         val START_WHEN_FULL = booleanPreferencesKey("startWhenFull")
         val KEEP_WORKING = booleanPreferencesKey("keepWorkingWhileUsing")
-        val FACE_CLUSTERING = booleanPreferencesKey("faceClusteringEnabled")
         val STOP_BY = stringPreferencesKey("stopByTime")
     }
 }

@@ -305,9 +305,6 @@ dependencies {
     implementation(libs.mlkit.face.detection)
     implementation(libs.mlkit.text.recognition)
 
-    implementation(libs.coil.compose)
-    implementation(libs.coil.video)
-
     debugImplementation(libs.compose.ui.tooling)
 
     testImplementation(libs.junit)

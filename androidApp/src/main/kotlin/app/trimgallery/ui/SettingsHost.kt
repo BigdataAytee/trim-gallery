@@ -12,6 +12,7 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.unit.dp
 import app.trimgallery.core.ui.motion.pressScale
 import app.trimgallery.core.ui.theme.TrimSpacing
@@ -19,6 +20,7 @@ import app.trimgallery.core.ui.theme.TrimTheme
 import app.trimgallery.engine.SettingsStore
 import app.trimgallery.engine.android.BuildIdentity
 import app.trimgallery.feature.settings.SettingsScreen
+import app.trimgallery.feature.settings.SettingsTestTags
 import kotlinx.coroutines.launch
 import org.koin.compose.koinInject
 
@@ -53,6 +55,7 @@ fun SettingsHost(onBack: () -> Unit, modifier: Modifier = Modifier, store: Setti
                 onQualityTarget = { target -> scope.launch { store.update { it.copy(qualityTarget = target) } } },
                 onStartWhenFull = { on -> scope.launch { store.update { it.copy(startWhenFull = on) } } },
                 onNightlyCap = { minutes -> scope.launch { store.update { it.copy(nightlyCapMinutes = minutes) } } },
+                onUndoRetention = { days -> scope.launch { store.update { it.copy(undoRetentionDays = days) } } },
                 modifier = Modifier.fillMaxSize().systemBarsPadding(),
                 header = { BackToHome(onBack) },
                 // The two things here that are Android's rather than the app's, so they
@@ -80,6 +83,7 @@ private fun About() {
     BasicText(
         text = BuildIdentity.line,
         style = TrimTheme.typography.caption.copy(color = TrimTheme.colors.muted),
+        modifier = Modifier.testTag(SettingsTestTags.ABOUT),
     )
 }
 

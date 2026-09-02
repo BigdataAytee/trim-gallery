@@ -3464,3 +3464,40 @@ becomes a candidate with an estimate, a 12 KB one is skipped as too small. The T
 size, mime and container facts — never bytes — which is why stubbing the reader costs this
 suite nothing. The encode itself is still a phone test: the emulator has no hardware
 encoder, and rule 2 forbids the software one.
+## History and Settings (2 Sep 2026)
+
+**Space became History by rename, not rewrite.** The rules underneath (`History`,
+`SpaceScreen` in `core/domain/space`) were already about jobs, savings and restores; only the
+screen's name was about free space. Renaming the composable and its file while leaving the
+domain types alone keeps the diff readable and the domain tests untouched. The domain names
+are imported aliased (`History as HistoryRules`, `SpaceScreen as SpaceRules`) rather than
+renamed, because renaming them would touch every test in that module for no behaviour.
+
+**The artwork slot was removed rather than left empty.** `HistoryRow` took a composable that
+drew a thumbnail. With the gallery gone there is nothing to draw it with, and a slot every
+caller passes `{}` to is dead weight that the next person will try to fill.
+
+**The retention stepper is the first control for a value that already existed.**
+`Settings.undoRetentionDays` shipped in milestone 10 with a policy warning attached and no
+way to change it. Bounds are 5 to 90 days in steps of 5: below 5 the bin stops being an undo
+window in any useful sense, and above 90 the phone is storing a second copy of everything for
+a quarter.
+
+**The test tag went on the value, not the row.** The retention journey reads the number back
+to prove the control changed the stored value. A `Row` is not a semantics merge boundary, so
+a tag on the row would have found a node carrying no text, and the assertion would have
+compared "" to "" and failed. Tags that a test reads text from belong on the text.
+
+**`faceClusteringEnabled` was deleted, not defaulted off.** It is a settings field whose
+feature was shelved in PR2. Leaving it would have left `SettingsPolicy` warning about face
+data that no longer exists.
+
+**Coil came out with the last thing that displayed an image.** STACK.md's rule is to ask
+before adding a library; taking one out when nothing uses it needs no permission and removes
+a crash surface this project has already paid for once.
+
+**What the journeys can and cannot assert.** A populated History needs a completed job and
+an `UndoEntry`, and both need an encode the emulator has no hardware to do. The journeys
+therefore assert the state every new install is actually in, and `assert-journeys-ran.py`
+names exactly those four tests rather than implying coverage that does not exist.
+
