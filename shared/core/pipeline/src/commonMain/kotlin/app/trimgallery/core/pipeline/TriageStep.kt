@@ -62,6 +62,14 @@ class TriageStep(
         val removed: Int,
         val candidates: Int,
         val skipped: Map<SkipReason, Int>,
+        /**
+         * Rows the diff reported as unchanged but that had never been judged.
+         *
+         * Separate from [added] because they are not new to the database — only new to
+         * triage. Non-zero on the first pass after another writer has filled the library,
+         * and zero on every pass after that.
+         */
+        val untriaged: Int = 0,
     ) {
         /** USER_JOURNEY.md § 14: *"Everything's already efficient — nothing to do tonight."* */
         val nothingToDo: Boolean get() = candidates == 0
@@ -87,6 +95,7 @@ class TriageStep(
 
         var candidates = 0
         val skipped = mutableMapOf<SkipReason, Int>()
+        val judged = mutableSetOf<String>()
 
         // Only what changed gets a container read and a verdict. Re-triaging the whole
         // library every night would give the same answer for everything that did not move,
@@ -97,11 +106,36 @@ class TriageStep(
         diff.added.forEach { row ->
             val item = enrich(row)
             sink.insert(item)
+            judged += item.id
             candidates += record(item, caps, skipped)
         }
 
         diff.modified.forEach { change ->
             val item = enrich(LibraryDiff.merge(change.stored, change.scanned, nowMs()))
+            sink.update(item)
+            judged += item.id
+            candidates += record(item, caps, skipped)
+        }
+
+        // Then the rows this diff had nothing to say about because somebody else inserted
+        // them, and which nothing has judged yet.
+        //
+        // This is not belt and braces. The diff above is a comparison against what the
+        // database already holds, so a row that another writer put there is, to triage,
+        // unchanged — and an unchanged row gets no verdict. Home's start-up walk is exactly
+        // such a writer: it scans and `applyScan`s the library so the app has a file count
+        // and a fast start before any triage has run. On a fresh install that means the very
+        // first `run` sees an empty diff over a full library and writes no verdicts at all,
+        // which is "Find big files" opening a screen with nothing on it.
+        //
+        // A row still at NEW (or INDEXED, which only ever meant the index had seen it) is
+        // triage's unfinished work whoever wrote it, so it is finished here. Costed once per
+        // file: the container read is the same one the added path would have paid, and after
+        // it the row is CANDIDATE or SKIPPED and never comes back through here.
+        val gone = diff.removed.mapTo(mutableSetOf()) { it.id }
+        val untriaged = stored.filter { it.status in UNJUDGED && it.id !in judged && it.id !in gone }
+        untriaged.forEach { row ->
+            val item = enrich(row)
             sink.update(item)
             candidates += record(item, caps, skipped)
         }
@@ -113,6 +147,7 @@ class TriageStep(
             removed = diff.removed.size,
             candidates = candidates,
             skipped = skipped,
+            untriaged = untriaged.size,
         )
     }
 
@@ -132,6 +167,11 @@ class TriageStep(
                 0
             }
         }
+
+    private companion object {
+        /** Statuses that mean "triage has not decided about this row yet". */
+        val UNJUDGED = setOf(MediaStatus.NEW, MediaStatus.INDEXED)
+    }
 }
 
 /**
