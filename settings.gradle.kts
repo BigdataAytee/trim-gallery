@@ -38,14 +38,7 @@ include(":shared:core:model")
 include(":shared:core:domain")
 include(":shared:core:data")
 include(":shared:core:pipeline")
-include(":shared:core:ui")
 
-include(":shared:feature:space")
-include(":shared:feature:compress")
-include(":shared:feature:settings")
 
 include(":androidApp")
-include(":benchmark")
 
-// iosApp is an Xcode project, not a Gradle module. It is present but not implemented;
-// see iosApp/README.md. It will consume shared/ as an XCFramework.
