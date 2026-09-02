@@ -5,10 +5,10 @@
 
   Every fixture until now handed the app `file://` URIs, and `JourneyFixtures` says so in a
   comment — "that is the one seam". It is not a small seam. A phone's library arrives as SAF
-  document URIs, and everything that reads a picture goes somewhere different for them:
-  Coil picks a different fetcher, `MediaMetadataRetriever` takes a different setDataSource
-  overload, and ExoPlayer builds a different DataSource. A suite that only ever passes
-  `file://` cannot fail the way a phone fails.
+  document URIs, and everything that reads a file goes somewhere different for them: a path
+  can be opened directly where a `content://` has to go through the resolver, and
+  `MediaMetadataRetriever` takes a different setDataSource overload for each. A suite that
+  only ever passes `file://` cannot fail the way a phone fails.
 -->
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
 

@@ -3501,3 +3501,10 @@ an `UndoEntry`, and both need an encode the emulator has no hardware to do. The 
 therefore assert the state every new install is actually in, and `assert-journeys-ran.py`
 names exactly those four tests rather than implying coverage that does not exist.
 
+**Dependencies are part of "moved out of the build".** ML Kit's three bundled-model
+artifacts survived the index's deletion because nothing referenced them and nothing had to:
+a dependency with no call site still ships. Same for the comments — the manifest explained
+its four `tools:node="remove"` lines by naming an image loader that is no longer here, which
+sends the next reader looking for a dependency that does not exist. Deleting a feature means
+its libraries and the prose that justified them, not only its source.
+

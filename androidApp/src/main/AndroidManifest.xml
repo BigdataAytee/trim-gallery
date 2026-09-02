@@ -33,11 +33,13 @@
       Not defensive tidying: `verifyNoInternetPermissionMerged<Variant>` failed on all three
       variants the first time CI ran it, which is precisely the case that guard was written
       for and the one a scan of this file alone cannot see. Libraries declare what they might
-      need — Coil can fetch an image over HTTP, WorkManager can constrain a job on network
-      state — and the manifest merger unions those declarations into the APK. Neither
-      capability is used here: Coil only ever decodes a local file the user already has, and
-      the night pass has no network constraint (BUILD.md § 6 gates on charging, screen off,
-      battery and heat).
+      need — WorkManager can constrain a job on network state, ML Kit can fetch a model — and
+      the manifest merger unions those declarations into the APK. No such capability is used
+      here: the night pass has no network constraint (BUILD.md § 6 gates on charging, screen
+      off, battery and heat).
+
+      These four lines stay whatever the dependency list happens to be. The image loader that
+      first dragged INTERNET in is gone, and the guard is not.
 
       Without these four lines the shipped APK asks for INTERNET while the app's own screen
       says it has no network access. `tools:node="remove"` deletes the permission from the

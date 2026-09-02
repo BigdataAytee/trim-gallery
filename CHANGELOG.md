@@ -31,6 +31,11 @@ key and its test. Nothing left in the app displays a photograph, so an image loa
 few hundred kilobytes and one more thing that could crash on tap — which, on this project,
 it did.
 
+**ML Kit goes too.** Image labelling, face detection and text recognition were still in the
+APK after the index came out in "Take the index out" — three bundled-model libraries linked
+by nothing. They are a large part of what makes this build big enough that it cannot be
+attached to a message, for a feature that no longer exists.
+
 **Four journeys.** History opens and leads with the freed total; an empty History explains
 itself; the retention stepper actually changes the stored value; Settings says which build
 this is — the question every field report so far has turned on.
