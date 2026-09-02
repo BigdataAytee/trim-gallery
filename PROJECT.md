@@ -3508,3 +3508,11 @@ its four `tools:node="remove"` lines by naming an image loader that is no longer
 sends the next reader looking for a dependency that does not exist. Deleting a feature means
 its libraries and the prose that justified them, not only its source.
 
+**A required suite can go missing without anything going red.** `assert-journeys-ran.py`
+exists because a green task is not proof a journey ran. It has the same weakness one level
+up: a suite deleted from its map is simply no longer asked about, and nothing anywhere
+reports the absence. `MainActivityLaunchTest` fell out that way during the gallery's
+deletion and nobody noticed for four PRs. The tell was a comment describing it still sitting
+in the file with no entry under it — which is why the orphaned comments were worth chasing
+rather than tidying away.
+

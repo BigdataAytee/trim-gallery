@@ -36,6 +36,13 @@ APK after the index came out in "Take the index out" — three bundled-model lib
 by nothing. They are a large part of what makes this build big enough that it cannot be
 attached to a message, for a feature that no longer exists.
 
+**And one suite that had quietly stopped being required.** `MainActivityLaunchTest` — does
+the app start at all, over the real graph — was dropped from `assert-journeys-ran.py` when
+the gallery's entries were deleted around it. The class was still there and still running,
+but nothing required it, so it could have stopped running and left CI green. That is the one
+thing that file exists to prevent, so it is back, along with two comments that had come
+loose from the entries they described.
+
 **Four journeys.** History opens and leads with the freed total; an empty History explains
 itself; the retention stepper actually changes the stored value; Settings says which build
 this is — the question every field report so far has turned on.
