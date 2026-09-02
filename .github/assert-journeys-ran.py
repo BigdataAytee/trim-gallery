@@ -37,13 +37,10 @@ DEVICES = [name for name in os.environ.get("SMOKE_DEVICES", "").split(",") if na
 
 # Suite -> the tests in it that must have run and passed.
 REQUIRED = {
-    "app.trimgallery.ui.GalleryJourneyTest": [
-        "grantingAFolderRendersTheGrid",
-        "tappingAPhotoOpensTheViewer",
-        "tappingAVideoPlaysIt",
-        "relaunchingAfterAGrantRendersTheGrid",
-        "aStartupThatFailsLandsOnRecoveryAndDoesNotRetry",
-    ],
+    # The gallery journeys are gone with the gallery (PROJECT.md, "The pivot"). The five
+    # screens that replace it bring their own journeys as each lands, and this map grows
+    # again with them. Until then this job proves the engine on a device and that the app
+    # launches — less than it proved yesterday, and said plainly rather than papered over.
     # The real Activity over the real graph with a folder granted, which is what a phone
     # does on every launch after the first and what no test covered until a build shipped
     # that crashed doing it.
@@ -65,23 +62,6 @@ REQUIRED = {
         "theOutcomeMatchesWhatTheDeviceSaysItCanEncode",
         "anEmptyWindowIsAnEmptyWindowRatherThanACrash",
     ],
-    # Long-press to Optimise, over a faked step. The encode itself cannot run here — no
-    # hardware encoder on an ATD image — so what these prove is everything between the
-    # finger and the encoder, which is where the screen is.
-    "app.trimgallery.ui.OptimiseJourneyTest": [
-        "holdingAVideoOffersToOptimiseIt",
-        "startingItReportsWhatChanged",
-        "theRunIsRecordedSoSpaceCanShowIt",
-        "aRunThatReplacedNothingNeverOffersAnUndo",
-        "undoPutsTheOriginalBack",
-    ],
-    # The crash a phone shows on tapping a tile, reproduced in the real Activity over
-    # content:// URIs, real Coil and camera-sized photographs. Twenty taps each, because a
-    # crash that depends on what the previous open left behind is not one tap can find.
-    "app.trimgallery.ui.TapCrashReproductionTest": [
-        "tappingPhotosTwentyTimesInTheRealActivityDoesNotCrash",
-        "tappingVideosTwentyTimesInTheRealActivityDoesNotCrash",
-    ],
     # That the night pass can build what it runs. A missing Koin definition compiles, passes
     # every unit test, and fails at 3am in a worker with no screen — so it is asked of the
     # assembled graph on a device, which is the only place the question can be put.
@@ -95,10 +75,6 @@ REQUIRED = {
     # is how "1 skipped" reached a field report with nothing here able to say what it was.
     "app.trimgallery.engine.android.Milestone1EncodeTest": [
         "reportsCodecCapabilities",
-    ],
-    "app.trimgallery.ui.MainActivityGrantedLaunchTest": [
-        "theRealActivityWithAFolderGrantedDrawsTheGrid",
-        "theLaunchMarkIsClearedOnceAFrameIsDrawn",
     ],
 }
 

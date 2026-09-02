@@ -40,12 +40,7 @@ include(":shared:core:data")
 include(":shared:core:pipeline")
 include(":shared:core:ui")
 
-include(":shared:feature:gallery")
-include(":shared:feature:search")
-include(":shared:feature:people")
 include(":shared:feature:space")
-include(":shared:feature:cleanup")
-include(":shared:feature:editor")
 include(":shared:feature:compress")
 include(":shared:feature:settings")
 
