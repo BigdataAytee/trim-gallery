@@ -16,6 +16,15 @@ value class MediaRef(val value: String)
 enum class MediaKind { VIDEO, PHOTO, PNG, FILE }
 
 /** Where an item is in its lifecycle (ARCHITECTURE.md § 9). */
+/**
+ * `INDEXED` is kept although nothing writes it any more.
+ *
+ * The indexer that set it went with the search and people screens it fed, and nothing ever
+ * read it — no triage rule, no query, no screen gated on it. But it is a *persisted* value:
+ * rows written by an earlier install still carry the string "INDEXED", and an enum that no
+ * longer has the constant fails to parse them. Removing it is a migration, not a deletion,
+ * and it buys nothing.
+ */
 enum class MediaStatus { NEW, INDEXED, CANDIDATE, PROCESSING, DONE, SKIPPED, FAILED }
 
 /**

@@ -8,7 +8,6 @@ import app.trimgallery.core.domain.billing.Tier
 import app.trimgallery.core.model.Uuid7
 import app.trimgallery.core.pipeline.ProbeAndSearch
 import app.trimgallery.core.pipeline.TriageStep
-import app.trimgallery.core.pipeline.index.IndexStep
 import app.trimgallery.core.pipeline.night.NightFacts
 import app.trimgallery.core.pipeline.night.NightRun
 import app.trimgallery.core.pipeline.photo.PhotoOptimiseStep
@@ -19,7 +18,6 @@ import app.trimgallery.core.pipeline.verify.VerifyPass
 import app.trimgallery.core.pipeline.video.VideoOptimiseStep
 import app.trimgallery.engine.CodecFactory
 import app.trimgallery.engine.ContainerReader
-import app.trimgallery.engine.Indexer
 import app.trimgallery.engine.LibraryStorage
 import app.trimgallery.engine.MetadataCopier
 import app.trimgallery.engine.NightScheduler
@@ -37,7 +35,6 @@ import app.trimgallery.engine.android.DiagnosticsExport
 import app.trimgallery.engine.android.GrantedFolders
 import app.trimgallery.engine.android.MediaCodecFactory
 import app.trimgallery.engine.android.MetadataCopierAndroid
-import app.trimgallery.engine.android.MlKitIndexer
 import app.trimgallery.engine.android.NativeQualityScorer
 import app.trimgallery.engine.android.NightPass
 import app.trimgallery.engine.android.NightWorker
@@ -202,7 +199,6 @@ val androidEngineModule = module {
     single<NightRun.Checkpoint> { get<TrimRepository>() }
     single<NightRun.OnInterrupted> { get<TrimRepository>() }
     single<TriageStep.Sink> { get<TrimRepository>() }
-    single<IndexStep.Sink> { get<TrimRepository>() }
 
     // --- Milestone 6: triage ---------------------------------------------------
     single<ContainerReader> { ContainerReaderAndroid(androidContext()) }
@@ -281,23 +277,6 @@ val androidEngineModule = module {
     // the foreground, and a night job holding the hardware at foreground priority would
     // break the promise that a camera always wins (BUILD.md § 2 rule 2, codec-priority).
     single<NightRun.Step> { get<VideoOptimiseStep>().asNightStep() }
-    //
-    // --- Milestone 9: the index ------------------------------------------------
-    //
-    // ML Kit finds labels, faces and text; everything that *decides* anything — which
-    // faces are one person, which files are duplicates, what a search means — is shared,
-    // because two devices deciding differently would come apart the moment a library
-    // moved between them (ARCHITECTURE.md § 6).
-    single<Indexer> { MlKitIndexer(androidContext()) }
-
-    single {
-        IndexStep(
-            indexer = get(),
-            storage = get(),
-            codec = get(),
-            sink = get(),
-        )
-    }
 }
 
 /**
