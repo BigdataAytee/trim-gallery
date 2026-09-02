@@ -3228,3 +3228,48 @@ device and asserted both files were scanned and persisted. So it is not a storag
 regression at API 36. The untested hypothesis is that the player crash above took the
 process with it and this test ran against the wreckage; the next run says whether that is
 true. It is recorded as unexplained rather than assumed fixed.
+
+## Deleting the gallery (2 Sep 2026)
+
+**One shelf branch, not six.** The plan called for `shelf/<area>` branches. A git branch
+carries the whole tree, so six of them would have been six byte-identical snapshots of the
+same repository wearing different names — a filing system that files nothing. There is one
+`shelf/pre-pivot` at `90895cf`, complete and buildable, and the map of what to look for
+inside it lives here. Recoverability is identical; the fiction is not.
+
+**Split into two changes.** No Gradle build configures in this environment — the proxy
+refuses `dl.google.com` — so compilation is only ever verified by CI, at about thirteen
+minutes a cycle. A single change deleting the gallery UI, the shared grid and hero
+geometry, five domain packages and the index pipeline would have been one unverifiable
+edit with many independent ways to fail. This change removes the gallery UI and its
+journeys; the next shelves what the gallery carried.
+
+**`core/ui/motion` survives, minus the hero.** `pressScale` lives there and `TrimApp` uses
+it; `ProgressRing` is used by both the Space screen and the Optimise sheet, which are
+keepers. Only `HeroGeometry`, `MotionSpec.Hero` and `core/ui/grid` are gallery-only, and
+they go in the next change with their tests.
+
+**`OptimiseController` is briefly unreferenced.** It was reached by long-press on a tile.
+Big files is where it comes back, and deleting and rewriting it in between would throw away
+a component whose behaviour is pinned by five journeys' worth of hard-won detail — the job
+row written before the encode, the undo lookup by media id, the size taken from the step's
+snapshot rather than the item's.
+
+## The API 36 video journey, and why it is not being fixed (2 Sep 2026)
+
+`GalleryJourneyTest.tappingAVideoPlaysIt` failed twice on API 36 with two different faults
+— `ArrayIndexOutOfBoundsException: length=320; index=-16`, which killed the instrumentation
+process and took thirteen other journeys with it, and then a 30-second timeout waiting for
+the video tile to appear at all — on app code identical to a run that passed 25 of 25 on
+both devices. Roughly one pass in three.
+
+**It is deleted rather than fixed, and the distinction matters.** The test goes because the
+feature goes, in the change that was already next in the sequence — not because it was
+inconvenient. Skipping, quarantining or loosening it to get a green tick would have been
+the other thing, and is never allowed here.
+
+**What is not settled.** Both faults are in ExoPlayer *playback* of a tile preview, which
+no longer exists. The engine's own decode path is `MediaCodec` through `YuvSourceAndroid`,
+which passed on both devices in every one of these runs, so the evidence points away from a
+platform decoder bug. That is an argument, not a proof. If the share-sheet trim or any new
+video journey shows a negative buffer index at API 36, this entry is where to start.

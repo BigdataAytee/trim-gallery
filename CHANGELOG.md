@@ -1,5 +1,35 @@
 # Changelog
 
+## The gallery is gone
+
+`shared/feature/gallery` and the four empty feature shells beside it are deleted, along
+with `GalleryHost`, `TilePreview`, `VideoPlayer` and the four emulator journeys that drove
+them. The complete pre-pivot tree is on `shelf/pre-pivot` at `90895cf`, so nothing is lost.
+
+**`HomeHost` keeps the wiring the gallery host was carrying.** The fast start from the
+database, the folder walk, the library diff, `StartupGuard` and the recovery path are
+byte-for-byte what shipped — only the grid they fed is gone, replaced for now by the two
+numbers this screen can state honestly: how much is in the granted folders, and how many
+files. What it does *not* do is guess a saving; that is a per-file question the probe and
+predictor answer on the Big files screen, and inventing it here would be the "saves about
+200 MB" that turns into 40 MB on the first screen anyone sees.
+
+Splitting the screen from the wiring was the reason to do this on its own. All of that is
+work the app begins by itself at launch over a persisted grant — the exact path that
+produced a crash loop once already — and rewriting it in the same change that deleted the
+gallery would have left any failure ambiguous between the two.
+
+**The emulator suite is smaller, and says so.** Four journeys went with the screens they
+drove. `assert-journeys-ran.py` now requires the engine suites and the launch check, and
+carries a note saying that is less than yesterday rather than papering over it. The five
+screens bring their own journeys as each lands. `JourneyFixtures`, `JourneyFakes` and the
+test `ContentProvider` are kept exactly as they are: they depend only on the model, the
+repository and the engine, so they are the harness the new journeys will be built on.
+
+**Coil and the thumbnail path stay for now.** `SpaceHost` still draws thumbnails and
+becomes History in a later change; removing them here would have meant rewriting that
+screen in this one.
+
 ## The tap crash, found where the phone has it
 
 Four builds crashed the moment a picture was tapped, and four builds of tap journeys stayed

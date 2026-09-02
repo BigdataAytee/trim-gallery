@@ -19,11 +19,10 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
-import androidx.media3.common.util.UnstableApi
 import app.trimgallery.core.data.TrimRepository
-import app.trimgallery.core.domain.compress.OptimiseFlow
 import app.trimgallery.core.model.MediaItem
 import app.trimgallery.core.pipeline.LibraryDiff
+import app.trimgallery.core.ui.format.MediaFormatting
 import app.trimgallery.core.ui.motion.pressScale
 import app.trimgallery.core.ui.theme.TrimShape
 import app.trimgallery.core.ui.theme.TrimSpacing
@@ -33,45 +32,33 @@ import app.trimgallery.engine.android.CrashReports
 import app.trimgallery.engine.android.GrantedFolders
 import app.trimgallery.engine.android.NightPass
 import app.trimgallery.engine.android.StartupGuard
-import app.trimgallery.feature.compress.OptimiseSheet
-import app.trimgallery.feature.gallery.GalleryScreen
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.withContext
-import kotlinx.datetime.TimeZone
-import kotlinx.datetime.todayIn
 import org.koin.compose.koinInject
-import kotlin.time.Clock
-import kotlin.time.Instant
 
 /**
- * What the launcher icon opens: the gallery, over whatever folders the user has granted.
+ * What the launcher icon opens now the gallery is gone: how much is in the granted folders,
+ * and the way to grant another.
  *
- * Until this existed the Activity drew the app's name on an empty page, and the
- * instrumented launch test passed against that — reaching RESUMED says the process came
- * up, not that anything is on screen. Every screen under `shared/feature` was written and
- * unit tested and none of them had ever been mounted.
+ * **This is deliberately not the Home screen BUILD.md § 9 describes.** "Find big files",
+ * the freed total, the next scheduled run and the on/off toggle arrive with the real Home,
+ * and this file becomes it. What it is today is the *wiring* the gallery host was carrying
+ * — the fast start from the database, the folder walk, the library diff, the startup guard
+ * and the recovery path — kept intact while the screen above it changes.
  *
- * This is the smallest honest host: grant a folder, walk it, show what is in it. Settings
- * is a sibling rather than a child — `TrimApp` owns which of the two is on screen — so
- * this file still has no navigation of its own.
+ * Separating those two was the point of doing this in its own change. All of it is work the
+ * app begins by itself, at launch, over a persisted grant: exactly the code path that
+ * produced a crash loop once already. Deleting the gallery and rewriting this wiring in one
+ * step would have meant a screen nobody had seen and a startup nobody had tested, with any
+ * failure ambiguous between the two. The wiring below is byte-for-byte what shipped, minus
+ * the grid it used to feed.
  */
-@UnstableApi
 @Composable
-fun GalleryHost(
+fun HomeHost(
     modifier: Modifier = Modifier,
-    /**
-     * The app's own startup work died. Not a crash any more — the caller shows a recovery
-     * screen instead, and nothing retries on its own.
-     */
     onStartupFailure: () -> Unit = {},
-    /**
-     * Controls drawn over the grid and under the viewer — the way in to Settings.
-     *
-     * Passed down rather than stacked on top of this host, because a control drawn above
-     * everything would float over an opened photograph. `GalleryScreen` owns the order.
-     */
     chrome: @Composable BoxScope.() -> Unit = {},
     storage: LibraryStorage = koinInject(),
     repository: TrimRepository = koinInject(),
@@ -79,15 +66,6 @@ fun GalleryHost(
     nightPass: NightPass = koinInject(),
     guard: StartupGuard = koinInject(),
     crashes: CrashReports = koinInject(),
-    /**
-     * The Optimise sheet, and the thing that runs one.
-     *
-     * A parameter with a default rather than a `remember` inside, so that the emulator test
-     * can hand it a controller over a faked `VideoOptimiseStep`. That is not a convenience:
-     * the image CI runs on has no hardware encoder, and BUILD.md § 2 rule 2 forbids the
-     * software one — so the only way to test this screen at all is to replace the step.
-     */
-    optimise: OptimiseController = rememberOptimiseController(),
 ) {
     var grants by remember { mutableStateOf(folders.grants()) }
     var items by remember { mutableStateOf(emptyList<MediaItem>()) }
@@ -99,16 +77,16 @@ fun GalleryHost(
 
     val picker = rememberFolderPicker(folders, nightPass) { grants = it }
 
-    // The photographs, before any folder is walked. This is the whole of the fast start:
-    // the rows were written the last time the app ran, and reading them is one indexed
-    // query rather than a walk of every granted tree.
+    // What is already known, before any folder is walked. This is the whole of the fast
+    // start: the rows were written the last time the app ran, and reading them is one
+    // indexed query rather than a walk of every granted tree.
     LaunchedEffect(Unit) {
         items = repository.gallery()
         loaded = true
     }
 
-    // Then the walk, in the background, with the result diffed in. The user is looking at
-    // their library while this runs; nothing here blocks a frame.
+    // Then the walk, in the background, with the result diffed in. Nothing here blocks a
+    // frame.
     LaunchedEffect(grants) {
         if (grants.isEmpty()) {
             items = emptyList()
@@ -132,16 +110,7 @@ fun GalleryHost(
             val scanned = mutableListOf<MediaItem>()
             storage.scan(grants)
                 .catch { failure = it.message ?: it::class.simpleName }
-                .collect { item ->
-                    scanned += item
-                    // Only while the grid has nothing to show — a first run, before anything
-                    // has ever been persisted. Publishing batches into a grid that is already
-                    // full would make the user's own photographs flicker for no benefit, and
-                    // the diff below is what decides what actually changed.
-                    if (items.isEmpty() && scanned.size % FIRST_RUN_BATCH == 0) {
-                        items = scanned.sortedNewestFirst()
-                    }
-                }
+                .collect { scanned += it }
 
             if (failure == null) {
                 // Off the main thread: the diff is a hash join over the whole library, and
@@ -187,94 +156,48 @@ fun GalleryHost(
         }
     }
 
-    // A Box, and the sheet last, because Compose draws siblings in the order they are
-    // emitted: the help sheet used to be emitted before the grid, which meant the grid's
-    // opaque background was painted straight over it and the sheet was never seen.
-    Box(modifier.fillMaxSize()) {
+    Box(modifier.fillMaxSize().background(TrimTheme.colors.page)) {
         when {
-            grants.isEmpty() && loaded -> {
-                NoFolderYet { picker.choose() }
-                chrome()
-            }
-            else -> GalleryScreen(
-                items = items,
-                // The tile that is being optimised right now, so the grid draws its
-                // breathing halo and progress ring while the sheet is open. The same
-                // treatment the night pass gets, because it is the same work.
-                processingIds = workingOn(optimise.state),
-                progressOf = { item -> progressFor(optimise.state, item) },
-                onLongPress = optimise::open,
-                today = Clock.System.todayIn(TimeZone.currentSystemDefault()),
-                timeZone = TimeZone.currentSystemDefault(),
-                emptyState = { ScanState(scanning = scanning, failure = failure) { picker.choose() } },
-                video = { VideoPlayer(it, modifier = Modifier.fillMaxSize()) },
-                preview = { TilePreview(it, modifier = Modifier.fillMaxSize()) },
-                chrome = chrome,
-                artwork = { Thumbnail(it) },
-            )
+            grants.isEmpty() && loaded -> NoFolderYet { picker.choose() }
+            items.isEmpty() -> ScanState(scanning = scanning, failure = failure) { picker.choose() }
+            else -> LibrarySummary(items = items, scanning = scanning, onChoose = { picker.choose() })
         }
-        picker.HelpSheet()
-
-        OptimiseOverlay(optimise)
+        chrome()
     }
 }
 
 /**
- * The Optimise sheet, over the grid.
+ * What is in the granted folders, in two numbers.
  *
- * Emitted last and inside the same Box, for the reason the help sheet is: Compose paints
- * siblings in the order they are emitted, and a sheet drawn before the grid is a sheet the
- * grid's own opaque background is painted straight over.
+ * The count and the total are the only things this screen can say honestly today. What
+ * *could* be saved is a per-file question the probe and the predictor answer, and Big files
+ * is the screen that asks it — inventing an estimate here would be the "saves about 200 MB"
+ * that turns into 40 MB, on the first screen the user ever sees.
  */
 @Composable
-@UnstableApi
-private fun BoxScope.OptimiseOverlay(optimise: OptimiseController) {
-    if (optimise.state == OptimiseFlow.State.Closed) return
-
-    OptimiseSheet(
-        state = optimise.state,
-        onStart = optimise::start,
-        onKeep = optimise::keep,
-        onUndo = optimise::undo,
-        onDismiss = optimise::dismiss,
-        modifier = Modifier.align(Alignment.BottomCenter).padding(TrimSpacing.INSET_DP.dp),
-        artwork = { optimise.state.item?.let { Thumbnail(it) } },
-    )
-}
-
-/** The tile the user is optimising right now, so the grid gives it the same halo a night does. */
-private fun workingOn(state: OptimiseFlow.State): Set<String> =
-    if (state is OptimiseFlow.State.Working) setOf(state.item.id) else emptySet()
-
-private fun progressFor(state: OptimiseFlow.State, item: MediaItem): Float? =
-    (state as? OptimiseFlow.State.Working)?.takeIf { it.item.id == item.id }?.progress
-
-/**
- * Newest first, which is the order `GalleryScreen` and `DateSections` both require.
- *
- * Sorted on `takenAt ?: mtime`, and the fallback is the point. `SafStorage.scan` reads one
- * cursor per folder — name, size, mime, mtime — and nothing else: the date a photo was
- * taken lives in its EXIF, `ContainerReaderAndroid` reads that, and it does so only for
- * the handful of files the library diff found to be new or changed, because a header read
- * per file turns a second into a minute on a large library.
- *
- * So on a first run every item is undated, and every one of them would land in a single
- * "Undated" section. The file's modification time is an approximation — a photo copied
- * from another device carries the copy's date, not the shot's — but an approximately
- * ordered grid is a great deal more useful than one undifferentiated block, and the real
- * date replaces it as soon as the item is indexed. Recorded in PROJECT.md.
- */
-private suspend fun List<MediaItem>.sortedNewestFirst(): List<MediaItem> =
-    // Off the main thread. This runs inside the collector, which is resumed on the main
-    // dispatcher because that is where Compose state has to be written — and a copy plus a
-    // sort of a hundred thousand items there is a visibly frozen frame, on exactly the
-    // libraries this app exists for. The list cannot change underneath it: the collector is
-    // suspended for the duration, so nothing is appending while this runs.
-    withContext(Dispatchers.Default) {
-        map { item ->
-            if (item.takenAt != null) item else item.copy(takenAt = Instant.fromEpochMilliseconds(item.mtime))
-        }.sortedByDescending { it.takenAt }
+private fun LibrarySummary(items: List<MediaItem>, scanning: Boolean, onChoose: () -> Unit) {
+    val colors = TrimTheme.colors
+    Column(
+        verticalArrangement = Arrangement.spacedBy(TrimSpacing.INSET_DP.dp),
+        modifier = Modifier.fillMaxSize().padding(TrimSpacing.INSET_DP.dp),
+    ) {
+        BasicText(
+            text = MediaFormatting.bytes(items.sumOf { it.size }),
+            style = TrimTheme.typography.title.copy(color = colors.text),
+        )
+        BasicText(
+            text = "${items.size} files in your granted folders" +
+                if (scanning) " · still looking" else "",
+            style = TrimTheme.typography.body.copy(color = colors.muted),
+        )
+        Box(modifier = Modifier.pressScale(onChoose)) {
+            BasicText(
+                text = "Add another folder",
+                style = TrimTheme.typography.label.copy(color = colors.accent),
+            )
+        }
     }
+}
 
 @Composable
 private fun NoFolderYet(onChoose: () -> Unit) {
@@ -289,12 +212,12 @@ private fun NoFolderYet(onChoose: () -> Unit) {
             modifier = Modifier.padding(TrimSpacing.INSET_DP.dp),
         ) {
             BasicText(
-                text = "Trim Gallery",
+                text = "Trim",
                 style = TrimTheme.typography.title.copy(color = colors.text, textAlign = TextAlign.Center),
             )
             BasicText(
-                text = "Choose the folder your photos are in. Nothing is read until you do, " +
-                    "and nothing ever leaves your phone.",
+                text = "Choose the folder your videos and photos are in. Nothing is read until " +
+                    "you do, and nothing ever leaves your phone.",
                 style = TrimTheme.typography.body.copy(color = colors.muted, textAlign = TextAlign.Center),
             )
             Box(
@@ -313,7 +236,7 @@ private fun NoFolderYet(onChoose: () -> Unit) {
 }
 
 /**
- * What the grid shows while it has nothing to show: scanning, or a scan that failed, or a
+ * What Home shows while it has nothing to show: scanning, or a scan that failed, or a
  * granted folder that genuinely holds no media.
  */
 @Composable
@@ -342,11 +265,4 @@ private fun ScanState(scanning: Boolean, failure: String?, onChoose: () -> Unit)
     }
 }
 
-/**
- * How often a *first* run publishes what it has found so far.
- *
- * Only ever used before anything has been persisted. Every later start draws from the
- * database immediately, so there is no partial state to show.
- */
-private const val FIRST_RUN_BATCH = 200
 private const val BUTTON_V_DP = 12

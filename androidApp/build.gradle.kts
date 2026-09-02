@@ -261,12 +261,7 @@ dependencies {
     implementation(projects.shared.core.data)
     implementation(projects.shared.core.pipeline)
     implementation(projects.shared.core.ui)
-    implementation(projects.shared.feature.gallery)
-    implementation(projects.shared.feature.search)
-    implementation(projects.shared.feature.people)
     implementation(projects.shared.feature.space)
-    implementation(projects.shared.feature.cleanup)
-    implementation(projects.shared.feature.editor)
     implementation(projects.shared.feature.compress)
     implementation(projects.shared.feature.settings)
 

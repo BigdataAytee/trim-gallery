@@ -32,20 +32,19 @@ import app.trimgallery.core.ui.theme.TrimTheme
  * answer, is an enum. A library would be a dependency STACK.md would have to be asked about
  * to buy nothing. Revisit when a screen has to open another screen.
  *
- * `remember` rather than `rememberSaveable`, so rotating the phone off the gallery returns
- * to the photographs. `rememberSaveable` lives in `runtime-saveable`, which nothing on this
+ * `remember` rather than `rememberSaveable`, so rotating the phone off a subscreen returns
+ * to Home. `rememberSaveable` lives in `runtime-saveable`, which nothing on this
  * classpath exports — `compose.runtime`, `compose.foundation` and `compose.animation` all
  * omit it — so keeping this across a configuration change means adding a dependency, and
  * STACK.md says ask first. Recorded in PROJECT.md as a follow-up.
  *
- * The other two are reached from controls drawn *over* the gallery rather than from a bar
- * above it: BUILD.md § 9 wants the photographs edge to edge, and a permanent toolbar spends
- * a strip of every screen on buttons used twice a month.
+ * The other two are reached from controls drawn *over* Home rather than from a bar above
+ * it: a permanent toolbar spends a strip of every screen on buttons used twice a month.
  */
 @UnstableApi
 @Composable
 fun TrimApp(startInRecovery: Boolean = false, modifier: Modifier = Modifier) {
-    var screen by remember { mutableStateOf(Screen.GALLERY) }
+    var screen by remember { mutableStateOf(Screen.HOME) }
 
     // Passed in rather than read here, and that is deliberate. The answer depends on being
     // asked before this launch marks itself, which only `MainActivity` is in a position to
@@ -60,7 +59,7 @@ fun TrimApp(startInRecovery: Boolean = false, modifier: Modifier = Modifier) {
     // The system back gesture returns to the photographs rather than closing the app. Only
     // off the gallery — disabled, the gesture falls through to the Activity, which is what
     // should happen on the gallery itself.
-    BackHandler(enabled = screen != Screen.GALLERY) { screen = Screen.GALLERY }
+    BackHandler(enabled = screen != Screen.HOME) { screen = Screen.HOME }
 
     if (recovering) {
         RecoveryScreen(onContinue = { recovering = false }, modifier = modifier.fillMaxSize())
@@ -69,12 +68,9 @@ fun TrimApp(startInRecovery: Boolean = false, modifier: Modifier = Modifier) {
 
     Box(modifier.fillMaxSize()) {
         when (screen) {
-            Screen.SETTINGS -> SettingsHost(onBack = { screen = Screen.GALLERY }, modifier = Modifier.fillMaxSize())
-            Screen.SPACE -> SpaceHost(onBack = { screen = Screen.GALLERY }, modifier = Modifier.fillMaxSize())
-            // Handed to the gallery rather than drawn over it: the grid owns where its own
-            // chrome sits in the stack, which is above the photographs and *below* the
-            // viewer. Drawn here, the pills would float over an opened photograph.
-            Screen.GALLERY -> GalleryHost(
+            Screen.SETTINGS -> SettingsHost(onBack = { screen = Screen.HOME }, modifier = Modifier.fillMaxSize())
+            Screen.SPACE -> SpaceHost(onBack = { screen = Screen.HOME }, modifier = Modifier.fillMaxSize())
+            Screen.HOME -> HomeHost(
                 modifier = Modifier.fillMaxSize(),
                 onStartupFailure = { recovering = true },
                 chrome = {
@@ -95,7 +91,7 @@ fun TrimApp(startInRecovery: Boolean = false, modifier: Modifier = Modifier) {
 }
 
 /** What is on top. One level deep, which is the whole of this app's navigation. */
-private enum class Screen { GALLERY, SETTINGS, SPACE }
+private enum class Screen { HOME, SETTINGS, SPACE }
 
 /**
  * The way off the grid: a small pill over its top-right corner.
