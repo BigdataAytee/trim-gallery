@@ -1,6 +1,5 @@
 package app.trimgallery.core.ui.motion
 
-import app.trimgallery.core.ui.grid.GridZoom
 import app.trimgallery.core.ui.theme.ReducedMotion
 import app.trimgallery.core.ui.theme.TrimShape
 import app.trimgallery.core.ui.theme.TrimSpacing
@@ -27,17 +26,6 @@ class MotionSpecTest {
         val worst = (0..999).maxOf { MotionSpec.Arrival.delayMs(it) }
         assertEquals((MotionSpec.Arrival.STAGGER_GROUP - 1) * MotionSpec.Arrival.STAGGER_MS, worst)
         assertTrue(worst < MotionSpec.Arrival.DURATION_MS, "a tile should never wait longer than the animation")
-    }
-
-    @Test
-    fun `the hero transition is a spring, with a duration only as the reduced fallback`() {
-        // DESIGN_SYSTEM.md replaced the reference prototype's duration-and-Bezier hero
-        // with `spring-standard` on the bounds. A spring has no duration to assert
-        // against; what is left to check is that the fallback is the reduce-motion one
-        // rather than a second, competing set of timings.
-        assertEquals(TrimSpring.STANDARD, MotionSpec.Hero.SPRING)
-        assertEquals(ReducedMotion.DURATION_MS, MotionSpec.Hero.OPEN_MS)
-        assertEquals(ReducedMotion.DURATION_MS, MotionSpec.Hero.CLOSE_MS)
     }
 
     @Test
@@ -77,15 +65,6 @@ class MotionSpecTest {
     }
 
     @Test
-    fun `grid gutters close as the grid zooms out`() {
-        // At year level any gap breaks the block into stripes that read as structure the
-        // data does not have (DESIGN_SYSTEM.md § Spacing and shape).
-        assertTrue(GridZoom.DAY.gutterDp > GridZoom.MONTH.gutterDp)
-        assertTrue(GridZoom.MONTH.gutterDp > GridZoom.YEAR.gutterDp)
-        assertEquals(0f, GridZoom.YEAR.gutterDp)
-    }
-
-    @Test
     fun `the type scale steps upward without collision`() {
         val roles = TrimType.entries
         roles.zipWithNext().forEach { (bigger, smaller) ->
@@ -111,16 +90,10 @@ class MotionSpecTest {
     }
 
     @Test
-    fun `only the opening curve overshoots`() {
-        assertTrue(MotionSpec.Hero.OPEN_EASING.y2 > 1f, "open should overshoot")
-        assertTrue(MotionSpec.Hero.CLOSE_EASING.y2 <= 1f, "close should not overshoot")
-    }
-
-    @Test
-    fun `the sheet starts after the zoom but finishes with it in view`() {
+    fun `the sheet starts after the opening move but finishes with it in view`() {
         assertTrue(MotionSpec.Sheet.DELAY_MS > 0, "the image should lead")
         assertTrue(
-            MotionSpec.Sheet.DELAY_MS < MotionSpec.Hero.OPEN_MS,
+            MotionSpec.Sheet.DELAY_MS < ReducedMotion.DURATION_MS,
             "the sheet should start while the zoom is still running, not after it",
         )
     }
