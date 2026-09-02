@@ -66,6 +66,13 @@ REQUIRED = {
         "aRunThatReplacedNothingNeverOffersAnUndo",
         "undoPutsTheOriginalBack",
     ],
+    # The crash a phone shows on tapping a tile, reproduced in the real Activity over
+    # content:// URIs, real Coil and camera-sized photographs. Twenty taps each, because a
+    # crash that depends on what the previous open left behind is not one tap can find.
+    "app.trimgallery.ui.TapCrashReproductionTest": [
+        "tappingPhotosTwentyTimesInTheRealActivityDoesNotCrash",
+        "tappingVideosTwentyTimesInTheRealActivityDoesNotCrash",
+    ],
     # That the night pass can build what it runs. A missing Koin definition compiles, passes
     # every unit test, and fails at 3am in a worker with no screen — so it is asked of the
     # assembled graph on a device, which is the only place the question can be put.
