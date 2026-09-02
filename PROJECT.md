@@ -3194,3 +3194,37 @@ would throw that away.
 naming the device in the failure line. Discovering devices from the reports on disk was
 rejected: an emulator that never booted would then look like a smaller matrix rather than a
 failure, which is the same class of bug as a green job that ran no tests.
+
+## The player's thread (2 Sep 2026)
+
+**Every ExoPlayer states its looper, and is only touched on it.** `TilePreview` and
+`VideoPlayer` built and configured their player inside `remember`, which runs during
+composition. `ExoPlayer.Builder` captures the current thread's looper; a Compose worker
+thread has none, so the builder falls back to main and the following `setMediaItem` — on
+that worker — throws `IllegalStateException: Player is accessed on the wrong thread`.
+
+**Why it took until now to appear.** Compose composes on the main thread in the app as it
+runs today, so the mismatch never happened in practice. That is a coincidence of the
+current runtime, not a guarantee: Compose does not promise which thread composition runs
+on. The API 36 emulator composed on a worker and the crash was immediate.
+
+**Construction, configuration and release are all player accesses.** The fix is not only to
+move `setMediaItem` — `release()` in `onDispose` runs on the applier thread too, so it is
+posted to main. A rule that holds for one call and not the others is not a rule.
+
+**The second emulator paid for itself on its first run.** It was added because the phone in
+the field reports is not on API 34, and it immediately found a real defect on the exact
+path that field report was about — tapping a video — that the API 34 device passes.
+
+## What the two-device matrix has and has not settled (2 Sep 2026)
+
+**`TapCrashReproductionTest` passes on both API 34 and API 36**: twenty taps of a photo tile
+and twenty of a video tile, in the real Activity over `content://` documents. The hero
+radius clamp holds at both levels.
+
+**`GalleryJourneyTest.tappingAPhotoOpensTheViewer` timed out on API 36** with the grid
+showing its empty state, on a run where `grantingAFolderRendersTheGrid` passed on the same
+device and asserted both files were scanned and persisted. So it is not a storage or scan
+regression at API 36. The untested hypothesis is that the player crash above took the
+process with it and this test ran against the wreckage; the next run says whether that is
+true. It is recorded as unexplained rather than assumed fixed.

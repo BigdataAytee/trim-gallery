@@ -43,6 +43,27 @@ missed. Three JVM tests pin it — the easing must keep overshooting (so nobody 
 flattening the curve), the radius must never go negative past 1.0, and it must still
 interpolate normally inside 0..1.
 
+### The second API level found a bug on its first run
+
+`TilePreview` and `VideoPlayer` both built their ExoPlayer inside `remember` and configured
+it there — during composition, on whatever thread composition happens to be on.
+`ExoPlayer.Builder` takes the current thread's looper, and a thread without one falls back
+to main, so the player expects main while the calls come from a Compose worker:
+
+```
+java.lang.IllegalStateException: Player is accessed on the wrong thread.
+Current thread: 'DefaultDispatcher-worker-4'   Expected thread: 'main'
+    at androidx.media3.exoplayer.ExoPlayerImpl.verifyApplicationThread(ExoPlayerImpl.java:3102)
+    at app.trimgallery.ui.TilePreviewKt.TilePreview(TilePreview.kt:35)
+```
+
+Both now state `setLooper(Looper.getMainLooper())`, configure the player in a
+`LaunchedEffect` on `Dispatchers.Main`, and post `release()` to main rather than calling it
+from the applier thread. Compose makes no promise about the composing thread; Media3 asks
+that every access be on one thread. Saying which one is the whole fix.
+
+It passed on API 34 and failed on API 36, which is the argument for the second device.
+
 ### Two API levels, and a check that requires both
 
 The emulator was API 34 and the phone the field reports come from is not. A second managed

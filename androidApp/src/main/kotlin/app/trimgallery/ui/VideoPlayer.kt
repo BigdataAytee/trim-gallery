@@ -1,7 +1,10 @@
 package app.trimgallery.ui
 
+import android.os.Handler
+import android.os.Looper
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
@@ -14,6 +17,8 @@ import androidx.media3.common.util.UnstableApi
 import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.ui.PlayerView
 import app.trimgallery.core.model.MediaItem
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 import androidx.media3.common.MediaItem as Media3Item
 
 /**
@@ -36,15 +41,24 @@ fun VideoPlayer(item: MediaItem, modifier: Modifier = Modifier) {
     // Keyed on the item, so paging to another video builds a new player rather than
     // re-pointing this one — a re-used player carries the previous item's position and
     // shows a frame of the wrong video before it seeks.
+    // Looper stated, not inherited from whichever thread composed this. See TilePreview for
+    // the failure this is: `ExoPlayer.Builder` defaults to the current thread's looper, a
+    // worker thread has none so it falls back to main, and every later call from that
+    // worker throws "Player is accessed on the wrong thread". Compose promises nothing
+    // about the composing thread.
     val player = remember(item.platformRef.value) {
-        ExoPlayer.Builder(context).build().apply {
-            setMediaItem(Media3Item.fromUri(item.platformRef.value))
+        ExoPlayer.Builder(context).setLooper(Looper.getMainLooper()).build()
+    }
+
+    LaunchedEffect(player) {
+        withContext(Dispatchers.Main) {
+            player.setMediaItem(Media3Item.fromUri(item.platformRef.value))
             // The user tapped this video; playing it is the whole intent of the tap.
-            playWhenReady = true
+            player.playWhenReady = true
             // Sound on: this is the viewer, not a grid preview. Muted autoplay belongs to
             // the tile, and that is a separate piece of work.
-            repeatMode = Player.REPEAT_MODE_OFF
-            prepare()
+            player.repeatMode = Player.REPEAT_MODE_OFF
+            player.prepare()
         }
     }
 
@@ -54,6 +68,8 @@ fun VideoPlayer(item: MediaItem, modifier: Modifier = Modifier) {
     DisposableEffect(lifecycleOwner, player) {
         val observer = LifecycleEventObserver { _, event ->
             when (event) {
+                // Lifecycle events arrive on main, which is the player's looper, so this
+                // one is already where it needs to be.
                 Lifecycle.Event.ON_STOP -> player.pause()
                 else -> Unit
             }
@@ -65,7 +81,9 @@ fun VideoPlayer(item: MediaItem, modifier: Modifier = Modifier) {
     // Released when the composable leaves — a player that outlives its page holds a
     // decoder the next one needs.
     DisposableEffect(player) {
-        onDispose { player.release() }
+        // Posted rather than called: onDispose runs on the applier thread, and release is
+        // a player access like any other.
+        onDispose { Handler(Looper.getMainLooper()).post { player.release() } }
     }
 
     AndroidView(
