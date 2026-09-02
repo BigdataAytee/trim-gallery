@@ -25,12 +25,13 @@ import app.trimgallery.core.ui.theme.TrimSpacing
 import app.trimgallery.core.ui.theme.TrimTheme
 
 /**
- * The app's three screens, and which of them is on top.
+ * The app's five screens, and which of them is on top.
  *
- * Still no navigation library, and the third screen is where that was to be re-decided: a
+ * Still no navigation library, and each new screen was where that was to be re-decided: a
  * back stack that is never deeper than one, with no arguments to pass and no deep links to
  * answer, is an enum. A library would be a dependency STACK.md would have to be asked about
- * to buy nothing. Revisit when a screen has to open another screen.
+ * to buy nothing. Revisit when a screen has to open another screen — which Big files nearly
+ * does, since a trim opens a sheet rather than a screen.
  *
  * `remember` rather than `rememberSaveable`, so rotating the phone off a subscreen returns
  * to Home. `rememberSaveable` lives in `runtime-saveable`, which nothing on this
@@ -38,8 +39,10 @@ import app.trimgallery.core.ui.theme.TrimTheme
  * omit it — so keeping this across a configuration change means adding a dependency, and
  * STACK.md says ask first. Recorded in PROJECT.md as a follow-up.
  *
- * The other two are reached from controls drawn *over* Home rather than from a bar above
- * it: a permanent toolbar spends a strip of every screen on buttons used twice a month.
+ * History and Settings are reached from controls drawn *over* Home rather than from a bar
+ * above it: a permanent toolbar spends a strip of every screen on buttons used twice a
+ * month. Big files and Folders are opened by Home's own content, because those are the two
+ * things a user came here to do.
  */
 @UnstableApi
 @Composable
@@ -51,14 +54,14 @@ fun TrimApp(startInRecovery: Boolean = false, modifier: Modifier = Modifier) {
     // do — a composable that resolved the guard and asked would be asking after the mark was
     // already set, and would send every launch to the recovery screen.
     //
-    // Set again if this launch's own startup work fails. Either way the gallery is not
+    // Set again if this launch's own startup work fails. Either way the scan is not
     // restarted: the work that failed is work the app does by itself, so trying it again is
     // the loop rather than a retry.
     var recovering by remember { mutableStateOf(startInRecovery) }
 
-    // The system back gesture returns to the photographs rather than closing the app. Only
-    // off the gallery — disabled, the gesture falls through to the Activity, which is what
-    // should happen on the gallery itself.
+    // The system back gesture returns to Home rather than closing the app. Only off Home —
+    // disabled, the gesture falls through to the Activity, which is what should happen on
+    // Home itself.
     BackHandler(enabled = screen != Screen.HOME) { screen = Screen.HOME }
 
     if (recovering) {
@@ -69,7 +72,7 @@ fun TrimApp(startInRecovery: Boolean = false, modifier: Modifier = Modifier) {
     Box(modifier.fillMaxSize()) {
         when (screen) {
             Screen.SETTINGS -> SettingsHost(onBack = { screen = Screen.HOME }, modifier = Modifier.fillMaxSize())
-            Screen.SPACE -> SpaceHost(onBack = { screen = Screen.HOME }, modifier = Modifier.fillMaxSize())
+            Screen.HISTORY -> HistoryHost(onBack = { screen = Screen.HOME }, modifier = Modifier.fillMaxSize())
             Screen.FOLDERS -> FoldersHost(onBack = { screen = Screen.HOME }, modifier = Modifier.fillMaxSize())
             Screen.BIG_FILES -> BigFilesHost(onBack = { screen = Screen.HOME }, modifier = Modifier.fillMaxSize())
             Screen.HOME -> HomeHost(
@@ -85,7 +88,7 @@ fun TrimApp(startInRecovery: Boolean = false, modifier: Modifier = Modifier) {
                             .systemBarsPadding()
                             .padding(TrimSpacing.INSET_DP.dp),
                     ) {
-                        Pill("Space") { screen = Screen.SPACE }
+                        Pill("History") { screen = Screen.HISTORY }
                         Pill("Settings") { screen = Screen.SETTINGS }
                     }
                 },
@@ -95,10 +98,10 @@ fun TrimApp(startInRecovery: Boolean = false, modifier: Modifier = Modifier) {
 }
 
 /** What is on top. One level deep, which is the whole of this app's navigation. */
-private enum class Screen { HOME, BIG_FILES, FOLDERS, SETTINGS, SPACE }
+private enum class Screen { HOME, BIG_FILES, FOLDERS, SETTINGS, HISTORY }
 
 /**
- * The way off the grid: a small pill over its top-right corner.
+ * The way off Home: a small pill over its top-right corner.
  *
  * Worded rather than drawn. A glyph would need an icon set this project does not have, and
  * the shortest true label is better than a picture of one.

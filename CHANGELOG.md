@@ -1,5 +1,51 @@
 # Changelog
 
+## History and Settings
+
+The last two of the five screens, and the end of the image loader the gallery brought with
+it.
+
+**Space is now History.** Same code, honest name. It was called Space when the app's job was
+to report free space on a phone full of photographs; in a trimming utility the screen is a
+record of what was changed and what was left alone, and the freed total is the headline
+rather than the point. The artwork slot went with the gallery — a row that tried to show a
+thumbnail it can no longer load is worse than a row that never offered one.
+
+**An empty History says so.** A library nothing has run over yet looks exactly like one where
+everything was already efficient, and both deserve a sentence instead of a blank page. The
+journeys assert this state, not a populated one: a populated History needs a job row and an
+undo entry, which needs a real encode, which the emulator cannot do.
+
+**Settings gains the control that decides whether a file is recoverable.** "Keep originals
+for" was in `Settings` and in `SettingsPolicy`'s warnings but had no control anywhere — the
+one number that decides how long an original survives under *Free the space* was unreachable.
+It steps 5 to 90 days, and the sentence under it says the thing a user needs to know: only
+folders set to Free the space ever delete an original.
+
+**Face clustering left the settings model.** `faceClusteringEnabled` and its warning were
+about a feature that no longer exists in this build. A toggle for a deleted feature is a lie
+the settings screen tells.
+
+**Coil is gone.** Both dependencies, the `ImageLoader` set-up, the video-frame fetcher, its
+key and its test. Nothing left in the app displays a photograph, so an image loader was a
+few hundred kilobytes and one more thing that could crash on tap — which, on this project,
+it did.
+
+**ML Kit goes too.** Image labelling, face detection and text recognition were still in the
+APK after the index came out in "Take the index out" — three bundled-model libraries linked
+by nothing. They are a large part of what makes this build big enough that it cannot be
+attached to a message, for a feature that no longer exists.
+
+**And one suite that had quietly stopped being required.** `MainActivityLaunchTest` — does
+the app start at all, over the real graph — was dropped from `assert-journeys-ran.py` when
+the gallery's entries were deleted around it. The class was still there and still running,
+but nothing required it, so it could have stopped running and left CI green. That is the one
+thing that file exists to prevent, so it is back, along with two comments that had come
+loose from the entries they described.
+
+**Four journeys.** History opens and leads with the freed total; an empty History explains
+itself; the retention stepper actually changes the stored value; Settings says which build
+this is — the question every field report so far has turned on.
 ## Big files
 
 The screen the utility exists for, and Home's "Find big files" now has somewhere to go.

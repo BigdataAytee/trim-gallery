@@ -2,7 +2,6 @@ package app.trimgallery.feature.space
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
@@ -17,10 +16,9 @@ import androidx.compose.foundation.text.BasicText
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.unit.dp
 import app.trimgallery.core.domain.skip.SkipList
-import app.trimgallery.core.model.MediaItem
 import app.trimgallery.core.model.StopReason
 import app.trimgallery.core.ui.format.MediaFormatting
 import app.trimgallery.core.ui.motion.ProgressRing
@@ -47,7 +45,7 @@ import app.trimgallery.core.domain.space.SpaceScreen as SpaceRules
  * Pure and platform-free: values in, callbacks out, thumbnails through a slot.
  */
 @Composable
-fun SpaceScreen(
+fun HistoryScreen(
     state: SpaceRules.State,
     history: List<HistoryRules.Row>,
     skipped: List<SkipList.Group>,
@@ -63,12 +61,11 @@ fun SpaceScreen(
     onSecondaryAction: (HistoryRules.Row) -> Unit,
     modifier: Modifier = Modifier,
     header: @Composable () -> Unit = {},
-    artwork: @Composable (MediaItem) -> Unit,
 ) {
     val colors = TrimTheme.colors
 
     LazyColumn(
-        modifier = modifier.fillMaxSize().background(colors.page),
+        modifier = modifier.fillMaxSize().background(colors.page).testTag(HistoryTestTags.SCREEN),
         contentPadding = PaddingValues(TrimSpacing.INSET_DP.dp),
         verticalArrangement = Arrangement.spacedBy(TrimSpacing.INSET_DP.dp),
     ) {
@@ -77,20 +74,19 @@ fun SpaceScreen(
         item { Total(state, nextRun) }
 
         if (history.isNotEmpty()) {
-            item { SectionTitle("What changed") }
+            item { SectionTitle("What changed", HistoryTestTags.CHANGED) }
             items(history, key = { it.job.id }) { row ->
                 HistoryRow(
                     row = row,
                     formatDate = formatDate,
                     onRestore = { onRestore(row) },
                     onSecondary = { onSecondaryAction(row) },
-                    artwork = artwork,
                 )
             }
         }
 
         if (skipped.isNotEmpty()) {
-            item { SectionTitle("Left alone") }
+            item { SectionTitle("Left alone", HistoryTestTags.LEFT_ALONE) }
             items(skipped, key = { it.heading }) { group -> SkippedGroup(group) }
         }
 
@@ -102,6 +98,7 @@ fun SpaceScreen(
                     // efficient.
                     text = "Nothing has been optimised yet. The next run will fill this in.",
                     style = TrimTheme.typography.body.copy(color = colors.muted),
+                    modifier = Modifier.testTag(HistoryTestTags.EMPTY),
                 )
             }
         }
@@ -131,6 +128,7 @@ private fun Total(state: SpaceRules.State, nextRun: String?) {
                 BasicText(
                     text = "Freed ${MediaFormatting.bytes(state.totalFreed)}",
                     style = TrimTheme.typography.title.copy(color = colors.text),
+                    modifier = Modifier.testTag(HistoryTestTags.TOTAL),
                 )
                 SpaceRules.projectionLine(state, MediaFormatting::bytes)?.let { line ->
                     BasicText(line, style = TrimTheme.typography.caption.copy(color = colors.muted))
@@ -204,7 +202,6 @@ private fun HistoryRow(
     formatDate: (Instant) -> String,
     onRestore: () -> Unit,
     onSecondary: () -> Unit,
-    artwork: @Composable (MediaItem) -> Unit,
 ) {
     val colors = TrimTheme.colors
 
@@ -213,12 +210,9 @@ private fun HistoryRow(
         modifier = Modifier
             .fillMaxWidth()
             .background(colors.card, RoundedCornerShape(TrimShape.CARD_DP.dp))
-            .padding(TrimSpacing.CARD_PADDING_DP.dp),
+            .padding(TrimSpacing.CARD_PADDING_DP.dp)
+            .testTag(HistoryTestTags.row(row.job.id)),
     ) {
-        Box(modifier = Modifier.size(THUMB_DP.dp).clip(RoundedCornerShape(TrimShape.BUTTON_DP.dp))) {
-            artwork(row.item)
-        }
-
         Column(
             modifier = Modifier.weight(1f),
             verticalArrangement = Arrangement.spacedBy(SMALL_GAP_DP.dp),
@@ -235,7 +229,7 @@ private fun HistoryRow(
             )
 
             if (HistoryRules.isOneTap(row.restorable)) {
-                Action("Restore the original", onRestore)
+                Action("Restore the original", onRestore, HistoryTestTags.restore(row.job.id))
             } else {
                 HistoryRules.secondaryActionLabel(row.restorable)?.let { label ->
                     Action(label, onSecondary)
@@ -266,19 +260,25 @@ private fun SkippedGroup(group: SkipList.Group) {
 }
 
 @Composable
-private fun Action(label: String, onClick: () -> Unit) {
+private fun Action(label: String, onClick: () -> Unit, tag: String? = null) {
     BasicText(
         text = label,
         style = TrimTheme.typography.label.copy(color = TrimTheme.colors.accent),
-        modifier = Modifier.pressScale(onClick).padding(vertical = SMALL_GAP_DP.dp),
+        modifier = Modifier
+            .pressScale(onClick)
+            .padding(vertical = SMALL_GAP_DP.dp)
+            .then(if (tag == null) Modifier else Modifier.testTag(tag)),
     )
 }
 
 @Composable
-private fun SectionTitle(text: String) {
-    BasicText(text, style = TrimTheme.typography.heading.copy(color = TrimTheme.colors.text))
+private fun SectionTitle(text: String, tag: String) {
+    BasicText(
+        text,
+        style = TrimTheme.typography.heading.copy(color = TrimTheme.colors.text),
+        modifier = Modifier.testTag(tag),
+    )
 }
 
 private const val SMALL_GAP_DP = 6
 private const val RING_DP = 44
-private const val THUMB_DP = 56

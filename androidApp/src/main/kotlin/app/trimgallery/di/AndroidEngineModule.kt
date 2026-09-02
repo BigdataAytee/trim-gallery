@@ -46,7 +46,6 @@ import app.trimgallery.engine.android.SafStorage
 import app.trimgallery.engine.android.SafeReplacerAndroid
 import app.trimgallery.engine.android.StartupGuard
 import app.trimgallery.engine.android.UndoBinAndroid
-import app.trimgallery.engine.android.VideoThumbnails
 import app.trimgallery.engine.android.WorkManagerScheduler
 import app.trimgallery.engine.android.YuvSourceAndroid
 import kotlinx.coroutines.Dispatchers
@@ -145,12 +144,6 @@ val androidEngineModule = module {
     // not know what schedules it; the diagnostics export asks the concrete class what
     // WorkManager currently holds, which is a question the port has no business answering
     // on iOS. Same instance either way — the second definition resolves the first.
-    // --- The grid's video frames --------------------------------------------
-    //
-    // Not a Coil component: Coil can only reach a `content://` document by copying it, and
-    // a tile is not worth a gigabyte of reads. Bound as a singleton because it owns the
-    // permit that keeps four extractions running at once rather than one per tile.
-    single { VideoThumbnails(androidContext()) }
 
     // Whether the app's own startup work finished last time (see StartupGuard).
     single { StartupGuard(androidContext()) }
@@ -172,6 +165,10 @@ val androidEngineModule = module {
     // The tier is a lambda rather than a value for the same reason: it changes while the
     // app is running, at the moment the purchase completes, and a captured copy would leave
     // a paying user on free-tier settings until the next launch.
+    // The tier itself, bound so a screen can ask what the user is entitled to rather than
+    // assuming. Everything that clamps by tier already goes through `currentTier()`; this is
+    // the same answer, reachable from the UI.
+    single<Tier> { currentTier() }
     single<SettingsStore> { DataStoreSettings(androidContext()) { currentTier() } }
 
     /*

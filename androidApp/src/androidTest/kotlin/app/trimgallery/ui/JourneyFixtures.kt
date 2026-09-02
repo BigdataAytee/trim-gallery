@@ -61,8 +61,8 @@ internal fun journeyVideo(context: Context) = journeyItem(
 private fun journeyItem(id: String, file: File, kind: MediaKind, mime: String, mtime: Long) = MediaItem(
     id = id,
     // A file URI, not a SAF document URI, and that is the one seam: without a persisted
-    // permission there is no document to address. Everything that reads it — Coil, the
-    // frame extractor, ExoPlayer — goes through the same ContentResolver either way.
+    // permission there is no document to address. Everything that reads it — the container
+    // reader, the encoder's extractor — goes through the same ContentResolver either way.
     platformRef = MediaRef(Uri.fromFile(file).toString()),
     name = file.name,
     kind = kind,

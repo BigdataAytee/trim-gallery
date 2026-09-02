@@ -17,9 +17,8 @@ import java.io.File
  * the seam the reported crash lives on: a `content://` URI and a `file://` URI take
  * different code paths through every reader in this app.
  *
- *   * **Coil** resolves a `file://` with its file fetcher and a `content://` through
- *     `ContentResolver.openInputStream`, which is a different decode path and a different
- *     set of failures.
+ *   * **`ContentResolver.openInputStream`** is the only way to read a `content://`, where a
+ *     `file://` can be opened as a path — a different set of failures for the same bytes.
  *   * **`MediaMetadataRetriever`** has `setDataSource(String)` for a path and
  *     `setDataSource(Context, Uri)` for a URI; only the second consults a provider.
  *   * **ExoPlayer** builds a `FileDataSource` for one and a `ContentDataSource` for the

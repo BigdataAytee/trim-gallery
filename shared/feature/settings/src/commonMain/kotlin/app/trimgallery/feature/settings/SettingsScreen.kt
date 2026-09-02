@@ -13,6 +13,7 @@ import androidx.compose.foundation.text.BasicText
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.unit.dp
 import app.trimgallery.core.model.QualityTarget
 import app.trimgallery.core.model.Settings
@@ -39,6 +40,16 @@ fun SettingsScreen(
     onQualityTarget: (QualityTarget) -> Unit,
     onStartWhenFull: (Boolean) -> Unit,
     onNightlyCap: (Int) -> Unit,
+    onUndoRetention: (Int) -> Unit,
+    /**
+     * The longest retention this user may actually store.
+     *
+     * Passed in rather than assumed, because it is an entitlement: the store sanitises
+     * every write through `Entitlements.retentionDays`, so a screen that offered a step
+     * past this would write a number the store silently rounds back — a control that
+     * moves and changes nothing.
+     */
+    retentionMax: Int,
     modifier: Modifier = Modifier,
     /** Whatever gets the user back where they came from. Scrolls with the list. */
     header: @Composable () -> Unit = {},
@@ -48,7 +59,7 @@ fun SettingsScreen(
     val colors = TrimTheme.colors
 
     LazyColumn(
-        modifier = modifier.fillMaxSize().background(colors.page),
+        modifier = modifier.fillMaxSize().background(colors.page).testTag(SettingsTestTags.SCREEN),
         contentPadding = PaddingValues(TrimSpacing.INSET_DP.dp),
         verticalArrangement = Arrangement.spacedBy(TrimSpacing.INSET_DP.dp),
     ) {
@@ -92,6 +103,46 @@ fun SettingsScreen(
             )
         }
 
+        item {
+            Stepper(
+                label = "Keep originals for",
+                value = "${settings.undoRetentionDays} days",
+                valueTag = SettingsTestTags.RETENTION,
+                lessTag = SettingsTestTags.RETENTION_LESS,
+                moreTag = SettingsTestTags.RETENTION_MORE,
+                onLess = {
+                    onUndoRetention((settings.undoRetentionDays - RETENTION_STEP).coerceAtLeast(RETENTION_MIN))
+                },
+                // Absent at the cap rather than present and inert.
+                onMore = if (settings.undoRetentionDays >= retentionMax) {
+                    null
+                } else {
+                    { onUndoRetention((settings.undoRetentionDays + RETENTION_STEP).coerceAtMost(retentionMax)) }
+                },
+            )
+        }
+
+        if (settings.undoRetentionDays >= retentionMax) {
+            item {
+                BasicText(
+                    text = "$retentionMax days is the longest originals are kept on this plan.",
+                    style = TrimTheme.typography.caption.copy(color = colors.muted),
+                    modifier = Modifier.testTag(SettingsTestTags.RETENTION_CAP),
+                )
+            }
+        }
+
+        item {
+            // The one sentence this screen owes the user, next to the control that decides
+            // it. Folder modes are where an original's fate is chosen; this is only how
+            // long the bin holds one under "Free the space".
+            BasicText(
+                text = "Only folders set to Free the space ever delete an original, and only " +
+                    "after this long.",
+                style = TrimTheme.typography.caption.copy(color = colors.muted),
+            )
+        }
+
         item { footer() }
     }
 }
@@ -129,7 +180,16 @@ private fun Toggle(label: String, detail: String, checked: Boolean, onChange: (B
 }
 
 @Composable
-private fun Stepper(label: String, value: String, onLess: () -> Unit, onMore: () -> Unit) {
+private fun Stepper(
+    label: String,
+    value: String,
+    onLess: () -> Unit,
+    /** Null where the value is already at its ceiling: no control rather than a dead one. */
+    onMore: (() -> Unit)?,
+    valueTag: String? = null,
+    lessTag: String? = null,
+    moreTag: String? = null,
+) {
     val colors = TrimTheme.colors
     Row(
         verticalAlignment = Alignment.CenterVertically,
@@ -140,14 +200,26 @@ private fun Stepper(label: String, value: String, onLess: () -> Unit, onMore: ()
         BasicText(
             text = "−",
             style = TrimTheme.typography.heading.copy(color = colors.accent),
-            modifier = Modifier.pressScale(onLess),
+            modifier = Modifier
+                .pressScale(onLess)
+                .then(if (lessTag == null) Modifier else Modifier.testTag(lessTag)),
         )
-        BasicText(value, style = TrimTheme.typography.body.copy(color = colors.text))
+        // The tag sits on the value, not on the row: a test that reads the number back has
+        // to land on the node that carries the text. An unmerged Row carries none.
         BasicText(
-            text = "+",
-            style = TrimTheme.typography.heading.copy(color = colors.accent),
-            modifier = Modifier.pressScale(onMore),
+            text = value,
+            style = TrimTheme.typography.body.copy(color = colors.text),
+            modifier = if (valueTag == null) Modifier else Modifier.testTag(valueTag),
         )
+        onMore?.let { more ->
+            BasicText(
+                text = "+",
+                style = TrimTheme.typography.heading.copy(color = colors.accent),
+                modifier = Modifier
+                    .pressScale(more)
+                    .then(if (moreTag == null) Modifier else Modifier.testTag(moreTag)),
+            )
+        }
     }
 }
 
@@ -171,3 +243,5 @@ private const val SMALL_GAP_DP = 6
 private const val CAP_STEP = 15
 private const val CAP_MIN = 15
 private const val CAP_MAX = 240
+private const val RETENTION_STEP = 5
+private const val RETENTION_MIN = 5

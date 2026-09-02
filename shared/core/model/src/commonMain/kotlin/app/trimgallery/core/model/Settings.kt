@@ -25,7 +25,6 @@ data class Settings(
     val carefulVerify: Boolean = false,
     val startWhenFull: Boolean = true,
     val keepWorkingWhileUsing: Boolean = false,
-    val faceClusteringEnabled: Boolean = true,
     val stopByTime: String? = null,
 ) {
     companion object {
