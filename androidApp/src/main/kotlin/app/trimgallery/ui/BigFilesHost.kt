@@ -15,6 +15,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.unit.dp
 import androidx.media3.common.util.UnstableApi
 import app.trimgallery.core.data.TrimRepository
 import app.trimgallery.core.domain.compress.OptimiseFlow
@@ -96,7 +97,7 @@ fun BigFilesHost(
  * at once would have them fighting for the one hardware encoder the phone has.
  */
 private fun workingOn(state: OptimiseFlow.State): Set<String> = when (state) {
-    is OptimiseFlow.State.Working -> setOf(state.offered.item.id)
+    is OptimiseFlow.State.Working -> setOf(state.item.id)
     else -> emptySet()
 }
 
