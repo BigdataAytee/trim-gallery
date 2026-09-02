@@ -1,5 +1,55 @@
 # Changelog
 
+## The tap crash, found where the phone has it
+
+Four builds crashed the moment a picture was tapped, and four builds of tap journeys stayed
+green. This change is the test that made the emulator crash the way the phone does, the stack
+trace it produced, and the one-line fix that trace named.
+
+### What the emulator now does that it never did
+
+`TapCrashReproductionTest` runs the **real `MainActivity`** — not `GalleryHost` in a bare
+`ComponentActivity` — over a folder of nine files served as **`content://` documents** by a
+test-manifest `ContentProvider`, loaded by the **production Coil `ImageLoader`**, with
+eight-megapixel photographs rather than 64-pixel squares. It taps a photo tile, waits for
+the viewer, drags it closed, and does that twenty times; then the same for video tiles. It
+is a required suite: the job fails if either test is missing from the results.
+
+It went red on the **first tap of both kinds**:
+
+```
+java.lang.IllegalArgumentException: Corner size in Px can't be negative(topStart = -0.13895845, topEnd = -0.13895845, bottomEnd = -0.13895845, bottomStart = -0.13895845)!
+    at androidx.compose.foundation.shape.CornerBasedShape.createOutline-Pq9zytI(CornerBasedShape.kt:125)
+```
+
+### The cause
+
+`MotionSpec.Hero.OPEN_EASING` is `Easing(0.2f, 0.9f, 0.25f, 1.1f)` — the second control
+point sits above 1, so the open overshoots on purpose and the image lands with a spring.
+`HeroGeometry.lerpRadius` interpolated from the tile's 4 dp to the viewer's 0 dp with no
+clamp, so for a few frames past fraction 1.0 it returned a negative radius, and
+`HeroViewer` handed that to `RoundedCornerShape`, which throws.
+
+Every earlier tap journey ran `TrimTheme(reduceMotion = true)`, under which `HeroViewer`
+snaps its progress to exactly 1.0 and never overshoots. `MainActivity` reads the system's
+animator scale and gets `false` on any normal phone. That is the whole difference between
+green CI and a crash on every tap.
+
+### The fix
+
+`lerpRadius` clamps at zero, at the source rather than the call site: the frame's width and
+height were already clamped at the call site for the same overshoot and the radius was
+missed. Three JVM tests pin it — the easing must keep overshooting (so nobody "fixes" this by
+flattening the curve), the radius must never go negative past 1.0, and it must still
+interpolate normally inside 0..1.
+
+### Failures now say what failed
+
+The instrumentation result check appends one line per failed or missing journey to the
+smoke log, and the failure summary hoists those lines into the head of the job log and into
+`::error::` annotations. Four CI cycles were spent reading around a log window before this;
+that does not happen again.
+
 ## Optimise, on one file, because you asked
 
 The first place a person can make this app change a file. Everything under it was built and

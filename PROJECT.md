@@ -3126,3 +3126,47 @@ the encode — the same snapshot the safe-replace contract is checked against. T
 this number, the `job` row stores it, and Space subtracts it from the new size to report what
 was freed, so a stale value is a wrong saving on the screen the feature is judged by. Found by
 the emulator journey, which is the argument for having it.
+
+## The tap crash, root-caused (2 Sep 2026)
+
+**The crash was `HeroGeometry.lerpRadius` going negative under an overshooting easing.**
+`MotionSpec.Hero.OPEN_EASING = Easing(0.2f, 0.9f, 0.25f, 1.1f)` overshoots by design;
+`lerpRadius` interpolated 4 dp → 0 dp with no clamp; `HeroViewer` passed the result to
+`RoundedCornerShape`, which throws `IllegalArgumentException: Corner size in Px can't be
+negative`. Reproduced on the emulator on the first tap of a photo and of a video, with the
+trace naming `CornerBasedShape.kt:125` under a Compose layer update.
+
+**Why four builds of green journeys missed it.** Every tile-tap journey ran
+`TrimTheme(reduceMotion = true)`, and under reduced motion `HeroViewer` snaps progress to
+exactly 1.0 — it never overshoots. `MainActivity` reads the system animator scale and gets
+`false` on any phone with animations on. The tests had quietly opted out of the one thing
+that crashed. A reproduction suite that fakes the host is only as honest as the fakes, and
+this one was faked at the point of failure.
+
+**Clamp at the source, not the call site.** The frame's width and height were already
+clamped at the call site in `HeroViewer` for the same overshoot, and the radius, computed
+next to them, was not. A value that cannot be negative should not be able to leave the
+function that computes it. The easing is not flattened: a test asserts `OPEN_EASING.y2 > 1`
+so the spring survives and the geometry has to.
+
+**The suspects the field report named, and what the evidence says.** The test removes the
+phone/emulator differences together — real Activity, `content://` documents through a
+provider, production Coil, camera-sized photographs, twenty taps — and the trace points at
+one of the four: the hero geometry with a real window. Coil's loader, the shared-element
+transition mechanics and the video frame decoder are not cleared by this; they are simply
+not what threw. The test keeps running all of them on every push, so if one of them is a
+second crash it will be the next red job, with its own trace.
+
+**`TapCrashReproductionTest` is a required suite.** The results check fails the job unless
+both tests ran and passed, so a green job means twenty taps of each kind survived — not that
+the test was compiled.
+
+**The one skipped test is `Milestone1EncodeTest`, and it is not in this suite.** Its second
+test `assumeTrue`s a hardware encoder, which an `aosp-atd` image does not have, and BUILD.md
+§ 2 rule 2 forbids the software one. It stands down with that reason; nothing in the tap
+suite is skipped.
+
+**Still open: the phone's API level.** The emulator is API 34. The phone is a Pixel 9 Pro
+XL; its Android version has not arrived (the message was cut off twice). If it differs, a
+second managed device at that level joins the smoke matrix and the twenty-tap bar applies to
+both.

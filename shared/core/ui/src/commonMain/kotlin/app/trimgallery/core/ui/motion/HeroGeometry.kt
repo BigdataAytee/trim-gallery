@@ -73,9 +73,31 @@ object HeroGeometry {
         height = from.height + (to.height - from.height) * fraction,
     )
 
-    /** Corner radius part-way through the same journey. */
-    fun lerpRadius(fraction: Float): Float = MotionSpec.Hero.TILE_RADIUS_DP +
-        (MotionSpec.Hero.HERO_RADIUS_DP - MotionSpec.Hero.TILE_RADIUS_DP) * fraction
+    /**
+     * The corner radius at [fraction] of the way from tile to viewer.
+     *
+     * Clamped at zero, and this is the crash behind "Trim Gallery keeps stopping the moment
+     * I tap a picture" — four builds of it. `MotionSpec.Hero.OPEN_EASING` is a cubic bezier
+     * whose second control point sits at y = 1.1: the open deliberately overshoots, so the
+     * image lands with a little spring. That means [fraction] passes *through* 1.0 and out
+     * the other side for a few frames, and a straight interpolation from the tile's 4 dp
+     * down to the viewer's 0 dp goes negative there — -0.139 px on a Pixel 6. `HeroViewer`
+     * hands that to `RoundedCornerShape`, which throws `IllegalArgumentException: Corner
+     * size in Px can't be negative`, on the main thread, mid-frame.
+     *
+     * Every journey that tapped a tile ran with `reduceMotion = true`, which snaps the
+     * progress to exactly 1.0 and never overshoots. A phone runs `MainActivity`, which reads
+     * the system's animator scale and gets `false`. That is the whole difference between
+     * green CI and a crash on every real device, and it is why the radius is clamped here
+     * — at the source — rather than at the call site: the frame's width and height were
+     * already clamped at the call site once, for the same overshoot, and the radius was
+     * missed. A value that cannot be negative should not be able to leave the function that
+     * computes it.
+     */
+    fun lerpRadius(fraction: Float): Float = (
+        MotionSpec.Hero.TILE_RADIUS_DP +
+            (MotionSpec.Hero.HERO_RADIUS_DP - MotionSpec.Hero.TILE_RADIUS_DP) * fraction
+        ).coerceAtLeast(0f)
 
     /**
      * How far a drag has dismissed the viewer, 0..1.
